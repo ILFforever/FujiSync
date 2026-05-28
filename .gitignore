@@ -1,0 +1,53 @@
+# ---------- Android / Gradle ----------
+.gradle/
+.idea/
+build/
+**/build/
+**/.cxx/
+captures/
+.externalNativeBuild/
+local.properties
+app/debug/
+*.iml
+*.ipr
+*.iws
+out/
+
+# ---------- Signing & secrets — NEVER commit ----------
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+release.properties
+
+# ---------- Kotlin ----------
+.kotlin/
+
+# ---------- VS Code ----------
+.vscode/
+*.code-workspace
+
+# ---------- Logs & temp ----------
+*.log
+*.tmp
+*.bak
+*~
+hs_err_pid*
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------- Reverse-engineering artifacts ----------
+# Decompile output is ~190 MB and reproducible from the APK via jadx.
+# The APK itself (~55 MB) is kept — it's our reference. Uncomment to drop it.
+reverse-engineering/fujirecipe_src/
+reverse-engineering/tools/
+# reverse-engineering/Fuji Recipe.apk
+
+# ---------- Claude / Codex working files ----------
+.claude/settings.local.json
+.claude/.cache/
