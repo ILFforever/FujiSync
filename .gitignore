@@ -42,11 +42,13 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # ---------- Reverse-engineering artifacts ----------
-# Decompile output is ~190 MB and reproducible from the APK via jadx.
-# The APK itself (~55 MB) is kept — it's our reference. Uncomment to drop it.
-reverse-engineering/fujirecipe_src/
-reverse-engineering/tools/
-# reverse-engineering/Fuji Recipe.apk
+reverse-engineering/
+
+# ---------- Handoff artifacts ----------
+handoff/
+
+# ---------- APK files ----------
+*.apk
 
 # ---------- Claude / Codex working files ----------
 .claude/settings.local.json
