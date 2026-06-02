@@ -1,5 +1,8 @@
 package com.paeki.fujirecipes.ui.detail
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -9,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,31 +23,66 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import com.paeki.fujirecipes.ui.components.IconClose
 import com.paeki.fujirecipes.ui.components.IconEdit
 import com.paeki.fujirecipes.ui.components.IconMore
 import com.paeki.fujirecipes.ui.components.IconStar
+import com.paeki.fujirecipes.ui.components.IconStarFilled
+import com.paeki.fujirecipes.ui.components.IconTrash
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.style.TextAlign
+import com.paeki.fujirecipes.ui.components.DeleteConfirmDialog
+import com.paeki.fujirecipes.ui.components.decodeSampledBitmap
+import com.paeki.fujirecipes.ui.components.FilmSimLabel
+import com.paeki.fujirecipes.ui.components.IconCheck
+import com.paeki.fujirecipes.ui.components.IconCopy
 import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.PrimaryCTA
 import com.paeki.fujirecipes.ui.components.PropRow
 import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
+import com.paeki.fujirecipes.ui.model.sourceCameraDisplayName
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -51,6 +90,7 @@ import com.paeki.fujirecipes.ui.theme.MonoFamily
 import com.paeki.fujirecipes.ui.theme.PanelHigh
 import com.paeki.fujirecipes.ui.theme.PanelLow
 import com.paeki.fujirecipes.ui.theme.SansFamily
+import com.paeki.fujirecipes.ui.theme.TextDim
 import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
 
@@ -61,26 +101,98 @@ fun RecipeDetailScreen(
     connected: Boolean,
     onClose: () -> Unit,
     onWrite: () -> Unit,
+    onAddReferenceImage: (RecipeUiModel) -> Unit,
+    onRemoveReferenceImage: (RecipeUiModel, String) -> Unit,
+    onToggleFavorite: (RecipeUiModel) -> Unit,
+    onEdit: (RecipeUiModel) -> Unit,
+    onClone: (RecipeUiModel) -> Unit,
+    onDelete: (RecipeUiModel) -> Unit,
     writeBusy: Boolean,
+    cameraModel: String = "",
+    cameraName: String = "",
+    cameraSlots: List<RecipeUiModel> = emptyList(),
+    onWriteToSlot: ((String) -> Unit)? = null,
 ) {
+    var expandedImageUri by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf(false) }
+    var pendingConfirmWrite by remember { mutableStateOf(false) }
+    var slotPickerOpen by remember { mutableStateOf(false) }
+    var pullDistance by remember { mutableStateOf(0f) }
+    var displayedRecipe by remember { mutableStateOf<RecipeUiModel?>(null) }
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(recipe) {
+        if (recipe != null) {
+            displayedRecipe = recipe
+            pullDistance = 0f
+        }
+    }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // If user pulls down and we are at the top, consume the delta to track pull distance
+                if (available.y > 0 && scrollState.value == 0) {
+                    pullDistance += available.y
+                    return available
+                }
+                // If user pushes up while we have pull distance, reduce it
+                if (available.y < 0 && pullDistance > 0) {
+                    val consumed = available.y.coerceAtLeast(-pullDistance)
+                    pullDistance += consumed
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullDistance > 400f) { // Threshold to close
+                    onClose()
+                    return Velocity.Zero
+                }
+                pullDistance = 0f
+                return Velocity.Zero
+            }
+            
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y < 0 && pullDistance > 0) {
+                   pullDistance = 0f
+                }
+                return super.onPostScroll(consumed, available, source)
+            }
+        }
+    }
+
     AnimatedVisibility(
         visible = recipe != null,
         enter = slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(300)) + fadeIn(tween(200)),
-        exit = slideOutVertically(targetOffsetY = { it / 3 }, animationSpec = tween(250)) + fadeOut(tween(150)),
+        exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)) + fadeOut(tween(150)),
     ) {
-        recipe ?: return@AnimatedVisibility
+        val visibleRecipe = displayedRecipe ?: return@AnimatedVisibility
+
+        BackHandler(onBack = onClose)
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Bg),
+                .background(Bg)
+                .nestedScroll(nestedScrollConnection),
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .graphicsLayer { translationY = pullDistance }
+            ) {
                 // Top nav bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -102,37 +214,72 @@ fun RecipeDetailScreen(
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Row(
-                            modifier = Modifier
-                                .clickable(onClick = {})
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(IconEdit, contentDescription = "Edit", tint = Gold, modifier = Modifier.size(16.dp))
-                            Text(
-                                text = "EDIT",
-                                fontFamily = SansFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                letterSpacing = 1.8.sp,
-                                color = Gold,
+                        var moreExpanded by remember { mutableStateOf(false) }
+                        IconButton(onClick = { onToggleFavorite(visibleRecipe) }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                if (visibleRecipe.favorite) IconStarFilled else IconStar,
+                                contentDescription = if (visibleRecipe.favorite) "Remove favorite" else "Add favorite",
+                                tint = if (visibleRecipe.favorite) Gold else TextMuted,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) {
-                            Icon(IconStar, contentDescription = "Save", tint = TextMuted, modifier = Modifier.size(20.dp))
+                        IconButton(onClick = { onEdit(visibleRecipe) }, modifier = Modifier.size(32.dp)) {
+                            Icon(IconEdit, contentDescription = "Edit", tint = TextMuted, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = {}, modifier = Modifier.size(32.dp)) {
-                            Icon(IconMore, contentDescription = "More", tint = TextMuted, modifier = Modifier.size(20.dp))
+                        Box {
+                            IconButton(onClick = { moreExpanded = true }, modifier = Modifier.size(32.dp)) {
+                                Icon(IconMore, contentDescription = "More", tint = TextMuted, modifier = Modifier.size(20.dp))
+                            }
+                            DropdownMenu(
+                                expanded = moreExpanded,
+                                onDismissRequest = { moreExpanded = false },
+                                offset = DpOffset(x = 0.dp, y = 4.dp),
+                                containerColor = PanelHigh,
+                                tonalElevation = 0.dp,
+                                shadowElevation = 12.dp,
+                                border = BorderStroke(1.dp, Border),
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                @Composable
+                                fun MenuItem(
+                                    label: String,
+                                    icon: androidx.compose.ui.graphics.vector.ImageVector,
+                                    tint: Color = TextDim,
+                                    labelColor: Color = TextPrimary,
+                                    onClick: () -> Unit,
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .clickable(onClick = onClick)
+                                            .padding(horizontal = 16.dp, vertical = 11.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
+                                        Text(label, fontFamily = SansFamily, fontSize = 13.sp, color = labelColor)
+                                    }
+                                }
+
+                                MenuItem("Clone", IconCopy, onClick = { moreExpanded = false; onClone(visibleRecipe) })
+                                Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
+                                MenuItem(
+                                    label = "Delete",
+                                    icon = IconTrash,
+                                    tint = Color(0xFFE05252),
+                                    labelColor = Color(0xFFE05252),
+                                    onClick = { moreExpanded = false; pendingDelete = true },
+                                )
+                            }
                         }
                     }
                 }
 
                 // Scrollable content
+                Box(modifier = Modifier.weight(1f)) {
                 Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
+                        .fillMaxSize()
+                        .verticalScroll(scrollState),
                 ) {
                     // Hero card
                     Column(
@@ -141,26 +288,13 @@ fun RecipeDetailScreen(
                             .clip(RoundedCornerShape(16.dp))
                             .background(PanelLow)
                             .border(1.dp, Border, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 22.dp, vertical = 20.dp),
+                            .padding(horizontal = 22.dp)
+                            .padding(top = 14.dp, bottom = 20.dp),
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .border(1.dp, Gold, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                        ) {
-                            Text(
-                                text = recipe.sim.uppercase(),
-                                fontFamily = MonoFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 9.5.sp,
-                                letterSpacing = 1.4.sp,
-                                color = Gold,
-                            )
-                        }
+                        FilmSimLabel(sim = visibleRecipe.sim, imageSize = 28.dp)
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            text = recipe.name,
+                            text = visibleRecipe.name,
                             fontFamily = SansFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 38.sp,
@@ -173,12 +307,18 @@ fun RecipeDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            recipe.pills.take(3).forEach { Pill(text = it, large = true) }
+                            visibleRecipe.pills.take(3).forEach { Pill(text = it, large = true) }
                         }
-                        if (recipe.description.isNotEmpty()) {
+                        RecipeReferenceImage(
+                            referenceImageUris = visibleRecipe.referenceImageUris,
+                            onAddReferenceImage = { onAddReferenceImage(visibleRecipe) },
+                            onRemoveReferenceImage = { uri -> onRemoveReferenceImage(visibleRecipe, uri) },
+                            onExpandImage = { uri -> expandedImageUri = uri },
+                        )
+                        if (visibleRecipe.description.isNotEmpty()) {
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                text = recipe.description,
+                                text = visibleRecipe.description,
                                 fontFamily = SansFamily,
                                 fontSize = 13.sp,
                                 lineHeight = 20.sp,
@@ -190,13 +330,14 @@ fun RecipeDetailScreen(
                     // Property sections
                     Spacer(Modifier.height(4.dp))
                     Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                        PropSectionDetail("Effects", recipe.effects)
-                        PropSectionDetail("Tone", recipe.tone)
-                        PropSectionDetail("White Balance", recipe.wb)
+                        PropSectionDetail("Effects", visibleRecipe.effects)
+                        PropSectionDetail("Tone", visibleRecipe.tone)
+                        PropSectionDetail("White Balance", visibleRecipe.wb)
+                        SavedFromSection(visibleRecipe)
                     }
 
                     // Slot selector (only for camera slots)
-                    if (recipe.slot.isNotEmpty()) {
+                    if (visibleRecipe.slot.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
                         Column(modifier = Modifier.padding(horizontal = 14.dp)) {
                             SectionLabel(
@@ -207,7 +348,7 @@ fun RecipeDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 listOf("C1", "C2", "C3", "C4", "C5", "C6", "C7").forEach { slot ->
-                                    val isCurrentSlot = slot == recipe.slot
+                                    val isCurrentSlot = slot == visibleRecipe.slot
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
@@ -233,6 +374,16 @@ fun RecipeDetailScreen(
 
                     Spacer(Modifier.height(100.dp))
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(listOf(Color.Transparent, Bg))
+                        ),
+                )
+                } // Box
 
                 // Sticky CTA
                 Column(
@@ -248,20 +399,586 @@ fun RecipeDetailScreen(
                             .background(Border),
                     )
                     Spacer(Modifier.height(12.dp))
+                    val isLibraryRecipe = visibleRecipe.slot.isEmpty() && onWriteToSlot != null
                     val ctaLabel = when {
                         writeBusy -> "Writing…"
-                        connected -> "Write to ${recipe.slot.ifEmpty { "C1" }}"
+                        isLibraryRecipe && !connected -> "Connect Camera to Sync"
+                        isLibraryRecipe -> "Sync to Camera"
+                        connected -> "Write to ${visibleRecipe.slot.ifEmpty { "C1" }}"
                         else -> "Save to Library"
                     }
                     PrimaryCTA(
                         label = ctaLabel,
-                        onClick = onWrite,
+                        onClick = if (isLibraryRecipe) { { slotPickerOpen = true } } else { { pendingConfirmWrite = true } },
                         busy = writeBusy,
-                        enabled = connected || recipe.slot.isEmpty(),
+                        enabled = if (isLibraryRecipe) (connected && !writeBusy) else (connected || visibleRecipe.slot.isEmpty()),
                     )
                 }
             }
+
+            if (slotPickerOpen && onWriteToSlot != null) {
+                SyncToCameraSheet(
+                    connected = connected,
+                    cameraModel = cameraModel,
+                    cameraSlots = cameraSlots,
+                    recipeName = visibleRecipe.name,
+                    writeBusy = writeBusy,
+                    onDismiss = { slotPickerOpen = false },
+                    onWriteToSlot = { slot ->
+                        slotPickerOpen = false
+                        onWriteToSlot(slot)
+                    },
+                )
+            }
+
+            if (pendingConfirmWrite) {
+                DeleteConfirmDialog(
+                    eyebrow = "WRITE TO CAMERA",
+                    title = visibleRecipe.slot,
+                    body = "\"${visibleRecipe.name}\" will overwrite the current recipe in ${visibleRecipe.slot}.",
+                    confirmLabel = "Write to ${visibleRecipe.slot}",
+                    confirmColor = Gold,
+                    onConfirm = onWrite,
+                    onDismiss = { pendingConfirmWrite = false },
+                )
+            }
+
+            // Fullscreen image lightbox
+            expandedImageUri?.let { uriString ->
+                ReferenceImageLightbox(
+                    uriString = uriString,
+                    onDismiss = { expandedImageUri = null },
+                )
+            }
+
+            if (pendingDelete) {
+                DeleteConfirmDialog(
+                    title = visibleRecipe.name,
+                    body = "This recipe will be permanently removed from your library.",
+                    confirmLabel = "Delete",
+                    onConfirm = { onDelete(visibleRecipe) },
+                    onDismiss = { pendingDelete = false },
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun RecipeReferenceImage(
+    referenceImageUris: List<String>,
+    onAddReferenceImage: () -> Unit,
+    onRemoveReferenceImage: (String) -> Unit,
+    onExpandImage: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val bitmaps = remember(referenceImageUris) {
+        referenceImageUris.map { uriString ->
+            uriString to decodeSampledBitmap(context, Uri.parse(uriString))
+        }
+    }
+    val hasImages = bitmaps.any { it.second != null }
+    var isEditing by remember { mutableStateOf(false) }
+
+    Spacer(Modifier.height(14.dp))
+    if (hasImages) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(PanelHigh)
+                .border(1.dp, Border, RoundedCornerShape(12.dp))
+                .padding(12.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "REFERENCE IMAGES",
+                        fontFamily = SansFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.6.sp,
+                        color = TextDim,
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = "${referenceImageUris.size}/20 added",
+                        fontFamily = SansFamily,
+                        fontSize = 12.sp,
+                        color = TextMuted,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isEditing && referenceImageUris.size < 20) {
+                        Text(
+                            text = "ADD",
+                            fontFamily = MonoFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 10.5.sp,
+                            letterSpacing = 1.3.sp,
+                            color = Gold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onAddReferenceImage)
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                        )
+                    }
+                    if (isEditing) {
+                        Text(
+                            text = "DONE",
+                            fontFamily = MonoFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 10.5.sp,
+                            letterSpacing = 1.3.sp,
+                            color = Gold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { isEditing = false }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { isEditing = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                IconEdit,
+                                contentDescription = "Edit images",
+                                tint = TextDim,
+                                modifier = Modifier.size(15.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                bitmaps.forEach { (uriString, bitmap) ->
+                    bitmap ?: return@forEach
+                    Box(modifier = Modifier.size(width = 118.dp, height = 86.dp)) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Bg)
+                                .clickable { onExpandImage(uriString) },
+                        )
+                        if (isEditing) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(5.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .clickable { onRemoveReferenceImage(uriString) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    IconClose,
+                                    contentDescription = "Remove image",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(10.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(PanelHigh)
+                .border(1.dp, Border, RoundedCornerShape(12.dp))
+                .clickable(onClick = onAddReferenceImage)
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(
+                    text = "REFERENCE IMAGE",
+                    fontFamily = SansFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.6.sp,
+                    color = TextDim,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "Add up to 20 visual samples for this recipe",
+                    fontFamily = SansFamily,
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                )
+            }
+            Text(
+                text = "ADD",
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.5.sp,
+                letterSpacing = 1.3.sp,
+                color = Gold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReferenceImageLightbox(
+    uriString: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val bitmap = remember(uriString) {
+        decodeSampledBitmap(context, Uri.parse(uriString), maxPx = 1920)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(onClick = {}),
+            )
+        }
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp)
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.5f)),
+        ) {
+            Icon(IconClose, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun SavedFromSection(recipe: RecipeUiModel) {
+    val cameraSource = recipe.sourceCameraDisplayName() ?: return
+
+    val rows = buildList {
+        add("Camera" to cameraSource)
+        recipe.saved?.let { add("Added" to it) }
+        recipe.sourceUsbId?.let { add("USB ID" to it) }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    SectionLabel(text = "Saved From", modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(PanelLow)
+            .border(1.dp, Border, RoundedCornerShape(14.dp)),
+    ) {
+        rows.forEachIndexed { i, (label, value) ->
+            SavedFromRow(label = label, value = value)
+            if (i < rows.lastIndex) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Border),
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(16.dp))
+}
+
+@Composable
+private fun SavedFromRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            fontFamily = SansFamily,
+            fontSize = 14.5.sp,
+            color = TextPrimary,
+        )
+        Text(
+            text = value,
+            fontFamily = MonoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.5.sp,
+            letterSpacing = 0.2.sp,
+            color = TextMuted,
+        )
+    }
+}
+
+@Composable
+private fun SyncToCameraSheet(
+    connected: Boolean,
+    cameraModel: String,
+    cameraSlots: List<RecipeUiModel>,
+    recipeName: String,
+    writeBusy: Boolean,
+    onDismiss: () -> Unit,
+    onWriteToSlot: (String) -> Unit,
+) {
+    val slotNames = listOf("C1", "C2", "C3", "C4", "C5", "C6", "C7")
+    val slotMap = cameraSlots.associateBy { it.slot }
+    var selectedSlot by remember { mutableStateOf("C1") }
+    var sheetVisible by remember { mutableStateOf(false) }
+    var confirmingWrite by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { sheetVisible = true }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.76f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            visible = sheetVisible,
+            enter = slideInVertically(
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+                initialOffsetY = { it / 3 },
+            ) + fadeIn(tween(200)),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(Color(0xFF111009))
+                    .border(1.dp, Border, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .clickable(onClick = {})
+                    .navigationBarsPadding(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 14.dp)
+                        .width(38.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(TextDim.copy(alpha = 0.4f)),
+                )
+                Spacer(Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            text = "SYNC TO CAMERA",
+                            fontFamily = MonoFamily,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.6.sp,
+                            color = TextMuted,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (connected && cameraModel.isNotBlank()) cameraModel.uppercase() else "NO CAMERA",
+                            fontFamily = SansFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 19.sp,
+                            letterSpacing = 0.4.sp,
+                            color = TextPrimary,
+                        )
+                    }
+                    if (connected) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Gold.copy(alpha = 0.12f))
+                                .border(1.dp, Gold.copy(alpha = 0.4f), RoundedCornerShape(999.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Gold),
+                            )
+                            Text(
+                                text = "CONNECTED",
+                                fontFamily = MonoFamily,
+                                fontSize = 9.sp,
+                                letterSpacing = 1.2.sp,
+                                color = Gold,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                if (!connected) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .padding(bottom = 36.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            text = "Connect your Fujifilm camera via USB-C to sync this recipe.",
+                            fontFamily = SansFamily,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            color = TextDim,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            text = "SET CAMERA TO USB RAW CONV. / BACKUP MODE",
+                            fontFamily = MonoFamily,
+                            fontSize = 9.5.sp,
+                            letterSpacing = 1.2.sp,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Border),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        slotNames.forEach { slot ->
+                            val currentRecipe = slotMap[slot]
+                            val isSelected = slot == selectedSlot
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (isSelected) Gold.copy(alpha = 0.08f) else Color.Transparent)
+                                    .clickable { selectedSlot = slot }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    Text(
+                                        text = slot,
+                                        fontFamily = MonoFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        letterSpacing = 1.2.sp,
+                                        color = if (isSelected) Gold else TextMuted,
+                                        modifier = Modifier.width(26.dp),
+                                    )
+                                    Column {
+                                        Text(
+                                            text = currentRecipe?.name?.ifBlank { "—" } ?: "—",
+                                            fontFamily = SansFamily,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp,
+                                            color = if (isSelected) TextPrimary else TextPrimary.copy(alpha = 0.6f),
+                                        )
+                                        if (currentRecipe?.sim?.isNotBlank() == true) {
+                                            Text(
+                                                text = currentRecipe.sim.uppercase(),
+                                                fontFamily = MonoFamily,
+                                                fontSize = 9.5.sp,
+                                                letterSpacing = 1.2.sp,
+                                                color = TextDim,
+                                            )
+                                        }
+                                    }
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        IconCheck,
+                                        contentDescription = null,
+                                        tint = Gold,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Border.copy(alpha = 0.5f)),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        PrimaryCTA(
+                            label = if (writeBusy) "Writing…" else "Write to $selectedSlot",
+                            onClick = { confirmingWrite = true },
+                            busy = writeBusy,
+                            enabled = !writeBusy,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+        }
+    }
+
+    if (confirmingWrite) {
+        DeleteConfirmDialog(
+            eyebrow = "WRITE TO CAMERA",
+            title = selectedSlot,
+            body = "\"$recipeName\" will overwrite the current recipe in $selectedSlot.",
+            confirmLabel = "Write to $selectedSlot",
+            confirmColor = Gold,
+            onConfirm = { onWriteToSlot(selectedSlot) },
+            onDismiss = { confirmingWrite = false },
+        )
     }
 }
 
@@ -292,3 +1009,5 @@ private fun PropSectionDetail(label: String, data: Map<String, String>) {
     }
     Spacer(Modifier.height(16.dp))
 }
+
+

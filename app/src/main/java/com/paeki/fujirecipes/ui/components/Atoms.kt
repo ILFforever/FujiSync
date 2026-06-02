@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -21,9 +21,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,52 +99,35 @@ fun Wordmark() {
 fun AppHeader(
     connected: Boolean,
     cameraModel: String,
-    sheetExpanded: Boolean,
+    sheetRevealProgress: Float,
     onReconnect: () -> Unit,
+    showConnectionStatus: Boolean = true,
+    showDisconnectedStatus: Boolean = true,
+    showReconnectButton: Boolean = true,
 ) {
+    val cameraModelAlpha = ((sheetRevealProgress - 0.08f) / 0.72f).coerceIn(0f, 1f)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Bg)
+            .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Wordmark()
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (connected) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // Glow dot: shadow behind + solid dot on top
-                    Box(contentAlignment = Alignment.Center) {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .clip(CircleShape)
-                                .background(Gold.copy(alpha = 0.35f))
-                                .blur(6.dp),
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Gold),
-                        )
-                    }
-                    if (sheetExpanded) {
-                        Text(
-                            text = cameraModel,
-                            fontFamily = MonoFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 10.5.sp,
-                            letterSpacing = 1.sp,
-                            color = TextPrimary,
-                        )
-                    }
-                }
-            } else {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(28.dp)) {
+            if (showConnectionStatus && connected) {
+                Text(
+                    text = cameraModel,
+                    fontFamily = MonoFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.5.sp,
+                    letterSpacing = 1.sp,
+                    color = TextPrimary.copy(alpha = cameraModelAlpha),
+                )
+            } else if (showConnectionStatus && showDisconnectedStatus) {
                 Text(
                     text = "OFFLINE",
                     fontFamily = MonoFamily,
@@ -148,14 +136,16 @@ fun AppHeader(
                     color = TextDim,
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            IconButton(onClick = onReconnect, modifier = Modifier.size(28.dp)) {
-                Icon(
-                    IconRefresh,
-                    contentDescription = "Reconnect",
-                    tint = TextMuted,
-                    modifier = Modifier.size(16.dp),
-                )
+            if (showReconnectButton) {
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onReconnect, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        IconRefresh,
+                        contentDescription = "Reconnect",
+                        tint = TextMuted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
@@ -386,3 +376,16 @@ fun MetaRow(label: String, value: String) {
         )
     }
 }
+
+internal fun decodeSampledBitmap(
+    context: Context,
+    uri: Uri,
+    maxPx: Int = 512,
+): ImageBitmap? = runCatching {
+    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+    val scale = maxOf(opts.outWidth, opts.outHeight).coerceAtLeast(1)
+    opts.inSampleSize = Integer.highestOneBit(scale / maxPx).coerceAtLeast(1)
+    opts.inJustDecodeBounds = false
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
+}.getOrNull()

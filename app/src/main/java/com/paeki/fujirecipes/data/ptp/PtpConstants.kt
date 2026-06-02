@@ -25,5 +25,8 @@ object PtpConstants {
 
     const val BULK_CHUNK_SIZE = 16_384
     const val STANDARD_TIMEOUT_MS = 5_000
+    const val HEARTBEAT_TIMEOUT_MS = 3_000
     const val MAX_SMALL_CONTAINER_BYTES = 4_194_304
 }
+
+internal val MONO_SIM_CODES: Set<Int> = setOf(6, 7, 8, 9, 10, 12, 13, 14, 15)

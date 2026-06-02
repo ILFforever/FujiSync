@@ -17,16 +17,16 @@ fun encodePtpString(value: String): ByteArray {
     return buffer.array()
 }
 
-fun decodeInt16Le(payload: ByteArray): Int {
-    if (payload.size < Short.SIZE_BYTES) return 0
+fun decodeInt16Le(payload: ByteArray): Int? {
+    if (payload.size < Short.SIZE_BYTES) return null
     return ByteBuffer.wrap(payload)
         .order(ByteOrder.LITTLE_ENDIAN)
         .short
         .toInt()
 }
 
-fun decodeUInt16Le(payload: ByteArray): Int =
-    decodeInt16Le(payload) and 0xFFFF
+fun decodeUInt16Le(payload: ByteArray): Int? =
+    decodeInt16Le(payload)?.and(0xFFFF)
 
 fun hexDump(bytes: ByteArray, maxBytes: Int = 32): String {
     if (bytes.isEmpty()) return "<empty>"

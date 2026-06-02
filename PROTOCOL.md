@@ -244,10 +244,54 @@ Read loop reference: [`UsbPtpService$readAllProperties$1`](reverse-engineering/f
 | 4 | `DAYLIGHT` |
 | 6 | `INCANDESCENT` |
 | 8 | `UNDERWATER` |
+| 32769 (`0x8001`) | `FLUORESCENT_1` |
+| 32770 (`0x8002`) | `FLUORESCENT_2` |
+| 32771 (`0x8003`) | `FLUORESCENT_3` |
 | 32774 (`0x8006`) | `SHADE` |
 | 32775 (`0x8007`) | `COLOR_TEMP` (Kelvin) |
 
 When `WHITE_BALANCE == COLOR_TEMP (0x8007)`, the `COLOR_TEMP (0xD19C)` property carries the actual Kelvin value.
+
+### 6.3 Recipe value encoding — dial ↔ PTP wire
+
+> Source of truth: reference [`FujiValueMapper.displayValue`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/mapper/FujiValueMapper.java).
+> These are the **PTP wire** encodings (what `GetDevicePropValue`/`SetDevicePropValue` carry) — **not** the EXIF MakerNote encodings of §13, which are different. The canonical internal representation is the **raw PTP wire value**; convert to dial positions only for display/editing. Mirrored in our [`FujiValueMapper`](app/src/main/java/com/paeki/fujirecipes/data/mapper/FujiValueMapper.kt).
+
+**×10-scaled signed dials** (`int16LE`): `HIGHLIGHT_TONE`, `SHADOW_TONE`, `COLOR`, `SHARPNESS`, `CLARITY`, `MONO_WC`, `MONO_MG`.
+Wire value = **dial × 10**. So Color dial +2 → wire `20`; Highlight −1.5 → wire `−15`; Sharpness −4 → wire `−40`.
+The sentinel `-32768` (`Short.MIN_VALUE`) means **default / unset**. The reference displays `%+.1f` (or `%+.0f` for whole steps); Mono WC/MG use integer `s / 10`.
+
+> ⚠️ This was Open Question §14.7. **Resolved:** the PTP wire unit is dial × 10 (not the EXIF `dial × −16`, and not the raw dial). Writing the bare dial value (e.g. `2` for Color +2) is the classic bug — the camera clamps it toward 0, so Color/Sharpness/Clarity appear unchanged after a write.
+
+**Direct signed dials** (`int16LE`, no scale): `WB_SHIFT_RED`, `WB_SHIFT_BLUE`. Wire value = dial value directly.
+
+**`HIGH_ISO_NR` (`0xD1A1`, `uint16LE`) — non-linear lookup** (default `8192` = dial 0 / Normal):
+
+| Wire | Dial | | Wire | Dial |
+|---:|---:|---|---:|---:|
+| 32768 | −4 | | 4096 | +1 |
+| 28672 | −3 | | 0 | +2 |
+| 16384 | −2 | | 24576 | +3 |
+| 12288 | −1 | | 20480 | +4 |
+| 8192 | 0 | | | |
+
+Unknown wire values have no dial mapping (reference renders them as raw hex). Writing the bare dial (e.g. `0` for Normal) is a bug — the camera reads wire `0` as dial **+2**.
+
+**`GRAIN_EFFECT` (`0xD195`, `uint16LE`)** — combined strength+size, default `6` (Off):
+
+| Wire | Meaning |
+|---:|---|
+| 1, 6 | Off |
+| 2 | Weak Small |
+| 3 | Strong Small |
+| 4 | Weak Large |
+| 5 | Strong Large |
+
+> Off encodes to `6` (the camera default). Wire `0` is **not** a valid Grain value — do not write it.
+
+**`COLOR_CHROME` / `COLOR_CHROME_FX_BLUE` / `SMOOTH_SKIN` (`uint16LE`)** — default `1` (Off): `1 = Off`, `2 = Weak`, `3 = Strong`.
+
+**`DYNAMIC_RANGE` (`0xD190`, `uint16LE`)** — wire is the literal percentage: `100`/`200`/`400`; `0` = Auto.
 
 ---
 
@@ -539,11 +583,225 @@ releaseInterface; close
 
 ---
 
-## 13. Open Questions / Caveats
+## 13. JPEG EXIF MakerNote → Recipe Parameters
+
+When importing a recipe from a shot JPEG rather than reading it live over USB, the
+Fujifilm MakerNote embedded in the file is the source. This section maps EXIF tags
+to recipe parameters and documents the value encodings.
+
+### 13.1 Confirmed mappings (decoded by metadata-extractor `FujifilmMakernoteDirectory`)
+
+| MakerNote tag name | EXIF decoded value (example) | Recipe parameter | PTP code |
+|---|---|---|---|
+| `Film Mode` | see lookup table below | Film Simulation | `0xD192` |
+| `White Balance` | `"Daylight"` | White Balance | `0xD199` |
+| `White Balance Fine Tune` | `"R B"` space-separated ints | WB Shift R / B | `0xD19A` / `0xD19B` |
+| `Color Saturation` | string or raw int — see lookup table below | Color | `0xD19F` |
+| `Sharpness` (MakerNote) | string or raw int — see lookup table below | Sharpness | `0xD1A0` |
+| `Tone (Contrast)` | `"Normal"` | Legacy combined — X-H2 uses separate Highlight/Shadow tags below | — |
+| `Dynamic Range` | `"Standard"` | Dynamic Range (DR setting) | `0xD190` |
+| `Development Dynamic Range` | `400` | Actual DR value in use (100/200/400) | `0xD190` |
+| `High ISO Noise Reduction` | string or raw int — see lookup table below | High ISO NR | `0xD1A1` |
+
+**WB Fine Tune encoding:** raw EXIF value = dial × 20. R+2 B+2 → `"40 40"`. Do not use directly for PTP writes (`WB_SHIFT_RED/BLUE` use dial click units).
+
+#### Film Simulation lookup (X-H2, fully verified)
+
+Identify film sim from `Film Mode` field first; for Monochrome/ACROS variants and Sepia, fall back to `Color Saturation`.
+
+| Fuji Film Sim | EXIF `Film Mode` | PTP code | Notes |
+|---|---|---|---|
+| Provia/Standard | `"F0/Standard (Provia)"` | 1 | |
+| Velvia/Vivid | `"F2/Fujichrome (Velvia)"` | 2 | |
+| Astia/Soft | `"F1b/Studio Portrait Smooth Skin Tone (Astia)"` | 3 | |
+| Pro Neg Hi | `"Pro Neg. Hi"` | 4 | |
+| Pro Neg Std | `"Pro Neg. Std"` | 5 | |
+| Monochrome | absent — use `Color Saturation: "None (B&W)"` | 6 | |
+| Monochrome+Y | absent — use `Color Saturation: "B&W Yellow Filter"` | 7 | |
+| Monochrome+R | absent — use `Color Saturation: "B&W Green Filter"` | 8 | ⚠️ label is wrong in metadata-extractor |
+| Monochrome+G | absent — use `Color Saturation: "B&W Blue Filter"` | 9 | ⚠️ label is wrong in metadata-extractor |
+| Sepia | absent — use `Color Saturation: Unknown (784)` | 10 | no Film Mode field written by camera |
+| Classic Chrome | `"Classic Chrome"` | 11 | |
+| ACROS | absent — use `Color Saturation: Unknown (1280)` | 12 | |
+| ACROS+R | absent — use `Color Saturation: Unknown (1281)` | 13 | |
+| ACROS+Y | absent — use `Color Saturation: Unknown (1282)` | 14 | |
+| ACROS+G | absent — use `Color Saturation: Unknown (1283)` | 15 | |
+| Eterna | `"Eterna"` | 16 | |
+| Classic Neg | `"Classic Negative"` | 17 | |
+| Eterna Bleach Bypass | `"Bleach Bypass"` | 18 | |
+| Nostalgic Neg | `"Nostalgic Neg"` | 19 | |
+| Reala Ace | `Unknown (2816)` | 20 | not decoded by metadata-extractor |
+
+#### White Balance lookup (X-H2, 11 isolation shots)
+
+| WB Mode | EXIF `White Balance` | PTP code |
+|---|---|---|
+| Auto | `"Auto"` | `0x0002` |
+| Auto White Priority | `Unknown (1)` | `0x8020` |
+| Ambience Priority | `Unknown (2)` | `0x8021` |
+| Daylight | `"Daylight"` | `0x0004` |
+| Shade | `"Cloudy"` ← metadata-extractor uses standard EXIF label | `0x8006` |
+| Incandescent | `"Incandescence"` | `0x0006` |
+| Underwater | `Unknown (1536)` | `0x0008` |
+| Fluorescent 1 | `"Daylight Fluorescent"` | `0x8001` |
+| Fluorescent 2 | `"Day White Fluorescent"` | `0x8002` |
+| Fluorescent 3 | `"White Fluorescent"` | `0x8003` |
+| Color Temp (Kelvin) | `"Kelvin"` | `0x8007` |
+
+When `White Balance == "Kelvin"`, a separate `Color Temperature` field contains the actual Kelvin value (e.g. `4700`).
+
+#### Color Saturation lookup (Pro Neg Hi, X-H2 — 9 isolation shots)
+
+| Dial | `Color Saturation` raw |
+|---:|---|
+| +4 | 224 |
+| +3 | 192 |
+| +2 | `"High"` |
+| +1 | `"Medium High"` |
+| 0 | `"Normal"` |
+| −1 | `"Medium Low"` |
+| −2 | 1024 |
+| −3 | 1216 |
+| −4 | 1248 |
+
+> metadata-extractor decodes known values to strings; unknown values appear as raw integers. Use this table as a direct lookup — map string → dial position, raw int → dial position.
+
+#### Monochrome color filter lookup (`Color Saturation` field, 4 isolation shots on Monochrome sim)
+
+| Fuji filter | EXIF `Color Saturation` |
+|---|---|
+| STD (no filter) | `"None (B&W)"` |
+| Yellow | `"B&W Yellow Filter"` |
+| Red | `"B&W Green Filter"` ⚠️ metadata-extractor label is wrong — this raw value is Red, not Green |
+| Green | `"B&W Blue Filter"` ⚠️ metadata-extractor label is wrong — this raw value is Green, not Blue |
+
+> **Implementation note:** Do NOT trust the string label for R/G filters — use the string as an opaque key and map it via this table.
+
+#### ACROS color filter lookup (`Color Saturation` field, 4 isolation shots on ACROS sim)
+
+| Fuji filter | EXIF `Color Saturation` |
+|---|---|
+| ACROS STD | `Unknown (1280)` |
+| ACROS+R | `Unknown (1281)` |
+| ACROS+Y | `Unknown (1282)` |
+| ACROS+G | `Unknown (1283)` |
+
+> ACROS values fall through as raw integers (metadata-extractor has no lookup for them) — no label confusion.
+
+#### High ISO NR lookup (Pro Neg Hi, X-H2 — 9 isolation shots)
+
+| Dial | `High ISO Noise Reduction` |
+|---:|---|
+| +4 | `Unknown (480)` |
+| +3 | `Unknown (448)` |
+| +2 | `"Strong"` |
+| +1 | `Unknown (384)` |
+| 0 | `"Normal"` |
+| −1 | `Unknown (640)` |
+| −2 | `"Weak"` |
+| −3 | `Unknown (704)` |
+| −4 | `Unknown (736)` |
+
+#### Sharpness lookup (Pro Neg Hi, X-H2 — 9 isolation shots)
+
+| Dial | `Sharpness` (MakerNote) |
+|---:|---|
+| +4 | `Unknown (6)` |
+| +3 | `"Hardest"` |
+| +2 | `"Hard"` |
+| +1 | `"Medium Hard"` |
+| 0 | `"Normal"` |
+| −1 | `"Medium Soft"` |
+| −2 | `"Soft"` |
+| −3 | `"Softest"` |
+| −4 | `Unknown (0)` |
+
+### 13.2 MakerNote unknown tags — decoded from controlled test shots
+
+Sources: X-H2 fw 5.20, Pro Neg Hi, 6 shots varying one parameter group at a time.
+T1–T3: Grain Off/Weak-Small/Strong-Large (CC Weak, FX Blue Weak, Smooth Skin Weak held constant).
+T4–T6: CC Off-Off / CC Strong-FX Off / CC Off-FX Strong (Grain Off, Smooth Skin Off).
+Constant baseline across all: DR100 · H−1 · S 0 · Color +2 · Sharp 0 · ISO NR 0 · Clarity 0 · WB Auto White Priority R+2 B+2.
+
+#### Confirmed
+
+| EXIF hex tag | Parameter | Encoding |
+|---|---|---|
+| `0x100f` | **Clarity** | raw = dial × 1000; +5 → 5000, 0 → 0, −5 → −5000. Dial range −5 to +5 in integer steps (3 isolation shots). |
+| `0x1040` | **Shadow Tone** | raw = dial × (−16); +2.0 → −32, 0 → 0, −2.0 → +32. Dial range −2.0 to +2.0 in 0.5 steps (5 isolation shots). |
+| `0x1041` | **Highlight Tone** | raw = dial × (−16); same encoding as Shadow Tone (5 isolation shots). |
+| `0x1047` | **Grain Effect** (strength) | 0=Off · 32=Weak · 64=Strong |
+| `0x104c` | **Grain Size** | 0=Off · 16=Small · 32=Large |
+| `0x1048` | **Color Chrome Effect** | 0=Off · 32=Weak · 64=Strong |
+| `0x104e` | **Color Chrome FX Blue** | 0=Off · 32=Weak · 64=Strong |
+| `0x1049` | **Monochrome WC** (Warm/Cool) | signed int8 stored as uint8; dial value direct: +18 → 18, −18 → 238. Range −18 to +18 (ACROS, 3 shots). |
+| `0x104a` | **Smooth Skin** | 0=Off · 32=Weak · 64=Strong (confirmed across 3 isolated shots: Off/Weak/Strong) |
+| `0x104b` | **Monochrome MG** (Magenta/Green) | signed int8 stored as uint8; same encoding as `0x1049`. |
+
+> **Note:** Early analysis had `0x1047`=Grain Size and `0x1048`=Smooth Skin (both wrong), and later
+> `0x1041`=Smooth Skin (also wrong — `0x1041` = 0 in all three Smooth Skin isolation shots). The
+> true Smooth Skin tag is `0x104a`. Previous T1–T6 data had `0x104a`=32 throughout because the
+> baseline kept Smooth Skin at Weak — it was mistakenly classified as a static camera flag.
+> Lesson: confirm every inferred tag with a dedicated isolation shot before treating it as settled.
+
+#### Still unknown
+
+| EXIF hex tag | Observed | Notes |
+|---|---|---|
+| `0x1045` | 0 in all T tests; 1 in original shot | Unclear |
+| `0x104d` | 0 in all shots | Unknown — not Shadow Tone (that's `0x1040`) |
+| `0x1050` | 0 in all shots | Unknown — not Clarity (that's `0x100f`) |
+| `0x1045` | 1 in original shot, 0 in all T/HS/Smooth Skin tests | Unclear |
+| `0x1046` | 1 in original shot, 0 in all T/HS/Smooth Skin tests | Unclear |
+
+#### Highlight Tone and Shadow Tone
+
+Both confirmed via three isolation shots (HS 00 / HS 20 / HS 02):
+- `0x1040` = Shadow Tone; `0x1041` = Highlight Tone
+- Encoding: `raw = dial × (−16)` — positive dial = negative raw, negative dial = positive raw
+- Full range: −2.0 → +32, −1.5 → +24, 0 → 0, +1.5 → −24, +2.0 → −32; each 0.5 step = ±8 raw
+- Confirmed across 5 shots (±2.0 both channels + baseline zero)
+- The legacy `Tone (Contrast)` field (0x1004) shows `"Normal"` regardless — not updated for per-channel tone on X-H2; ignore it.
+- `0x1040` = 24 in the original makernote.txt shot → Shadow Tone was −1.5 in that session.
+
+#### Other encoding notes
+
+**EXIF Sharpness / Color are absolute, not dial-relative.** EXIF reports `"Normal"` and `"High"`
+for Sharpness 0 and Color +2 because the film simulation's built-in offset is baked in. Cannot
+recover dial position from these legacy tags without a per-sim offset table.
+
+**WB Fine Tune encoding is NOT dial clicks.** R=+4 → raw 20, B=−5 → raw −60 in original shot;
+R=+2 B=+2 → raw "40 40" in T tests. From T tests: +2 → 40, so scale = ×20. Original shot then:
+20/20 = R+1 (not R+4 as stated) — either the original recipe WB wasn't what was recalled, or the
+R/B axes have different scales. Do not use these values directly when writing via PTP
+(`WB_SHIFT_RED 0xD19A` / `WB_SHIFT_BLUE 0xD19B` use dial click units, not this encoding).
+
+**High ISO NR −4 → raw 704; NR 0 → decoded as `"Normal"`.** Encoding non-linear or offset;
+needs a non-zero raw value for NR=0 to fit the curve.
+
+### 13.3 Pending test shots
+
+> Same baseline as T1–T6. One setting changes per shot.
+
+| # | Set this | Resolves |
+|---|---|---|
+_(no pending tests — all parameters confirmed)_
+
+---
+
+## 14. Open Questions / Caveats
+
+7. **Highlight/Shadow Tone PTP wire unit — RESOLVED.** The PTP wire unit is **dial × 10** (`int16LE`), per the reference `FujiValueMapper` (`s / 10.0f`, `%+.1f`). So Highlight −1.5 → wire `−15`, Shadow +2.0 → wire `20`. This is independent of the EXIF encoding (`raw = dial × −16`, §13). Full details in §6.3. (`-32768` is the default/unset sentinel.)
+
+8. **Grain EXIF → PTP combined value.** The EXIF side uses two tags (`0x1047` strength, `0x104c` size); the PTP side uses one combined `GRAIN_EFFECT (0xD195)` value: **`1`/`6`=Off, `2`=Weak Small, `3`=Strong Small, `4`=Weak Large, `5`=Strong Large** (see §6.3; default `6`). In all observed test shots both EXIF tags are 0 when grain is Off. If an EXIF import produces strength≠0 but size=0 (invalid camera state), treat the whole grain setting as Off — picking a size silently would be worse than dropping it.
+
+9. **DR Priority.** Fuji cameras have a "Dynamic Range Priority" setting (Off / Weak / Strong / Auto) that overrides the manual DR100/200/400 setting when active. It does not appear in the `PRESET_BLOCK_RANGE (0xD18E–0xD1A5)` PTP properties from the reverse-engineered APK — it may not be exposed over USB. Not observed in any EXIF test shots (all used manual DR). Rarely used in practice; treat as unsupported for now.
+
+---
 
 1. **Slot count.** The APK does not hard-code "7" anywhere visible in the protocol layer — it's the model that exposes 7 slots on X-H2. If you target older bodies (X-T3 etc.) you may need to clamp differently.
 2. **`SetDevicePropValue` size.** Every observed write is 2 bytes (int16/uint16). `FUJI_PRESET_NAME` is the only variable-length one (PTP string).
-3. **Non-recipe properties in the block.** Codes `0xD18E, 0xD18F, 0xD191, 0xD1A3, 0xD1A4, 0xD1A5` are read but the app has no enum entry. Their meaning is unknown — a logger that captures them across slots would help map them.
+3. **Non-recipe properties in the block.** Codes `0xD18E, 0xD18F, 0xD191, 0xD1A3, 0xD1A4, 0xD1A5` are read but the app has no enum entry. Their meaning is unknown — a logger that captures them across slots would help map them. See also §13 for EXIF-side unknowns.
 4. **GetDeviceInfo during apply.** The decompile shows a `GetDeviceInfo` call early in the apply path (the `slotResult` continuation variable). It looks defensive — possibly to confirm the camera is still alive after writing the slot selector. Replicating it costs little, so do it.
 5. **Inter-write delay** is 150 ms in the apply loop and 100 ms after writing the slot selector during reads. Don't tune below those without testing on multiple bodies.
 6. **Card-reader fallback.** If the camera enumerates with interface class `0x08` (or DeviceInfo lacks `0xD18C`), the app immediately calls `CloseSession`, releases the interface, and reports CARD_READER mode. Replicate that — leaving the interface claimed will block Android's MTP indexer.

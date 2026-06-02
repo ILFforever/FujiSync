@@ -80,6 +80,17 @@ data class OpenPtpConnection(
     fun closeSession(): Boolean =
         executeCommand(PtpConstants.CLOSE_SESSION).isOk
 
+    fun ping(): Boolean =
+        try {
+            val transaction = executeCommand(
+                code = PtpConstants.GET_DEVICE_INFO,
+                timeoutMs = PtpConstants.HEARTBEAT_TIMEOUT_MS,
+            )
+            transaction.isOk && transaction.data != null
+        } catch (_: Exception) {
+            false
+        }
+
     fun executeCommand(
         code: Int,
         params: List<Int> = emptyList(),

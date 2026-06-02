@@ -1,0 +1,195 @@
+=== Fujifilm MakerNote ===
+Makernote Version: 1.30
+Serial Number: FF02B7603672     593536373031230916065310313A8F
+Unknown tag (0x0020): 29580
+Quality: FINE   
+Sharpness: Medium Hard
+White Balance: Daylight
+Color Saturation: High
+Tone (Contrast): Normal
+White Balance Fine Tune: 20 -60
+Noise Reduction: N/A
+High ISO Noise Reduction: Unknown (704)
+Unknown tag (0x100f): 0
+Flash Mode: Unknown (32768)
+Flash Strength: 0 EV (Apex)
+Focus Mode: Auto Focus
+Unknown tag (0x1022): 1
+Focus Pixel: 4097 1051
+Unknown tag (0x1025): 4293656454
+Unknown tag (0x1026): 48
+Unknown tag (0x102b): 18
+Unknown tag (0x102c): 131073
+Unknown tag (0x102d): 24578
+Unknown tag (0x102e): 258
+Slow Sync: Off
+Picture Mode: Manual exposure
+Unknown tag (0x1032): 1
+Unknown tag (0x1040): 24
+Unknown tag (0x1041): 16
+Unknown tag (0x1045): 1
+Unknown tag (0x1046): 1
+Unknown tag (0x1047): 32
+Unknown tag (0x1048): 32
+Unknown tag (0x104a): 32
+Unknown tag (0x104c): 16
+Unknown tag (0x104d): 0
+Unknown tag (0x104e): 32
+Unknown tag (0x1050): 0
+Auto Bracketing: On
+Sequence Number: 1
+Unknown tag (0x1103): 251724546
+Unknown tag (0x1200): 0
+Blur Warning: No Blur Warning
+Focus Warning: Good Focus
+AE Warning: AE Good
+Unknown tag (0x1303): 0
+GE Image Size: 0
+Unknown tag (0x1305): 0
+Dynamic Range: Standard
+Film Mode: Classic Negative
+Dynamic Range Setting: Manual
+Development Dynamic Range: 400
+Minimum Focal Length: 70
+Maximum Focal Length: 300
+Maximum Aperture at Minimum Focal Length: 4.5
+Maximum Aperture at Maximum Focal Length: 5.6
+Unknown tag (0x1408): 48 52 48 48
+Unknown tag (0x1409): 48 49 48 48
+Unknown tag (0x140a): 19
+Unknown tag (0x1422): 3 1 0
+Unknown tag (0x1430): [129 values]
+Unknown tag (0x1436): 0
+Image Number: 53918
+Unknown tag (0x1439): 
+Unknown tag (0x1442): 0
+Unknown tag (0x1446): 1
+Unknown tag (0x1447): X-H2_0200
+Unknown tag (0x1448): X-H2_0200
+Unknown tag (0x1449): 251723881
+Unknown tag (0x144a): 570
+Unknown tag (0x144b): 302
+Unknown tag (0x144c): 520
+Faces Detected: 1
+Unknown tag (0x4101): 8
+Unknown tag (0x4102): 4
+Face Positions: 3682 677 4296 1244
+Unknown tag (0x4104): 31224 8611 36431 15824
+Unknown tag (0x4105): 0
+Unknown tag (0x4180): 52
+Unknown tag (0x4181): 0
+Unknown tag (0x4200): 2
+Unknown tag (0x4201): 8 7
+Unknown tag (0x4202): 4 4
+Unknown tag (0x4203): 3682 677 4296 1244 3187 556 4840 3735
+Unknown tag (0x4204): 31224 8611 36431 15824 27026 7072 41044 47511
+Unknown tag (0x4205): 0 0
+Unknown tag (0x4208): 3 3
+Unknown tag (0x4280): 52 76
+Unknown tag (0x4281): 0 0
+Unknown tag (0x4283): 0 0
+Unknown tag (0x4284): 0 0
+
+=== EXIF IFD0 ===
+Make: FUJIFILM
+Model: X-H2
+Orientation: Top, left side (Horizontal / normal)
+X Resolution: 72 dots per inch
+Y Resolution: 72 dots per inch
+Resolution Unit: Inch
+Software: Digital Camera X-H2 Ver5.20
+Date/Time: 2026:05:24 14:40:53
+Artist:                                                                                                                                                                                                                                                                
+YCbCr Positioning: Datum point
+Copyright:                                                                                                                                                                                                                                                                
+
+=== EXIF SubIFD ===
+Exposure Time: 1/8000 sec
+F-Number: f/5.6
+Exposure Program: Manual control
+ISO Speed Ratings: 500
+Sensitivity Type: Standard Output Sensitivity
+Exif Version: 2.32
+Date/Time Original: 2026:05:24 14:40:53
+Date/Time Digitized: 2026:05:24 14:40:53
+Time Zone: +09:00
+Time Zone Original: +09:00
+Time Zone Digitized: +09:00
+Components Configuration: YCbCr
+Compressed Bits Per Pixel: 4.8 bits/pixel
+Shutter Speed Value: 1/8191 sec
+Aperture Value: f/5.7
+Brightness Value: 8.32
+Exposure Bias Value: -367/100 EV
+Max Aperture Value: f/4.4
+Metering Mode: Multi-segment
+White Balance: Daylight
+Flash: Flash did not fire
+Focal Length: 210 mm
+User Comment: 
+FlashPix Version: 1.00
+Color Space: sRGB
+Exif Image Width: 7728 pixels
+Exif Image Height: 5152 pixels
+Focal Plane X Resolution: 1/3289 cm
+Focal Plane Y Resolution: 1/3289 cm
+Focal Plane Resolution Unit: cm
+Sensing Method: One-chip color area sensor
+File Source: Digital Still Camera (DSC)
+Scene Type: Directly photographed image
+Custom Rendered: Normal process
+Exposure Mode: Manual exposure
+White Balance Mode: Manual white balance
+Focal Length 35: 315 mm
+Scene Capture Type: Standard
+Sharpness: Hard
+Subject Distance Range: Unknown
+Body Serial Number: 3C001957
+Lens Specification: 70-300mm f/4.5-5.6
+Lens Make: NIKON
+Lens Model: NIKON AF-P NIKKOR 70-300mm f/4.5-5.6E ED VR
+Lens Serial Number: AB5C8E1X
+Unknown tag (0xa460): 1
+
+=== JPEG ===
+Compression Type: Baseline
+Data Precision: 8 bits
+Image Height: 5152 pixels
+Image Width: 7728 pixels
+Number of Components: 3
+Component 1: Y component: Quantization table 0, Sampling factors 2 horiz/1 vert
+Component 2: Cb component: Quantization table 1, Sampling factors 1 horiz/1 vert
+Component 3: Cr component: Quantization table 1, Sampling factors 1 horiz/1 vert
+
+=== Interoperability ===
+Interoperability Index: Recommended Exif Interoperability Rules (ExifR98)
+Interoperability Version: 1.00
+
+=== PrintIM ===
+PrintIM Version: 0250
+Unknown tag (0x0002): 0x00000001
+Unknown tag (0x0003): 0x00000022
+Unknown tag (0x0101): 0x00000000
+
+=== Exif Thumbnail ===
+Compression: JPEG (old-style)
+Orientation: Top, left side (Horizontal / normal)
+X Resolution: 72 dots per inch
+Y Resolution: 72 dots per inch
+Resolution Unit: Inch
+Artist:                                                                                                                                                                                                                                                                
+Thumbnail Offset: 4202 bytes
+Thumbnail Length: 9115 bytes
+YCbCr Positioning: Datum point
+
+=== XMP ===
+XMP Value Count: 1
+
+=== Huffman ===
+Number of Tables: 4 Huffman tables
+
+=== File Type ===
+Detected File Type Name: JPEG
+Detected File Type Long Name: Joint Photographic Experts Group
+Detected MIME Type: image/jpeg
+Expected File Name Extension: jpg

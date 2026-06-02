@@ -42,8 +42,8 @@ class UsbCameraScanner(
         }
 
         return when {
-            sawPtp -> CameraUsbMode.Ptp
             sawMassStorage -> CameraUsbMode.CardReader
+            sawPtp -> CameraUsbMode.Ptp
             else -> CameraUsbMode.Other
         }
     }

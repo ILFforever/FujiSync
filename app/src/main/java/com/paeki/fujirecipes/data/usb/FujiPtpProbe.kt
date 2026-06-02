@@ -98,7 +98,9 @@ class FujiPtpProbe(
                     batteryPercent = batteryPercent,
                 )
             } else {
-                FujiPtpProbeResult.NotReady("Fuji slot selector 0xD18C was not advertised.")
+                FujiPtpProbeResult.NotReady(
+                    "Fuji recipe slots not available. On the camera go to MENU → SET UP → USB Setting and select \"USB RAW Conv. / Backup Restore\", then reconnect."
+                )
             }
         }
     }

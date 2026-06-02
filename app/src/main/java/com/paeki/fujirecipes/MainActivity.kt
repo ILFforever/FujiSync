@@ -9,227 +9,134 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.viewModels
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import com.paeki.fujirecipes.data.usb.CameraUsbMode
-import com.paeki.fujirecipes.data.usb.FujiPtpProbe
-import com.paeki.fujirecipes.data.usb.FujiPtpProbeResult
-import com.paeki.fujirecipes.data.usb.FujiRecipeCamera
-import com.paeki.fujirecipes.data.usb.UsbCameraRepository
-import com.paeki.fujirecipes.data.usb.UsbCameraScanner
-import com.paeki.fujirecipes.data.usb.UsbPtpConnection
-import com.paeki.fujirecipes.domain.model.CameraSlot
-import com.paeki.fujirecipes.ui.AppTab
 import com.paeki.fujirecipes.ui.FujiSyncApp
-import com.paeki.fujirecipes.ui.FujiSyncUiState
-import com.paeki.fujirecipes.ui.WriteToastState
-import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.paeki.fujirecipes.ui.model.RecipeUiModel
-import com.paeki.fujirecipes.ui.model.SampleData
+import com.paeki.fujirecipes.ui.MainViewModel
+import com.paeki.fujirecipes.ui.MainViewModelEvent
+import com.paeki.fujirecipes.ui.SplashScreen
 import com.paeki.fujirecipes.ui.theme.FujiRecipesTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    private lateinit var usbManager: UsbManager
-    private lateinit var repository: UsbCameraRepository
-    private lateinit var connectionFactory: UsbPtpConnection
 
-    private var uiState by mutableStateOf(
-        FujiSyncUiState(
-            slots = SampleData.slots,
-            library = SampleData.library,
-        )
-    )
+    private val viewModel: MainViewModel by viewModels()
+
+    private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        if (uris.isEmpty()) return@registerForActivityResult
+        uris.forEach { uri ->
+            runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        }
+        viewModel.applyReferenceImages(uris)
+    }
+
+    private val groupImagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        viewModel.applyGroupImage(uri)
+    }
+
+    private val exifImagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.handleExifImportResult(uri)
+    }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != ACTION_USB_PERMISSION) return
-            val device = intent.usbDeviceExtra()
+            val device = intent.usbDeviceExtra() ?: return
             val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-            if (granted && device != null) {
-                probeDevice(device)
-            } else {
-                uiState = uiState.copy(writeBusy = false)
-            }
+            viewModel.onUsbPermissionResult(device, granted)
         }
     }
+
+    private var showSplash by mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
-        repository = UsbCameraRepository(UsbCameraScanner(usbManager))
-        connectionFactory = UsbPtpConnection(usbManager)
+        enableEdgeToEdge()
 
         registerUsbPermissionReceiver()
-        refreshDevices()
+        collectViewModelEvents()
+        handleUsbAttachIntent(intent)
 
         setContent {
             FujiRecipesTheme {
-                FujiSyncApp(
-                    state = uiState,
-                    onReconnect = ::onReconnect,
-                    onTabChange = { tab -> uiState = uiState.copy(tab = tab) },
-                    onSelectSlot = { idx -> uiState = uiState.copy(selectedSlotIdx = idx) },
-                    onOpenDetail = { recipe -> uiState = uiState.copy(detailRecipe = recipe) },
-                    onCloseDetail = { uiState = uiState.copy(detailRecipe = null) },
-                    onWrite = ::handleWrite,
-                    onToggleLibrarySort = {
-                        uiState = uiState.copy(
-                            librarySort = if (uiState.librarySort == "NEWEST") "NAME" else "NEWEST"
-                        )
-                    },
-                    onOpenLibraryItem = { recipe ->
-                        uiState = uiState.copy(
-                            detailRecipe = RecipeUiModel(
-                                slot = "",
-                                name = recipe.name,
-                                sim = recipe.sim,
-                                pills = recipe.pills,
-                            )
-                        )
-                    },
-                )
-            }
-        }
-    }
-
-    private fun onReconnect() {
-        // If already connected via USB, toggle back to disconnected for demo.
-        // In real use this triggers a USB scan.
-        if (uiState.connected) {
-            uiState = uiState.copy(connected = false)
-        } else {
-            val devices = repository.scanUsb()
-            val ptpDevice = devices.firstOrNull { it.mode == CameraUsbMode.Ptp }
-            if (ptpDevice != null) {
-                // Real camera found — probe it
-                if (!usbManager.hasPermission(ptpDevice.device)) {
-                    requestUsbPermission(ptpDevice.device)
-                    return
-                }
-                probeDevice(ptpDevice.device)
-            } else {
-                // No camera — simulate connection with sample data (prototype/demo mode)
-                val model = devices.firstOrNull()?.productName?.takeIf { it.isNotBlank() } ?: "X-H2"
-                uiState = uiState.copy(
-                    connected = true,
-                    cameraModel = model,
-                    slots = SampleData.slots,
-                )
-            }
-        }
-    }
-
-    private fun handleWrite() {
-        val recipe = uiState.detailRecipe ?: uiState.slots.getOrNull(uiState.selectedSlotIdx) ?: return
-        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-
-        uiState = uiState.copy(writeBusy = true)
-
-        if (selected == null || !uiState.connected) {
-            // Demo mode — simulate write
-            lifecycleScope.launch {
-                delay(1400)
-                val slot = recipe.slot.ifEmpty { "C1" }
-                uiState = uiState.copy(
-                    writeBusy = false,
-                    detailRecipe = null,
-                    writeToast = WriteToastState(slot = slot, name = recipe.name),
-                )
-                delay(2400)
-                uiState = uiState.copy(writeToast = null)
-            }
-            return
-        }
-
-        if (!usbManager.hasPermission(selected.device)) {
-            requestUsbPermission(selected.device)
-            return
-        }
-
-        lifecycleScope.launch {
-            // Real write would go here via FujiRecipeCamera
-            delay(1400)
-            val slot = recipe.slot.ifEmpty { "C1" }
-            uiState = uiState.copy(
-                writeBusy = false,
-                detailRecipe = null,
-                writeToast = WriteToastState(slot = slot, name = recipe.name),
-            )
-            delay(2400)
-            uiState = uiState.copy(writeToast = null)
-        }
-    }
-
-    private fun probeDevice(device: UsbDevice) {
-        lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching { FujiPtpProbe(connectionFactory).probe(device) }
-                    .getOrElse { FujiPtpProbeResult.NotReady(it.message ?: "Probe failed.") }
-            }
-
-            when (result) {
-                is FujiPtpProbeResult.Ready -> {
-                    val model = result.deviceInfo.model.ifBlank { "Fujifilm" }
-                    val battery = result.batteryPercent?.let { "$it%" } ?: "—"
-                    val firmware = result.deviceInfo.deviceVersion.ifBlank { "—" }
-                    uiState = uiState.copy(
-                        connected = true,
-                        cameraModel = model,
-                        battery = battery,
-                        firmware = firmware,
-                        slots = SampleData.slots, // real slots filled in by readAllSlots()
+                val state by viewModel.uiState.collectAsState()
+                if (showSplash) {
+                    SplashScreen(onComplete = { showSplash = false })
+                } else {
+                    FujiSyncApp(
+                    state = state,
+                    onReconnect = viewModel::onReconnect,
+                    onTabChange = viewModel::setTab,
+                    onSelectSlot = viewModel::setSelectedSlotIdx,
+                    onOpenDetail = viewModel::openDetail,
+                    onCloseDetail = viewModel::closeDetail,
+                    onOpenRecipeCreator = viewModel::openRecipeCreator,
+                    onOpenRecipeEditor = viewModel::openRecipeEditor,
+                    onCloseRecipeEditor = viewModel::closeRecipeEditor,
+                    onSaveRecipeDraft = viewModel::saveRecipeDraft,
+                    onWrite = viewModel::handleWrite,
+                    onSaveToLibrary = viewModel::handleSaveToLibrary,
+                    onAddReferenceImage = viewModel::handleAddReferenceImage,
+                    onRemoveReferenceImage = viewModel::handleRemoveReferenceImage,
+                    onAddEditorReferenceImage = viewModel::handleAddEditorReferenceImage,
+                    onRemoveEditorReferenceImage = viewModel::handleRemoveEditorReferenceImage,
+                    onDeleteLibraryRecipes = viewModel::handleDeleteLibraryRecipes,
+                    onCloneLibraryRecipe = viewModel::handleCloneLibraryRecipe,
+                    onAddLibraryGroupImage = viewModel::handleAddLibraryGroupImage,
+                    onOpenLibraryItem = viewModel::openLibraryItem,
+                    onOpenCameraImageTuner = { viewModel.setShowCameraImageTuner(true) },
+                    onCloseCameraImageTuner = { viewModel.setShowCameraImageTuner(false) },
+                    onLoadSampleLibrary = viewModel::handleLoadSampleLibrary,
+                    onDuplicateSaveAsNew = viewModel::handleDuplicateSaveAsNew,
+                    onDuplicateUpdateExisting = viewModel::handleDuplicateUpdateExisting,
+                    onDuplicateDismiss = viewModel::handleDuplicateDismiss,
+                    onExploreDemo = viewModel::handleExploreDemo,
+                    onBackupSlots = { label -> viewModel.handleBackupSlots(label) },
+                    onRestoreSlots = viewModel::handleRestoreSlots,
+                    onDeleteSlotBackup = viewModel::handleDeleteSlotBackup,
+                    onRenameSlotBackup = viewModel::handleRenameSlotBackup,
+                    onRenameCameraLabel = { serial, label -> viewModel.handleRenameCameraLabel(serial, label) },
+                    onDeleteCamera = viewModel::handleDeleteCamera,
+                    onResetCameraLabel = viewModel::handleResetCameraLabel,
+                    onToggleFavorite = viewModel::handleToggleFavoriteById,
+                    onToggleLibraryShowImages = viewModel::handleToggleLibraryShowImages,
+                    onWriteLibraryRecipeToSlot = viewModel::handleWriteToSlot,
+                    onImportFromPhoto = viewModel::handleLaunchExifImport,
+                    onExifImportErrorDismiss = viewModel::handleExifImportDismiss,
+                    onAddMockCamera = viewModel::handleAddMockCamera,
+                    onSaveAllToLibrary = viewModel::handleSaveAllSlotsToLibrary,
+                    onSaveAllReportDismiss = viewModel::handleSaveAllReportDismiss,
                     )
-                    readAllSlots(device)
-                }
-                is FujiPtpProbeResult.NotReady -> {
-                    uiState = uiState.copy(connected = false)
-                }
+                } // else
             }
         }
     }
 
-    private fun readAllSlots(device: UsbDevice) {
+    private fun collectViewModelEvents() {
         lifecycleScope.launch {
-            val updatedSlots = uiState.slots.toMutableList()
-            for (slot in CameraSlot.entries) {
-                val preset = withContext(Dispatchers.IO) {
-                    runCatching {
-                        connectionFactory.open(device)?.use { connection ->
-                            check(connection.openSession()) { "OpenSession rejected." }
-                            try {
-                                FujiRecipeCamera(connection).readPreset(slot)
-                            } finally {
-                                connection.closeSession()
-                            }
-                        }
-                    }.getOrNull()
-                }
-                if (preset != null) {
-                    val idx = slot.ordinal
-                    updatedSlots[idx] = updatedSlots[idx].copy(
-                        slot = slot.label,
-                        name = preset.name.ifBlank { updatedSlots[idx].name },
-                    )
+            viewModel.events.collect { event ->
+                when (event) {
+                    is MainViewModelEvent.RequestUsbPermission -> requestUsbPermission(event.device)
+                    MainViewModelEvent.LaunchReferenceImagePicker -> referenceImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.SingleMimeType("image/jpeg")))
                 }
             }
-            uiState = uiState.copy(slots = updatedSlots)
-        }
-    }
-
-    private fun refreshDevices() {
-        val devices = repository.scanUsb()
-        val hasPtp = devices.any { it.mode == CameraUsbMode.Ptp }
-        if (!hasPtp) {
-            uiState = uiState.copy(connected = false)
         }
     }
 
@@ -239,6 +146,7 @@ class MainActivity : ComponentActivity() {
             this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
+        val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
         usbManager.requestPermission(device, pendingIntent)
     }
 
@@ -260,11 +168,25 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        refreshDevices()
+        if (!handleUsbAttachIntent(intent)) {
+            viewModel.refreshDevices()
+        }
+    }
+
+    private fun handleUsbAttachIntent(intent: Intent?): Boolean {
+        if (intent?.action != ACTION_USB_DEVICE_ATTACHED) return false
+        val device = intent.usbDeviceExtra()
+        if (device?.vendorId != FUJI_VENDOR_ID) {
+            viewModel.refreshDevices()
+            return true
+        }
+        viewModel.onReconnect()
+        return true
     }
 
     private companion object {
         const val ACTION_USB_PERMISSION = "com.paeki.fujirecipes.USB_PERMISSION"
+        const val FUJI_VENDOR_ID = 0x04CB
     }
 }
 
