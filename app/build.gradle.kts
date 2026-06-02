@@ -87,6 +87,7 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("com.drewnoakes:metadata-extractor:2.19.0")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.12")

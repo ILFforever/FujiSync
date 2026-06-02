@@ -115,6 +115,7 @@ fun ProfileScreen(
     onOpenExifBench: () -> Unit = {},
     onOpenWriteDelayBench: () -> Unit = {},
     onImportFromPhoto: () -> Unit = {},
+    onImportFromScreenshot: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
@@ -187,8 +188,14 @@ fun ProfileScreen(
                         .border(1.dp, Border, RoundedCornerShape(14.dp)),
                 ) {
                     ProfileNavRow(
-                        label = "Import recipe from photo",
+                        label = "Camera JPEG — read EXIF",
                         onClick = onImportFromPhoto,
+                        inCard = true,
+                    )
+                    ProfileDivider()
+                    ProfileNavRow(
+                        label = "Recipe screenshot — read text",
+                        onClick = onImportFromScreenshot,
                         inCard = true,
                     )
                 }

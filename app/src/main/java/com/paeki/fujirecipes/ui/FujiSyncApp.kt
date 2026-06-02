@@ -177,6 +177,8 @@ data class FujiSyncUiState(
     val settings: AppSettings = AppSettings(),
     val exifImportLoading: Boolean = false,
     val exifImportError: String? = null,
+    val ocrImportLoading: Boolean = false,
+    val ocrImportError: String? = null,
     val saveAllSlotsConfirmed: Boolean = false,
     val saveAllReport: SaveAllReport? = null,
 )
@@ -224,6 +226,8 @@ fun FujiSyncApp(
     onWriteLibraryRecipeToSlot: (String) -> Unit = {},
     onImportFromPhoto: () -> Unit = {},
     onExifImportErrorDismiss: () -> Unit = {},
+    onImportFromScreenshot: () -> Unit = {},
+    onOcrImportErrorDismiss: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
     onSaveAllToLibrary: (LibraryRecipeSource) -> Unit = {},
     onSaveAllReportDismiss: () -> Unit = {},
@@ -239,9 +243,13 @@ fun FujiSyncApp(
     var pendingEditorTab by remember { mutableStateOf<AppTab?>(null) }
     val editorOpen = state.creatingRecipe || state.editorRecipe != null
     var showImportFromPhotoGuide by remember { mutableStateOf(false) }
+    var showImportFromScreenshotGuide by remember { mutableStateOf(false) }
     LaunchedEffect(state.editorRecipe) {
         if (showImportFromPhotoGuide && state.editorRecipe != null) {
             showImportFromPhotoGuide = false
+        }
+        if (showImportFromScreenshotGuide && state.editorRecipe != null) {
+            showImportFromScreenshotGuide = false
         }
     }
 
@@ -283,8 +291,11 @@ fun FujiSyncApp(
     overlayStackOf(
         OverlayLayer(state.detailRecipe != null) { onCloseDetail() },
         OverlayLayer(showImportFromPhotoGuide) { showImportFromPhotoGuide = false },
+        OverlayLayer(showImportFromScreenshotGuide) { showImportFromScreenshotGuide = false },
         OverlayLayer(state.exifImportError != null) { onExifImportErrorDismiss() },
         OverlayLayer(state.exifImportLoading) { },  // blocks back during import, no dismiss action
+        OverlayLayer(state.ocrImportError != null) { onOcrImportErrorDismiss() },
+        OverlayLayer(state.ocrImportLoading) { },
         OverlayLayer(state.camera.restoringSlots) { },  // blocks back while writing the set to camera
         OverlayLayer(showExifBench) { showExifBench = false },
         OverlayLayer(showWriteDelayBench) { showWriteDelayBench = false },
@@ -376,6 +387,7 @@ fun FujiSyncApp(
                         onOpenExifBench = { showExifBench = true },
                         onOpenWriteDelayBench = { showWriteDelayBench = true },
                         onImportFromPhoto = { showImportFromPhotoGuide = true },
+                        onImportFromScreenshot = { showImportFromScreenshotGuide = true },
                         onAddMockCamera = onAddMockCamera,
                     )
                 }
@@ -416,8 +428,13 @@ fun FujiSyncApp(
                     onExifBenchClose = { showExifBench = false },
                     onWriteDelayBenchClose = { showWriteDelayBench = false },
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
+                    showImportFromScreenshotGuide = showImportFromScreenshotGuide,
+                    onImportFromScreenshotGuideClose = { showImportFromScreenshotGuide = false },
+                    onImportFromScreenshot = onImportFromScreenshot,
                     onExifImportErrorDismiss = onExifImportErrorDismiss,
                     onExifImportRetry = onImportFromPhoto,
+                    onOcrImportErrorDismiss = onOcrImportErrorDismiss,
+                    onOcrImportRetry = onImportFromScreenshot,
                 )
             }
 
@@ -436,6 +453,9 @@ fun FujiSyncApp(
                 onTabChange = { tab ->
                     if (showImportFromPhotoGuide) {
                         showImportFromPhotoGuide = false
+                        onTabChange(tab)
+                    } else if (showImportFromScreenshotGuide) {
+                        showImportFromScreenshotGuide = false
                         onTabChange(tab)
                     } else if (editorOpen && tab != state.tab) {
                         requestEditorClose(tab)
@@ -485,8 +505,13 @@ private fun BoxScope.AppOverlays(
     onExifBenchClose: () -> Unit,
     onWriteDelayBenchClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
+    showImportFromScreenshotGuide: Boolean,
+    onImportFromScreenshotGuideClose: () -> Unit,
+    onImportFromScreenshot: () -> Unit,
     onExifImportErrorDismiss: () -> Unit,
     onExifImportRetry: () -> Unit,
+    onOcrImportErrorDismiss: () -> Unit,
+    onOcrImportRetry: () -> Unit,
 ) {
     val writeDelayBenchVm: WriteDelayBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
@@ -554,6 +579,21 @@ private fun BoxScope.AppOverlays(
         }
     }
 
+    AnimatedVisibility(
+        visible = showImportFromScreenshotGuide,
+        enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+        exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+               slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+    ) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            ImportFromScreenshotGuide(
+                onClose = onImportFromScreenshotGuideClose,
+                onChooseScreenshot = onImportFromScreenshot,
+            )
+        }
+    }
+
     if (state.exifImportLoading) {
         ExifImportLoadingScreen()
     }
@@ -567,6 +607,18 @@ private fun BoxScope.AppOverlays(
             message = error,
             onDismiss = onExifImportErrorDismiss,
             onRetry = onExifImportRetry,
+        )
+    }
+
+    if (state.ocrImportLoading) {
+        ExifImportLoadingScreen(eyebrow = "READING IMAGE", subtitle = "Scanning for recipe settings")
+    }
+
+    state.ocrImportError?.let { error ->
+        ExifImportErrorScreen(
+            message = error,
+            onDismiss = onOcrImportErrorDismiss,
+            onRetry = onOcrImportRetry,
         )
     }
 
@@ -1173,7 +1225,10 @@ private fun RestoreSetLoadingScreen(currentSlotIndex: Int) {
 // ── EXIF import loading ───────────────────────────────────────────
 
 @Composable
-private fun ExifImportLoadingScreen() {
+private fun ExifImportLoadingScreen(
+    eyebrow: String = "READING PHOTO",
+    subtitle: String = "Extracting recipe data",
+) {
     val transition = rememberInfiniteTransition(label = "exif-load")
 
     val scanProgress by transition.animateFloat(
@@ -1284,14 +1339,14 @@ private fun ExifImportLoadingScreen() {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    text = "READING PHOTO",
+                    text = eyebrow,
                     fontFamily = MonoFamily,
                     fontSize = 10.sp,
                     letterSpacing = 2.4.sp,
                     color = TextPrimary.copy(alpha = textAlpha),
                 )
                 Text(
-                    text = "Extracting recipe data",
+                    text = subtitle,
                     fontFamily = SansFamily,
                     fontSize = 12.sp,
                     color = TextDim.copy(alpha = textAlpha * 0.7f),

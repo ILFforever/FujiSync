@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import com.paeki.fujirecipes.data.exif.FujiExifReader
+import com.paeki.fujirecipes.data.ocr.OcrRecipeParser
 import com.paeki.fujirecipes.data.exif.toPreset
 import com.paeki.fujirecipes.data.local.LocalStore
 import com.paeki.fujirecipes.data.remote.FxwRecipe
@@ -57,6 +58,7 @@ sealed class MainViewModelEvent {
     object LaunchReferenceImagePicker : MainViewModelEvent()
     object LaunchGroupImagePicker : MainViewModelEvent()
     object LaunchExifImagePicker : MainViewModelEvent()
+    object LaunchOcrImagePicker : MainViewModelEvent()
 }
 
 private data class ReferenceImageTarget(
@@ -555,6 +557,76 @@ class MainViewModel @Inject constructor(
 
     fun handleExifImportDismiss() {
         _uiState.update { it.copy(exifImportLoading = false, exifImportError = null) }
+    }
+
+    // ── OCR / screenshot import ───────────────────────────────────────
+
+    fun handleLaunchOcrImport() {
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchOcrImagePicker) }
+    }
+
+    fun handleOcrImportResult(uri: android.net.Uri) {
+        _uiState.update { it.copy(ocrImportLoading = true, ocrImportError = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            val result = runCatching {
+                val rawText = OcrRecipeParser.recognizeText(appContext, uri)
+                OcrRecipeParser.parse(rawText)
+            }
+            delay(minLoadMs(started))
+            when {
+                result.isFailure -> _uiState.update {
+                    it.copy(
+                        ocrImportLoading = false,
+                        ocrImportError = "Couldn't read this image. Make sure it's a clear screenshot.",
+                    )
+                }
+                result.getOrNull() == null -> _uiState.update {
+                    it.copy(
+                        ocrImportLoading = false,
+                        ocrImportError = "No recipe settings found in this screenshot. Try a clearer image with visible parameter labels.",
+                    )
+                }
+                else -> {
+                    val parsed = result.getOrNull()!!
+                    val imageName = imageDisplayName(uri)
+                    val description = buildString {
+                        append("Scanned from $imageName")
+                        if (parsed.unmatchedFields.isNotEmpty()) {
+                            append("\nCouldn't read: ${parsed.unmatchedFields.joinToString(", ")} — please verify.")
+                        }
+                    }
+                    val name = parsed.suggestedName.ifBlank { "OCR Import" }
+                    // Round-trip through toPreset → toUiModel to compute correct pills.
+                    val preliminary = RecipeUiModel(
+                        slot    = "C1",
+                        name    = name,
+                        sim     = parsed.sim,
+                        pills   = emptyList(),
+                        effects = parsed.effects,
+                        tone    = parsed.tone,
+                        wb      = parsed.wb,
+                    )
+                    val uiModel = preliminary
+                        .toPreset(com.paeki.fujirecipes.domain.model.CameraSlot.C1)
+                        .toUiModel()
+                        .copy(slot = "", name = name, description = description)
+                    _uiState.update {
+                        it.copy(
+                            ocrImportLoading  = false,
+                            ocrImportError    = null,
+                            creatingRecipe    = false,
+                            editorRecipe      = uiModel,
+                            editorReferenceImageUris = emptyList(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun handleOcrImportDismiss() {
+        _uiState.update { it.copy(ocrImportLoading = false, ocrImportError = null) }
     }
 
     private fun minLoadMs(startedAt: Long, minMs: Long = 1400): Long =

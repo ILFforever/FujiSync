@@ -53,6 +53,11 @@ class MainActivity : ComponentActivity() {
         viewModel.handleExifImportResult(uri)
     }
 
+    private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.handleOcrImportResult(uri)
+    }
+
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != ACTION_USB_PERMISSION) return
@@ -118,6 +123,8 @@ class MainActivity : ComponentActivity() {
                     onWriteLibraryRecipeToSlot = viewModel::handleWriteToSlot,
                     onImportFromPhoto = viewModel::handleLaunchExifImport,
                     onExifImportErrorDismiss = viewModel::handleExifImportDismiss,
+                    onImportFromScreenshot = viewModel::handleLaunchOcrImport,
+                    onOcrImportErrorDismiss = viewModel::handleOcrImportDismiss,
                     onAddMockCamera = viewModel::handleAddMockCamera,
                     onSaveAllToLibrary = viewModel::handleSaveAllSlotsToLibrary,
                     onSaveAllReportDismiss = viewModel::handleSaveAllReportDismiss,
@@ -135,6 +142,7 @@ class MainActivity : ComponentActivity() {
                     MainViewModelEvent.LaunchReferenceImagePicker -> referenceImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.SingleMimeType("image/jpeg")))
+                    MainViewModelEvent.LaunchOcrImagePicker  -> ocrImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
             }
         }
