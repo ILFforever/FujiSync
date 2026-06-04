@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -63,9 +64,9 @@ fun SplashScreen(onComplete: () -> Unit) {
             SplashWordmark()
             Spacer(Modifier.height(14.dp))
             Subtitle()
+            Spacer(Modifier.height(20.dp))
+            ScanLine()
         }
-
-        ScanLine(modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -120,10 +121,10 @@ private fun ScanLine(modifier: Modifier = Modifier) {
 
     Box(
         modifier = modifier
-            .padding(bottom = 64.dp)
             .fillMaxWidth()
             .height(1.dp)
             .padding(horizontal = 48.dp)
+            .clipToBounds()
             .drawBehind {
                 val lineWidth = size.width * 0.35f
                 val startX = (size.width + lineWidth) * progress - lineWidth

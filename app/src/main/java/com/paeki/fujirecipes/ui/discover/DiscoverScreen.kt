@@ -86,12 +86,12 @@ import com.paeki.fujirecipes.ui.theme.SansFamily
 import com.paeki.fujirecipes.ui.theme.TextDim
 import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun DiscoverScreen(
-    viewModel: DiscoverViewModel = viewModel(),
-    mainViewModel: MainViewModel = viewModel(),
+    viewModel: DiscoverViewModel = hiltViewModel(),
+    mainViewModel: MainViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
     var selectedRecipe by remember { mutableStateOf<FxwRecipe?>(null) }

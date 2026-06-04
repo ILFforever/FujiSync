@@ -1,5 +1,15 @@
 package com.paeki.fujirecipes.ui.camera
 
+import android.animation.ValueAnimator
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import com.paeki.fujirecipes.ui.overlay.OverlayLayer
 import com.paeki.fujirecipes.ui.overlay.BackHandler
 import com.paeki.fujirecipes.ui.overlay.overlayStackOf
@@ -16,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -24,9 +35,11 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SheetValue
@@ -58,9 +71,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.paeki.fujirecipes.R
+import com.paeki.fujirecipes.domain.model.CameraSlot
 import com.paeki.fujirecipes.ui.components.DragHandle
 import com.paeki.fujirecipes.ui.components.FilmSimBadgeImage
 import com.paeki.fujirecipes.ui.components.IconArrowDown
+import com.paeki.fujirecipes.ui.components.IconChevronRight
 import com.paeki.fujirecipes.ui.components.IconRefresh
 import com.paeki.fujirecipes.ui.components.IconSort
 import com.paeki.fujirecipes.ui.components.MetaRow
@@ -79,6 +94,7 @@ import com.paeki.fujirecipes.ui.theme.SansFamily
 import com.paeki.fujirecipes.ui.theme.TextDim
 import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal val PEEK_HEIGHT = 165.dp
@@ -119,10 +135,14 @@ fun CameraConnected(
     hasSlotBackup: Boolean = false,
     slotBackupMeta: SlotBackupMeta? = null,
     slotBackupSlots: List<RecipeUiModel>? = null,
+    restoringSlots: Boolean = false,
     onBackupSlots: (String) -> Unit = {},
     onRestoreSlots: () -> Unit = {},
     onDeleteSlotBackup: () -> Unit = {},
     onRenameSlotBackup: (String) -> Unit = {},
+    onRearrangeSlots: (List<RecipeUiModel>) -> Unit = {},
+    readingSlotIndex: Int = -1,
+    isRestoringValidation: Boolean = false,
     cameraSerial: String = "",
     cameraNames: List<String> = listOf("My Camera"),
     onOpenCameraDetail: (Int, CameraCardUiModel) -> Unit = { _, _ -> },
@@ -134,21 +154,22 @@ fun CameraConnected(
 ) {
     val scaffoldState = rememberBottomSheetScaffoldState()
     val isExpanded = scaffoldState.bottomSheetState.currentValue == SheetValue.Expanded
-    if (readingSlots && slots.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = "READING C1–C7…", fontFamily = MonoFamily, fontSize = 11.sp, letterSpacing = 2.sp, color = TextDim)
-        }
-        return
-    }
-    val recipe = slots.getOrNull(selectedSlotIdx) ?: return
+    // All remembered state must be declared before any early returns (Compose rule)
     var showBackupSheet by remember { mutableStateOf(false) }
     var showRestoreSheet by remember { mutableStateOf(false) }
     var showSaveAllSheet by remember { mutableStateOf(false) }
+    var showRearrangeSheet by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val cameras = remember(cameraModel, firmware, battery, cameraSerial) {
         listOf(CameraCardUiModel(cameraModel, firmware, battery, connected = true, usbId = cameraSerial, lastSync = ""))
     }
     val pagerState = rememberPagerState(pageCount = { cameras.size })
+
+    LaunchedEffect(isRestoringValidation) {
+        if (isRestoringValidation) showRestoreSheet = true
+    }
+
+    val recipe = slots.getOrNull(selectedSlotIdx) ?: if (!isRestoringValidation) return else null
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -166,10 +187,11 @@ fun CameraConnected(
             OverlayLayer(showBackupSheet) { showBackupSheet = false },
             OverlayLayer(showRestoreSheet) { showRestoreSheet = false },
             OverlayLayer(showSaveAllSheet) { showSaveAllSheet = false },
+            OverlayLayer(showRearrangeSheet) { showRearrangeSheet = false },
             OverlayLayer(saveAllReport != null) { onSaveAllReportDismiss() },
         ).BackHandler()
 
-        BottomSheetScaffold(
+        if (recipe != null) BottomSheetScaffold(
             scaffoldState = scaffoldState,
             sheetPeekHeight = PEEK_HEIGHT,
             sheetContainerColor = PanelLow,
@@ -234,9 +256,14 @@ fun CameraConnected(
                         onSaveAllToLibrary = { showSaveAllSheet = true },
                         saveAllSlotsConfirmed = saveAllSlotsConfirmed,
                     )
+
+                    RearrangeRecipesButton(
+                        enabled = !writeBusy && slots.size >= CameraSlot.entries.size,
+                        onClick = { showRearrangeSheet = true },
+                    )
                 }
             }
-        }
+        } // end if (recipe != null)
 
         if (showBackupSheet) {
             BackupSheet(onDismiss = { showBackupSheet = false }, onConfirm = { label -> onBackupSlots(label) })
@@ -250,6 +277,11 @@ fun CameraConnected(
                 onConfirm = { onRestoreSlots() },
                 onDelete = onDeleteSlotBackup,
                 onRename = onRenameSlotBackup,
+                restoreInProgress = restoringSlots,
+                isRestoringValidation = isRestoringValidation,
+                readingSlots = readingSlots,
+                readingSlotIndex = readingSlotIndex,
+                loadedSlots = slots,
             )
         }
 
@@ -270,6 +302,18 @@ fun CameraConnected(
                             usbId = selectedCamera.usbId,
                         )
                     )
+                },
+            )
+        }
+
+        if (showRearrangeSheet) {
+            RearrangeRecipesSheet(
+                slots = slots,
+                writeBusy = writeBusy,
+                onDismiss = { showRearrangeSheet = false },
+                onApply = { nextSlots ->
+                    onRearrangeSlots(nextSlots)
+                    showRearrangeSheet = false
                 },
             )
         }
@@ -516,6 +560,340 @@ private fun SaveAllSlotChip(
                 maxLines = 1,
             )
         }
+    }
+}
+
+@Composable
+private fun RearrangeRecipesButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(PanelLow)
+            .border(1.dp, Border, RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = IconSort,
+                contentDescription = null,
+                tint = if (enabled) Gold else TextMuted.copy(alpha = 0.45f),
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = "REARRANGE RECIPES",
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.5.sp,
+                letterSpacing = 1.2.sp,
+                color = if (enabled) TextPrimary else TextMuted.copy(alpha = 0.45f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                text = "EDIT",
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.5.sp,
+                letterSpacing = 1.sp,
+                color = if (enabled) Gold.copy(alpha = 0.82f) else TextMuted.copy(alpha = 0.45f),
+            )
+            androidx.compose.material3.Icon(
+                imageVector = IconChevronRight,
+                contentDescription = null,
+                tint = if (enabled) Gold.copy(alpha = 0.82f) else TextMuted.copy(alpha = 0.45f),
+                modifier = Modifier.size(12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RearrangeRecipesSheet(
+    slots: List<RecipeUiModel>,
+    writeBusy: Boolean,
+    onDismiss: () -> Unit,
+    onApply: (List<RecipeUiModel>) -> Unit,
+) {
+    val motionEnabled = ValueAnimator.areAnimatorsEnabled()
+    val scope = rememberCoroutineScope()
+    var visible by remember { mutableStateOf(!motionEnabled) }
+    val initialSlots = remember(slots) { slots.take(CameraSlot.entries.size) }
+    var draftSlots by remember(initialSlots) { mutableStateOf(initialSlots) }
+    val changed = draftSlots != initialSlots
+    val canApply = changed && !writeBusy && draftSlots.size == CameraSlot.entries.size
+
+    fun dismissWithMotion() {
+        if (!motionEnabled) {
+            onDismiss()
+            return
+        }
+        scope.launch {
+            visible = false
+            delay(180)
+            onDismiss()
+        }
+    }
+
+    LaunchedEffect(motionEnabled) { visible = true }
+
+    val overlayTransition = updateTransition(targetState = visible, label = "rearrange-overlay")
+    val overlayAlpha by overlayTransition.animateFloat(
+        transitionSpec = { tween(if (targetState) 170 else 120, easing = FastOutSlowInEasing) },
+        label = "rearrange-overlay-alpha",
+    ) { if (it) 1f else 0f }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF090807).copy(alpha = 0.88f * overlayAlpha))
+            .clickable(enabled = !writeBusy, onClick = ::dismissWithMotion),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) + slideInVertically(
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                initialOffsetY = { it / 3 },
+            ),
+            exit = fadeOut(tween(105, easing = FastOutSlowInEasing)) + slideOutVertically(
+                animationSpec = tween(180, easing = FastOutSlowInEasing),
+                targetOffsetY = { it / 4 },
+            ),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 650.dp)
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(PanelLow)
+                    .border(1.dp, Border, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .clickable(onClick = {})
+                    .navigationBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .width(38.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(TextDim.copy(alpha = 0.55f)),
+                )
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Column {
+                        Text(
+                            text = "REARRANGE RECIPES",
+                            fontFamily = SansFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            letterSpacing = 0.5.sp,
+                            color = TextPrimary,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "SET THE ORDER WRITTEN TO C1-C7",
+                            fontFamily = MonoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            letterSpacing = 1.2.sp,
+                            color = TextDim,
+                        )
+                    }
+                    Text(
+                        text = if (changed) "CHANGED" else "CURRENT",
+                        fontFamily = MonoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        letterSpacing = 1.2.sp,
+                        color = if (changed) Gold else TextDim,
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    draftSlots.forEachIndexed { index, recipe ->
+                        RearrangeSlotRow(
+                            targetSlot = CameraSlot.entries[index].label,
+                            recipe = recipe,
+                            canMoveUp = index > 0 && !writeBusy,
+                            canMoveDown = index < draftSlots.lastIndex && !writeBusy,
+                            onMoveUp = { draftSlots = draftSlots.moveItem(index, index - 1) },
+                            onMoveDown = { draftSlots = draftSlots.moveItem(index, index + 1) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .border(1.dp, Border, RoundedCornerShape(13.dp))
+                            .clickable(enabled = !writeBusy, onClick = ::dismissWithMotion),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "CANCEL",
+                            fontFamily = SansFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.3.sp,
+                            color = TextMuted,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(if (canApply) Gold else PanelHigh)
+                            .border(1.dp, if (canApply) Gold else Border, RoundedCornerShape(13.dp))
+                            .clickable(enabled = canApply) { onApply(draftSlots) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (writeBusy) "WRITING" else "APPLY",
+                            fontFamily = SansFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.3.sp,
+                            color = if (canApply) Bg else TextDim,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RearrangeSlotRow(
+    targetSlot: String,
+    recipe: RecipeUiModel,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(13.dp))
+            .background(PanelHigh.copy(alpha = 0.56f))
+            .border(1.dp, Border, RoundedCornerShape(13.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(34.dp)
+                .height(44.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Bg)
+                .border(1.dp, Gold.copy(alpha = 0.38f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = targetSlot,
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                letterSpacing = 0.5.sp,
+                color = Gold,
+            )
+        }
+        FilmSimBadgeImage(sim = recipe.sim, size = 30.dp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = recipe.name,
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = recipe.sim.trimEnd('.').uppercase(),
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                letterSpacing = 0.8.sp,
+                color = TextDim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ReorderArrowButton(up = true, enabled = canMoveUp, onClick = onMoveUp)
+            ReorderArrowButton(up = false, enabled = canMoveDown, onClick = onMoveDown)
+        }
+    }
+}
+
+@Composable
+private fun ReorderArrowButton(
+    up: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (enabled) PanelLow else PanelLow.copy(alpha = 0.45f))
+            .border(1.dp, if (enabled) Border else Border.copy(alpha = 0.45f), RoundedCornerShape(9.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = IconArrowDown,
+            contentDescription = if (up) "Move up" else "Move down",
+            tint = if (enabled) TextMuted else TextDim.copy(alpha = 0.45f),
+            modifier = Modifier
+                .size(13.dp)
+                .graphicsLayer { rotationZ = if (up) 180f else 0f },
+        )
+    }
+}
+
+private fun List<RecipeUiModel>.moveItem(from: Int, to: Int): List<RecipeUiModel> {
+    if (from !in indices || to !in indices || from == to) return this
+    return toMutableList().apply {
+        add(to, removeAt(from))
     }
 }
 

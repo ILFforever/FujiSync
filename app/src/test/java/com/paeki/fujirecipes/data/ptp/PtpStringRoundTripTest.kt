@@ -34,7 +34,7 @@ class PtpStringRoundTripTest {
     @Test
     fun `round-trip maximum length name`() {
         val name = "A".repeat(CameraPresetName.MAX_LENGTH)
-        // encodePtpString takes 254 chars max; 31 is well within that
+        // encodePtpString takes 254 chars max; the camera preset name limit is well within that.
         assertEquals(name, roundTrip(name))
     }
 

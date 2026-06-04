@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -113,7 +115,7 @@ fun RecipeDetailScreen(
     cameraSlots: List<RecipeUiModel> = emptyList(),
     onWriteToSlot: ((String) -> Unit)? = null,
 ) {
-    var expandedImageUri by remember { mutableStateOf<String?>(null) }
+    var expandedImageIndex by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf(false) }
     var pendingConfirmWrite by remember { mutableStateOf(false) }
     var slotPickerOpen by remember { mutableStateOf(false) }
@@ -313,18 +315,16 @@ fun RecipeDetailScreen(
                             referenceImageUris = visibleRecipe.referenceImageUris,
                             onAddReferenceImage = { onAddReferenceImage(visibleRecipe) },
                             onRemoveReferenceImage = { uri -> onRemoveReferenceImage(visibleRecipe, uri) },
-                            onExpandImage = { uri -> expandedImageUri = uri },
+                            onExpandImage = { index -> expandedImageIndex = index },
                         )
-                        if (visibleRecipe.description.isNotEmpty()) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = visibleRecipe.description,
-                                fontFamily = SansFamily,
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                color = TextMuted,
-                            )
-                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = visibleRecipe.description.takeIf { it.isNotEmpty() } ?: "No description given.",
+                            fontFamily = SansFamily,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp,
+                            color = if (visibleRecipe.description.isNotEmpty()) TextMuted else TextDim,
+                        )
                     }
 
                     // Property sections
@@ -444,10 +444,11 @@ fun RecipeDetailScreen(
             }
 
             // Fullscreen image lightbox
-            expandedImageUri?.let { uriString ->
+            expandedImageIndex?.let { startIndex ->
                 ReferenceImageLightbox(
-                    uriString = uriString,
-                    onDismiss = { expandedImageUri = null },
+                    imageUris = visibleRecipe.referenceImageUris,
+                    startIndex = startIndex,
+                    onDismiss = { expandedImageIndex = null },
                 )
             }
 
@@ -469,7 +470,7 @@ private fun RecipeReferenceImage(
     referenceImageUris: List<String>,
     onAddReferenceImage: () -> Unit,
     onRemoveReferenceImage: (String) -> Unit,
-    onExpandImage: (String) -> Unit,
+    onExpandImage: (Int) -> Unit,
 ) {
     val context = LocalContext.current
     val bitmaps = remember(referenceImageUris) {
@@ -567,8 +568,8 @@ private fun RecipeReferenceImage(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                bitmaps.forEach { (uriString, bitmap) ->
-                    bitmap ?: return@forEach
+                bitmaps.forEachIndexed { index, (uriString, bitmap) ->
+                    bitmap ?: return@forEachIndexed
                     Box(modifier = Modifier.size(width = 118.dp, height = 86.dp)) {
                         Image(
                             bitmap = bitmap,
@@ -578,7 +579,7 @@ private fun RecipeReferenceImage(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Bg)
-                                .clickable { onExpandImage(uriString) },
+                                .clickable { onExpandImage(index) },
                         )
                         if (isEditing) {
                             Box(
@@ -646,12 +647,21 @@ private fun RecipeReferenceImage(
 
 @Composable
 private fun ReferenceImageLightbox(
-    uriString: String,
+    imageUris: List<String>,
+    startIndex: Int,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val bitmap = remember(uriString) {
-        decodeSampledBitmap(context, Uri.parse(uriString), maxPx = 1920)
+    val displayUris = remember(imageUris) { imageUris.filter { it.isNotBlank() } }
+    if (displayUris.isEmpty()) return
+
+    BackHandler(onBack = onDismiss)
+    val initialPage = startIndex.coerceIn(displayUris.indices)
+    val pagerState = rememberPagerState(initialPage = initialPage) { displayUris.size }
+    LaunchedEffect(initialPage, displayUris.size) {
+        if (pagerState.currentPage != initialPage) {
+            pagerState.scrollToPage(initialPage)
+        }
     }
 
     Box(
@@ -661,21 +671,37 @@ private fun ReferenceImageLightbox(
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(onClick = {}),
+        ) { page ->
+            val uriString = displayUris[page]
+            val bitmap = remember(uriString) {
+                decodeSampledBitmap(context, Uri.parse(uriString), maxPx = 1920)
+            }
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(onClick = {}),
-            )
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         }
         IconButton(
             onClick = onDismiss,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(12.dp)
+                .statusBarsPadding()
+                .padding(top = 14.dp, end = 12.dp)
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.5f)),

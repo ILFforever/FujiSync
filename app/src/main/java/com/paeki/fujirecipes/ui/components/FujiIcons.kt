@@ -277,6 +277,32 @@ val IconCopy = icon("Copy") {
     stroke("M8 10h2M8 14h8M8 18h6")
 }
 
+val IconImage = icon("Image") {
+    stroke("M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5z")
+    stroke(circle(8.5f, 8.5f, 1.5f))
+    stroke("M21 15l-5-5L5 20")
+}
+
+val IconScan = icon("Scan") {
+    stroke("M3 7V5a2 2 0 0 1 2-2h2")
+    stroke("M17 3h2a2 2 0 0 1 2 2v2")
+    stroke("M21 17v2a2 2 0 0 1-2 2h-2")
+    stroke("M7 21H5a2 2 0 0 1-2-2v-2")
+    stroke("M7 12h10")
+}
+
+val IconQrCode = icon("QrCode") {
+    stroke("M3 3h7v7H3z")
+    stroke("M14 3h7v7h-7z")
+    stroke("M3 14h7v7H3z")
+    stroke("M14 14h.01")
+    stroke("M18 14h.01")
+    stroke("M14 18h.01")
+    stroke("M18 18h.01")
+    stroke("M14 21v-3h3")
+    stroke("M17 14h4")
+}
+
 val IconArrowDown = icon("ArrowDown") {
     stroke("M12 5v14")
     stroke("M19 12l-7 7-7-7")

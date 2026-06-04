@@ -2,6 +2,7 @@ package com.paeki.fujirecipes.ui.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.paeki.fujirecipes.domain.model.canonicalFilmSimLabel
 import com.paeki.fujirecipes.ui.LibraryUiState
 import com.paeki.fujirecipes.ui.model.LibraryGroupStyle
 import com.paeki.fujirecipes.ui.model.LibraryGroupUiModel
@@ -61,7 +62,7 @@ class LibraryViewModel @Inject constructor(
     val screenState: StateFlow<LibraryScreenState> = combine(holder.state, _ui) { data, ui ->
         val visibleGroups = buildVisibleGroups(data.recipes, data.groups)
         val groupNamesById = visibleGroups.associate { it.id to it.name }
-        val filmSimOptions = data.recipes.map { it.sim }.filter { it.isNotBlank() }.distinct().sorted()
+        val filmSimOptions = data.recipes.map { it.sim.canonicalFilmSimLabel() }.filter { it.isNotBlank() }.distinct().sorted()
         val sourceOptions = data.recipes
             .mapNotNull { r -> r.sourceFilterKey()?.let { it to r.sourceFilterLabel() } }
             .distinctBy { it.first }
@@ -218,7 +219,7 @@ class LibraryViewModel @Inject constructor(
                 else -> recipe.groupIds.any { it == ui.filterGroupId }
             }
             val sourceMatch = ui.filterSourceKey == null || recipe.sourceFilterKey() == ui.filterSourceKey
-            val filmSimMatch = ui.filterFilmSim == null || recipe.sim == ui.filterFilmSim
+            val filmSimMatch = ui.filterFilmSim == null || recipe.sim.canonicalFilmSimLabel() == ui.filterFilmSim
             val searchMatch = query.isBlank() ||
                 recipe.name.contains(query, ignoreCase = true) ||
                 recipe.sim.contains(query, ignoreCase = true) ||

@@ -1,6 +1,7 @@
 package com.paeki.fujirecipes.data.remote
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -11,6 +12,7 @@ object FxwRepository {
     private const val CACHE_DIR = "discover_fxw"
     private const val CACHE_VERSION = 1
     private const val FRESH_MS = 6L * 60L * 60L * 1000L
+    private const val MAX_MEMORY_PAGES = 5
 
     private val memoryPages = java.util.concurrent.ConcurrentHashMap<Int, CachedPage>()
 
@@ -33,7 +35,7 @@ object FxwRepository {
                     return@withContext it.toResult(Source.Memory)
                 }
                 diskPage?.takeIf { it.isFresh() }?.let {
-                    memoryPages[page] = it
+                    cachePage(page, it)
                     return@withContext it.toResult(Source.Disk)
                 }
             }
@@ -53,7 +55,7 @@ object FxwRepository {
                             etag = fetched.etag ?: validator.etag,
                             lastModified = fetched.lastModified ?: validator.lastModified,
                         )
-                        memoryPages[page] = refreshed
+                        cachePage(page, refreshed)
                         writePage(cacheFile, refreshed)
                         refreshed.toResult(Source.NotModified)
                     } else {
@@ -64,7 +66,7 @@ object FxwRepository {
                             lastModified = fetched.lastModified,
                             cachedAt = System.currentTimeMillis(),
                         )
-                        memoryPages[page] = next
+                        cachePage(page, next)
                         writePage(cacheFile, next)
                         next.toResult(Source.Network)
                     }
@@ -101,6 +103,18 @@ object FxwRepository {
         return File(dir, "page-$page.json")
     }
 
+    private fun cachePage(page: Int, cachedPage: CachedPage) {
+        memoryPages[page] = cachedPage
+        if (memoryPages.size <= MAX_MEMORY_PAGES) return
+
+        val pagesToRemove = memoryPages.entries
+            .sortedBy { it.value.cachedAt }
+            .take(memoryPages.size - MAX_MEMORY_PAGES)
+            .map { it.key }
+
+        pagesToRemove.forEach { memoryPages.remove(it) }
+    }
+
     private fun readPage(file: File): CachedPage? =
         runCatching {
             if (!file.exists()) return null
@@ -125,6 +139,8 @@ object FxwRepository {
                 .put("lastModified", page.lastModified.orEmpty())
                 .put("recipes", page.recipes.toJsonArray())
             file.writeText(root.toString())
+        }.onFailure { error ->
+            Log.w("FxwRepository", "Failed to write FXW cache ${file.name}: ${error.message}")
         }
     }
 

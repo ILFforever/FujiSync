@@ -1,5 +1,6 @@
 package com.paeki.fujirecipes
 
+import android.app.Activity
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED
@@ -14,7 +16,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.viewModels
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.runtime.collectAsState
@@ -22,6 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import com.paeki.fujirecipes.capture.CaptureDiag
+import com.paeki.fujirecipes.capture.OcrCaptureService
 import com.paeki.fujirecipes.ui.FujiSyncApp
 import com.paeki.fujirecipes.ui.MainViewModel
 import com.paeki.fujirecipes.ui.MainViewModelEvent
@@ -34,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
-    private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+    private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@registerForActivityResult
         uris.forEach { uri ->
             runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
@@ -42,18 +45,18 @@ class MainActivity : ComponentActivity() {
         viewModel.applyReferenceImages(uris)
     }
 
-    private val groupImagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    private val groupImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         viewModel.applyGroupImage(uri)
     }
 
-    private val exifImagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    private val exifImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.handleExifImportResult(uri)
     }
 
-    private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.handleOcrImportResult(uri)
     }
@@ -67,6 +70,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val ocrResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != OcrCaptureService.ACTION_OCR_TILE_RESULT) return
+            CaptureDiag.log(this@MainActivity, "ocr result broadcast received")
+            handleCaptureIntent(intent)
+        }
+    }
+
+    private var ocrResultReceiverRegistered = false
+    private var lastHandledCaptureToken: String? = null
     private var showSplash by mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,8 +87,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         registerUsbPermissionReceiver()
+        registerOcrResultReceiver()
         collectViewModelEvents()
         handleUsbAttachIntent(intent)
+        handleCaptureIntent(intent)
 
         setContent {
             FujiRecipesTheme {
@@ -115,6 +130,7 @@ class MainActivity : ComponentActivity() {
                     onRestoreSlots = viewModel::handleRestoreSlots,
                     onDeleteSlotBackup = viewModel::handleDeleteSlotBackup,
                     onRenameSlotBackup = viewModel::handleRenameSlotBackup,
+                    onRearrangeCameraSlots = viewModel::handleRearrangeCameraSlots,
                     onRenameCameraLabel = { serial, label -> viewModel.handleRenameCameraLabel(serial, label) },
                     onDeleteCamera = viewModel::handleDeleteCamera,
                     onResetCameraLabel = viewModel::handleResetCameraLabel,
@@ -128,6 +144,9 @@ class MainActivity : ComponentActivity() {
                     onAddMockCamera = viewModel::handleAddMockCamera,
                     onSaveAllToLibrary = viewModel::handleSaveAllSlotsToLibrary,
                     onSaveAllReportDismiss = viewModel::handleSaveAllReportDismiss,
+                    onLoadCaptureLog = viewModel::loadCaptureLog,
+                    onClearCaptureLog = viewModel::clearCaptureLog,
+                    onSetPropertyWriteDelay = viewModel::handleSetPropertyWriteDelay,
                     )
                 } // else
             }
@@ -139,10 +158,10 @@ class MainActivity : ComponentActivity() {
             viewModel.events.collect { event ->
                 when (event) {
                     is MainViewModelEvent.RequestUsbPermission -> requestUsbPermission(event.device)
-                    MainViewModelEvent.LaunchReferenceImagePicker -> referenceImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.SingleMimeType("image/jpeg")))
-                    MainViewModelEvent.LaunchOcrImagePicker  -> ocrImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    MainViewModelEvent.LaunchReferenceImagePicker -> referenceImagePicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchOcrImagePicker  -> ocrImagePicker.launch(arrayOf("image/*"))
                 }
             }
         }
@@ -168,7 +187,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun registerOcrResultReceiver() {
+        if (ocrResultReceiverRegistered) return
+        val filter = IntentFilter(OcrCaptureService.ACTION_OCR_TILE_RESULT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(ocrResultReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(ocrResultReceiver, filter)
+        }
+        ocrResultReceiverRegistered = true
+    }
+
+    private fun unregisterOcrResultReceiver() {
+        if (!ocrResultReceiverRegistered) return
+        unregisterReceiver(ocrResultReceiver)
+        ocrResultReceiverRegistered = false
+    }
+
     override fun onDestroy() {
+        unregisterOcrResultReceiver()
         unregisterReceiver(usbPermissionReceiver)
         super.onDestroy()
     }
@@ -176,9 +214,29 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (!handleUsbAttachIntent(intent)) {
-            viewModel.refreshDevices()
+        when (intent.action) {
+            OcrCaptureService.ACTION_OCR_TILE_RESULT -> handleCaptureIntent(intent)
+            else -> if (!handleUsbAttachIntent(intent)) viewModel.refreshDevices()
         }
+    }
+
+    private fun handleCaptureIntent(intent: Intent?) {
+        CaptureDiag.log(this, "handleCaptureIntent: action=${intent?.action} extras=${intent?.extras?.keySet()?.joinToString()}")
+        if (intent?.action != OcrCaptureService.ACTION_OCR_TILE_RESULT) return
+        val uriString = intent.getStringExtra(OcrCaptureService.EXTRA_CAPTURE_URI)
+        CaptureDiag.log(this, "uri string: $uriString")
+        if (uriString == null) {
+            viewModel.loadCaptureLog()
+            return
+        }
+        val token = intent.getStringExtra(OcrCaptureService.EXTRA_CAPTURE_TOKEN) ?: uriString
+        if (token == lastHandledCaptureToken) {
+            CaptureDiag.log(this, "capture token already handled: $token")
+            return
+        }
+        lastHandledCaptureToken = token
+        CaptureDiag.log(this, "calling handleOcrImportResult")
+        viewModel.handleOcrImportResult(Uri.parse(uriString))
     }
 
     private fun handleUsbAttachIntent(intent: Intent?): Boolean {

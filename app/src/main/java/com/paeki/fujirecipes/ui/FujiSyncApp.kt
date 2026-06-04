@@ -82,6 +82,10 @@ import com.paeki.fujirecipes.ui.camera.CameraCardUiModel
 import com.paeki.fujirecipes.ui.camera.CameraConnected
 import com.paeki.fujirecipes.ui.camera.CameraImageTunerScreen
 import com.paeki.fujirecipes.ui.dev.ExifBenchScreen
+import com.paeki.fujirecipes.ui.dev.NameBenchScreen
+import com.paeki.fujirecipes.ui.dev.NameBenchViewModel
+import com.paeki.fujirecipes.ui.dev.ReadSlotsBenchScreen
+import com.paeki.fujirecipes.ui.dev.ReadSlotsBenchViewModel
 import com.paeki.fujirecipes.ui.dev.WriteDelayBenchScreen
 import com.paeki.fujirecipes.ui.dev.WriteDelayBenchViewModel
 import com.paeki.fujirecipes.ui.camera.ConnectGuide
@@ -149,6 +153,7 @@ data class CameraUiState(
     val slotBackupSlots: List<RecipeUiModel>? = null,
     val restoringSlots: Boolean = false,
     val restoringSlotIndex: Int = -1,
+    val isRestoringValidation: Boolean = false,
     val cameraLabels: Map<String, String> = emptyMap(),
     val cameraModels: Map<String, String> = emptyMap(),
     val cameraFirmwares: Map<String, String> = emptyMap(),
@@ -179,8 +184,11 @@ data class FujiSyncUiState(
     val exifImportError: String? = null,
     val ocrImportLoading: Boolean = false,
     val ocrImportError: String? = null,
+    val ocrRawText: String? = null,
+    val ocrParseResult: com.paeki.fujirecipes.data.ocr.OcrParseResult? = null,
     val saveAllSlotsConfirmed: Boolean = false,
     val saveAllReport: SaveAllReport? = null,
+    val captureLog: String? = null,
 )
 
 data class WriteToastState(val slot: String, val name: String, val savedToLibrary: Boolean = false)
@@ -218,6 +226,7 @@ fun FujiSyncApp(
     onRestoreSlots: () -> Unit,
     onDeleteSlotBackup: () -> Unit,
     onRenameSlotBackup: (String) -> Unit,
+    onRearrangeCameraSlots: (List<RecipeUiModel>) -> Unit = {},
     onRenameCameraLabel: (String, String) -> Unit,
     onDeleteCamera: (String) -> Unit = {},
     onResetCameraLabel: (String) -> Unit = {},
@@ -231,9 +240,15 @@ fun FujiSyncApp(
     onAddMockCamera: () -> Unit = {},
     onSaveAllToLibrary: (LibraryRecipeSource) -> Unit = {},
     onSaveAllReportDismiss: () -> Unit = {},
+    onLoadCaptureLog: () -> Unit = {},
+    onClearCaptureLog: () -> Unit = {},
+    onSetPropertyWriteDelay: (Long) -> Unit = {},
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showWriteDelayBench by remember { mutableStateOf(false) }
+    var showNameBench by remember { mutableStateOf(false) }
+    var showReadSlotsBench by remember { mutableStateOf(false) }
+    var showScanTileGuide by remember { mutableStateOf(false) }
     var cameraSheetRevealProgress by rememberSaveable { mutableStateOf(0f) }
     val cameraLabel = state.camera.cameraLabels[state.camera.cameraSerial] ?: "My Camera"
     var cameraDetail by remember { mutableStateOf<Pair<Int, CameraCardUiModel>?>(null) }
@@ -276,8 +291,12 @@ fun FujiSyncApp(
         }
     }
 
-    LaunchedEffect(state.camera.readingSlots) {
-        if (state.camera.readingSlots) showReadingOverlay = true
+    LaunchedEffect(state.camera.readingSlots, state.camera.isRestoringValidation) {
+        if (state.camera.readingSlots && !state.camera.isRestoringValidation) {
+            showReadingOverlay = true
+        } else if (state.camera.isRestoringValidation) {
+            showReadingOverlay = false
+        }
     }
 
     LaunchedEffect(editorOpen) {
@@ -299,6 +318,9 @@ fun FujiSyncApp(
         OverlayLayer(state.camera.restoringSlots) { },  // blocks back while writing the set to camera
         OverlayLayer(showExifBench) { showExifBench = false },
         OverlayLayer(showWriteDelayBench) { showWriteDelayBench = false },
+        OverlayLayer(showNameBench) { showNameBench = false },
+        OverlayLayer(showReadSlotsBench) { showReadSlotsBench = false },
+        OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
         OverlayLayer(cameraDetail != null) { cameraDetail = null },
@@ -341,10 +363,14 @@ fun FujiSyncApp(
                                 hasSlotBackup = state.camera.hasSlotBackup,
                                 slotBackupMeta = state.camera.slotBackupMeta,
                                 slotBackupSlots = state.camera.slotBackupSlots,
+                                restoringSlots = state.camera.restoringSlots,
                                 onBackupSlots = onBackupSlots,
                                 onRestoreSlots = onRestoreSlots,
                                 onDeleteSlotBackup = onDeleteSlotBackup,
                                 onRenameSlotBackup = onRenameSlotBackup,
+                                onRearrangeSlots = onRearrangeCameraSlots,
+                                readingSlotIndex = state.camera.readingSlotIndex,
+                                isRestoringValidation = state.camera.isRestoringValidation,
                                 cameraSerial = state.camera.cameraSerial,
                                 cameraNames = listOf(cameraLabel),
                                 onOpenCameraDetail = { idx, cam -> cameraDetail = idx to cam },
@@ -368,6 +394,9 @@ fun FujiSyncApp(
                         onOpenItem = onOpenLibraryItem,
                         onCreateRecipe = onOpenRecipeCreator,
                         onAddGroupImage = onAddLibraryGroupImage,
+                        onImportFromPhoto = { showImportFromPhotoGuide = true },
+                        onImportFromScreenshot = { showImportFromScreenshotGuide = true },
+                        onScanTileGuide = { showScanTileGuide = true },
                     )
                     AppTab.Discover -> DiscoverScreen()
                     AppTab.Profile -> ProfileScreen(
@@ -386,9 +415,11 @@ fun FujiSyncApp(
                         onExploreDemo = onExploreDemo,
                         onOpenExifBench = { showExifBench = true },
                         onOpenWriteDelayBench = { showWriteDelayBench = true },
-                        onImportFromPhoto = { showImportFromPhotoGuide = true },
-                        onImportFromScreenshot = { showImportFromScreenshotGuide = true },
+                        onOpenNameBench = { showNameBench = true },
+                        onOpenReadSlotsBench = { showReadSlotsBench = true },
                         onAddMockCamera = onAddMockCamera,
+                        onShowScanLog = onLoadCaptureLog,
+                        onSetPropertyWriteDelay = onSetPropertyWriteDelay,
                     )
                 }
 
@@ -398,6 +429,8 @@ fun FujiSyncApp(
                     cameraDetail = cameraDetail,
                     showExifBench = showExifBench,
                     showWriteDelayBench = showWriteDelayBench,
+                    showNameBench = showNameBench,
+                    showReadSlotsBench = showReadSlotsBench,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -427,10 +460,14 @@ fun FujiSyncApp(
                     onDuplicateDismiss = onDuplicateDismiss,
                     onExifBenchClose = { showExifBench = false },
                     onWriteDelayBenchClose = { showWriteDelayBench = false },
+                    onNameBenchClose = { showNameBench = false },
+                    onReadSlotsBenchClose = { showReadSlotsBench = false },
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,
                     onImportFromScreenshotGuideClose = { showImportFromScreenshotGuide = false },
                     onImportFromScreenshot = onImportFromScreenshot,
+                    showScanTileGuide = showScanTileGuide,
+                    onScanTileGuideClose = { showScanTileGuide = false },
                     onExifImportErrorDismiss = onExifImportErrorDismiss,
                     onExifImportRetry = onImportFromPhoto,
                     onOcrImportErrorDismiss = onOcrImportErrorDismiss,
@@ -440,6 +477,9 @@ fun FujiSyncApp(
 
             val isCharging = rememberIsPhoneCharging()
             var chargingBannerDismissed by remember { mutableStateOf(false) }
+            LaunchedEffect(isCharging) {
+                if (!isCharging) chargingBannerDismissed = false
+            }
             AnimatedVisibility(
                 visible = state.tab == AppTab.Camera && isCharging && !chargingBannerDismissed,
                 enter = slideInVertically { it },
@@ -465,6 +505,53 @@ fun FujiSyncApp(
                 },
             )
         }
+
+        state.captureLog?.let { log ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color(0xCC000000))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onClearCaptureLog,
+                    ),
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .background(androidx.compose.ui.graphics.Color(0xFF1A1A1A), RoundedCornerShape(8.dp))
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {},
+                        )
+                ) {
+                    Text("SCAN DIAGNOSTIC LOG",
+                        color = androidx.compose.ui.graphics.Color(0xFFC99A4E),
+                        fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        letterSpacing = androidx.compose.ui.unit.TextUnit(1.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                    Text(log,
+                        color = androidx.compose.ui.graphics.Color(0xFFCCCCCC),
+                        fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        fontFamily = com.paeki.fujirecipes.ui.theme.MonoFamily,
+                        lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("TAP OUTSIDE TO DISMISS · CLEARS LOG",
+                        color = androidx.compose.ui.graphics.Color(0xFF555555),
+                        fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        letterSpacing = androidx.compose.ui.unit.TextUnit(1.2f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -475,6 +562,8 @@ private fun BoxScope.AppOverlays(
     cameraDetail: Pair<Int, CameraCardUiModel>?,
     showExifBench: Boolean,
     showWriteDelayBench: Boolean,
+    showNameBench: Boolean,
+    showReadSlotsBench: Boolean,
     showImportFromPhotoGuide: Boolean,
     showReadingOverlay: Boolean,
     showDiscardEditorDialog: Boolean,
@@ -504,16 +593,23 @@ private fun BoxScope.AppOverlays(
     onDuplicateDismiss: () -> Unit,
     onExifBenchClose: () -> Unit,
     onWriteDelayBenchClose: () -> Unit,
+    onNameBenchClose: () -> Unit,
+    onReadSlotsBenchClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
     showImportFromScreenshotGuide: Boolean,
     onImportFromScreenshotGuideClose: () -> Unit,
     onImportFromScreenshot: () -> Unit,
+    showScanTileGuide: Boolean,
+    onScanTileGuideClose: () -> Unit,
     onExifImportErrorDismiss: () -> Unit,
     onExifImportRetry: () -> Unit,
     onOcrImportErrorDismiss: () -> Unit,
     onOcrImportRetry: () -> Unit,
 ) {
+    val context = LocalContext.current
     val writeDelayBenchVm: WriteDelayBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val nameBenchVm: NameBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val readSlotsBenchVm: ReadSlotsBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
     Box(modifier = Modifier.fillMaxSize()) {
         RecipeDetailScreen(
@@ -564,6 +660,18 @@ private fun BoxScope.AppOverlays(
         }
     }
 
+    if (showNameBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            NameBenchScreen(viewModel = nameBenchVm, onClose = onNameBenchClose)
+        }
+    }
+
+    if (showReadSlotsBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            ReadSlotsBenchScreen(viewModel = readSlotsBenchVm, onClose = onReadSlotsBenchClose)
+        }
+    }
+
     AnimatedVisibility(
         visible = showImportFromPhotoGuide,
         enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
@@ -594,6 +702,18 @@ private fun BoxScope.AppOverlays(
         }
     }
 
+    AnimatedVisibility(
+        visible = showScanTileGuide,
+        enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+        exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+               slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+    ) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            com.paeki.fujirecipes.ui.ScanTileGuide(onClose = onScanTileGuideClose)
+        }
+    }
+
     if (state.exifImportLoading) {
         ExifImportLoadingScreen()
     }
@@ -615,10 +735,21 @@ private fun BoxScope.AppOverlays(
     }
 
     state.ocrImportError?.let { error ->
+        val rawText = state.ocrRawText
         ExifImportErrorScreen(
             message = error,
             onDismiss = onOcrImportErrorDismiss,
             onRetry = onOcrImportRetry,
+            onShareRawDump = if (rawText != null) {
+                {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "OCR dump")
+                        putExtra(Intent.EXTRA_TEXT, formatOcrDump(rawText, state.ocrParseResult))
+                    }
+                    context.startActivity(Intent.createChooser(intent, null))
+                }
+            } else null,
         )
     }
 
@@ -639,6 +770,38 @@ private fun BoxScope.AppOverlays(
             onRemoveReferenceImage = onRemoveEditorReferenceImage,
             onSave = onSaveRecipeDraft,
         )
+    }
+
+    val ocrRawText = state.ocrRawText
+    if (ocrRawText != null && (state.creatingRecipe || state.editorRecipe != null)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(bottom = 80.dp, end = 16.dp),
+            contentAlignment = Alignment.BottomEnd,
+        ) {
+            Text(
+                text = "SHARE OCR DUMP",
+                fontFamily = MonoFamily,
+                fontSize = 9.sp,
+                letterSpacing = 1.4.sp,
+                color = Gold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(PanelLow.copy(alpha = 0.92f))
+                    .border(1.dp, Gold.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
+                    .clickable {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "OCR dump")
+                            putExtra(Intent.EXTRA_TEXT, formatOcrDump(ocrRawText, state.ocrParseResult))
+                        }
+                        context.startActivity(Intent.createChooser(intent, null))
+                    }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
     }
 
     if (showDiscardEditorDialog) {
@@ -1278,12 +1441,15 @@ private fun ExifImportLoadingScreen(
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val gold = Color(0xFFC99A4E)
                     val inset = 11.dp.toPx()
-                    val innerTop = inset
-                    val innerBottom = size.height - inset
+                    val scanLineInset = inset + 8.dp.toPx()
+                    val innerTop = scanLineInset
+                    val innerBottom = size.height - scanLineInset
+                    val innerLeft = scanLineInset
+                    val innerRight = size.width - scanLineInset
                     val y = innerTop + (innerBottom - innerTop) * scanProgress
                     val trailH = (innerBottom - innerTop) * 0.4f
 
-                    // Glow trail above scan line, clipped to inner rect
+                    // Glow trail above scan line, clipped to the inset scan lane.
                     if (y > innerTop) {
                         drawRect(
                             brush = Brush.verticalGradient(
@@ -1291,12 +1457,12 @@ private fun ExifImportLoadingScreen(
                                 startY = maxOf(innerTop, y - trailH),
                                 endY = y,
                             ),
-                            topLeft = Offset(inset, maxOf(innerTop, y - trailH)),
-                            size = Size(size.width - inset * 2, minOf(trailH, y - innerTop)),
+                            topLeft = Offset(innerLeft, maxOf(innerTop, y - trailH)),
+                            size = Size(innerRight - innerLeft, minOf(trailH, y - innerTop)),
                         )
                     }
 
-                    // Scan line — gradient fade at edges, spans inner rect width
+                    // Scan line — gradient fade at edges, inset from the frame.
                     drawLine(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
@@ -1306,11 +1472,11 @@ private fun ExifImportLoadingScreen(
                                 gold.copy(alpha = 0.55f),
                                 Color.Transparent,
                             ),
-                            startX = inset,
-                            endX = size.width - inset,
+                            startX = innerLeft,
+                            endX = innerRight,
                         ),
-                        start = Offset(inset, y),
-                        end = Offset(size.width - inset, y),
+                        start = Offset(innerLeft, y),
+                        end = Offset(innerRight, y),
                         strokeWidth = 1.5.dp.toPx(),
                     )
 
@@ -1363,6 +1529,7 @@ private fun ExifImportErrorScreen(
     message: String,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
+    onShareRawDump: (() -> Unit)? = null,
 ) {
     Box(
         modifier = Modifier.fillMaxSize().background(Bg),
@@ -1437,6 +1604,24 @@ private fun ExifImportErrorScreen(
                         color = TextMuted,
                     )
                 }
+                if (onShareRawDump != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(onClick = onShareRawDump)
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "SHARE OCR DUMP",
+                            fontFamily = MonoFamily,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.6.sp,
+                            color = Gold,
+                        )
+                    }
+                }
             }
         }
     }
@@ -1477,4 +1662,34 @@ fun WriteToast(
             )
         }
     }
+}
+
+private fun formatOcrDump(
+    rawText: String?,
+    result: com.paeki.fujirecipes.data.ocr.OcrParseResult?,
+): String = buildString {
+    appendLine("=== PARSE RESULT ===")
+    if (result == null) {
+        appendLine("No recipe fields found (parse returned null)")
+    } else {
+        appendLine("Matched: ${result.matchedCount} field(s)")
+        appendLine()
+        appendLine("Film Simulation: ${result.sim}")
+        appendLine()
+        appendLine("Effects:")
+        result.effects.forEach { (k, v) -> appendLine("  $k: $v") }
+        appendLine()
+        appendLine("Tone:")
+        result.tone.forEach { (k, v) -> appendLine("  $k: $v") }
+        appendLine()
+        appendLine("White Balance:")
+        result.wb.forEach { (k, v) -> appendLine("  $k: $v") }
+        if (result.unmatchedFields.isNotEmpty()) {
+            appendLine()
+            appendLine("Detected but not parsed: ${result.unmatchedFields.joinToString(", ")}")
+        }
+    }
+    appendLine()
+    appendLine("=== RAW OCR TEXT ===")
+    appendLine(rawText ?: "(none)")
 }

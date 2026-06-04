@@ -3,7 +3,7 @@ package com.paeki.fujirecipes.data.ptp
 import java.text.Normalizer
 
 object CameraPresetName {
-    const val MAX_LENGTH = 31
+    const val MAX_LENGTH = 25
     const val FALLBACK = "Untitled"
 
     private val ALLOWED: Set<Char> = buildSet {
@@ -11,7 +11,7 @@ object CameraPresetName {
         ('a'..'z').forEach(::add)
         ('0'..'9').forEach(::add)
         add(' ')
-        add('\'')
+        "!\"#$%&'()*+,-./:;<=>?@[]\\^_{}|~".forEach(::add)
     }
 
     fun sanitize(name: String): String =

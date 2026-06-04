@@ -24,6 +24,7 @@ private val COLOR_ONLY_PROPS = setOf(
 
 class FujiRecipeCamera(
     private val connection: OpenPtpConnection,
+    private val propertyWriteDelayMs: Long = 0L,
 ) {
     suspend fun readPreset(slot: CameraSlot): RecipePreset {
         selectSlot(slot)
@@ -63,13 +64,11 @@ class FujiRecipeCamera(
             params = listOf(PtpConstants.FUJI_PRESET_NAME),
             payload = encodePtpString(safe),
         )
-        delay(PROPERTY_WRITE_DELAY_MS)
         return transaction.isOk
     }
 
     suspend fun writeFilmSimulation(slot: CameraSlot, filmSimulation: FujiFilmSimulation): Boolean {
         if (!selectSlot(slot)) return false
-        delay(PROPERTY_WRITE_DELAY_MS)
 
         connection.executeCommand(PtpConstants.GET_DEVICE_INFO)
 
@@ -78,7 +77,6 @@ class FujiRecipeCamera(
             params = listOf(FujiPropertyCode.FilmSimulation.code),
             payload = uint16Le(filmSimulation.protocolValue),
         )
-        delay(PROPERTY_WRITE_DELAY_MS)
         return transaction.isOk
     }
 
@@ -118,7 +116,7 @@ class FujiRecipeCamera(
                 payload = uint16Le(value),
             )
             if (tx.isOk) success++ else failed++
-            delay(PROPERTY_WRITE_DELAY_MS)
+            if (propertyWriteDelayMs > 0) delay(propertyWriteDelayMs)
         }
 
         // Name is always written last (§9.6 step 5)
@@ -159,7 +157,6 @@ class FujiRecipeCamera(
     }
 
     private companion object {
-        const val SLOT_SWITCH_DELAY_MS = 100L
-        const val PROPERTY_WRITE_DELAY_MS = 150L
+        const val SLOT_SWITCH_DELAY_MS = 25L
     }
 }

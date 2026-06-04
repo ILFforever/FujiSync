@@ -31,17 +31,33 @@ data class FxwRecipe(
     val colorChromeFxBlue: String get() = params["Color Chrome FX Blue"] ?: ""
 
     fun pillLabels(): List<String> = buildList {
-        if (dynamicRange.isNotBlank()) add(dynamicRange)
-        if (highlight.isNotBlank() && shadow.isNotBlank()) add("Hi $highlight · Sh $shadow")
-        if (color.isNotBlank() && color != "0") add("Color $color")
-        if (clarity.isNotBlank() && clarity != "0") add("Clarity $clarity")
+        if (dynamicRange.isNotBlank()) add(dynamicRange.normalizedDynamicRangePill())
         if (grainEffect.isNotBlank() && !grainEffect.lowercase().startsWith("off")) {
-            val level = when {
-                grainEffect.lowercase().contains("strong") -> "Str"
-                grainEffect.lowercase().contains("weak") -> "Wk"
-                else -> grainEffect.substringBefore(",").trim()
-            }
-            add("Grain $level")
+            add("GRAIN ${grainEffect.normalizedGrainPill()}")
         }
+        if (highlight.isNotBlank() && highlight != "0") add("HL $highlight")
+        if (shadow.isNotBlank() && shadow != "0") add("SH $shadow")
+        if (color.isNotBlank() && color != "0") add("COLOR $color")
+        if (clarity.isNotBlank() && clarity != "0") add("CLARITY $clarity")
+    }
+
+    private fun String.normalizedDynamicRangePill(): String =
+        trim().uppercase()
+            .replace("DR ", "DR")
+            .let { value -> if (value.matches(Regex("""DR\d{3}"""))) "$value%" else value }
+
+    private fun String.normalizedGrainPill(): String {
+        val lower = lowercase()
+        val strength = when {
+            "strong" in lower -> "ST"
+            "weak" in lower -> "WK"
+            else -> substringBefore(",").trim().uppercase()
+        }
+        val size = when {
+            "large" in lower -> "L"
+            "small" in lower -> "S"
+            else -> null
+        }
+        return size?.let { "$strength/$it" } ?: strength
     }
 }

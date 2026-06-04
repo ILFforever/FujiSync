@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <uses-feature
         android:name="android.hardware.usb.host"
@@ -15,6 +17,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.FujiRecipes">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,15 +27,52 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
-
             <meta-data
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/usb_device_filter" />
         </activity>
+
+        <!-- Transparent activity that requests MediaProjection permission from the user -->
+        <activity
+            android:name=".capture.OcrCaptureActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Capture" />
+
+        <!-- Foreground service that holds the VirtualDisplay and grabs one frame -->
+        <service
+            android:name=".capture.OcrCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- Quick Settings tile -->
+        <service
+            android:name=".capture.OcrTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_ocr"
+            android:label="Scan Recipe"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- FileProvider for sharing the capture bitmap with the OCR parser -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

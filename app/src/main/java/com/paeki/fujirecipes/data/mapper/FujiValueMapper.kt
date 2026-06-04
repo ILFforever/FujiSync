@@ -68,13 +68,12 @@ object FujiValueMapper {
         else -> "Off" // 1, 6, null, or unknown
     }
 
-    /** Off encodes to 6 (the camera default per PROTOCOL §5). */
     fun grainLabelToRaw(label: String?): Int = when (label) {
         "Weak Small" -> 2
         "Strong Small" -> 3
         "Weak Large" -> 4
         "Strong Large" -> 5
-        else -> 6
+        else -> 6  // Off/default; protocol also accepts 1 as Off on read.
     }
 
     // ── Off / Weak / Strong (Color Chrome, FX Blue, Smooth Skin) ────────────────

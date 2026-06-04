@@ -20,10 +20,9 @@ import com.paeki.fujirecipes.data.usb.CameraUsbMode
 import com.paeki.fujirecipes.data.usb.FujiPtpProbe
 import com.paeki.fujirecipes.data.usb.FujiPtpProbeResult
 import com.paeki.fujirecipes.data.usb.FujiRecipeCamera
-import com.paeki.fujirecipes.data.usb.UsbCameraRepository
 import com.paeki.fujirecipes.data.usb.UsbPtpConnection
 import com.paeki.fujirecipes.domain.model.CameraSlot
-import com.paeki.fujirecipes.ui.library.LibraryNameValidator
+import com.paeki.fujirecipes.domain.repository.CameraRepository
 import com.paeki.fujirecipes.ui.library.LibraryStateHolder
 import com.paeki.fujirecipes.ui.model.AppSettings
 import com.paeki.fujirecipes.ui.model.LibraryGroupUiModel
@@ -79,7 +78,7 @@ internal object UiTimings {
 class MainViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val usbManager: UsbManager,
-    private val repository: UsbCameraRepository,
+    private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
     private val localStore: LocalStore,
     private val heartbeat: CameraHeartbeat,
@@ -293,6 +292,7 @@ class MainViewModel @Inject constructor(
                     camera = it.camera.copy(
                         readingSlots = false,
                         readingSlotIndex = -1,
+                        isRestoringValidation = false,
                         scanError = if (failCount > 0) "$failCount slot${if (failCount > 1) "s" else ""} could not be read." else null,
                     ),
                 )
@@ -305,6 +305,18 @@ class MainViewModel @Inject constructor(
         heartbeat.reset()
         heartbeatJob = viewModelScope.launch {
             launch { heartbeat.monitor(device) }
+            launch {
+                heartbeat.slots.collect { presets ->
+                    if (presets.isEmpty()) return@collect
+                    _uiState.update { state ->
+                        state.copy(
+                            camera = state.camera.copy(
+                                slots = presets.map { it.toUiModel() },
+                            ),
+                        )
+                    }
+                }
+            }
             heartbeat.alive.drop(1).collect { alive ->
                 if (!alive && _uiState.value.camera.connected) {
                     _uiState.update {
@@ -357,7 +369,7 @@ class MainViewModel @Inject constructor(
                         connection.use {
                             check(connection.openSession()) { "OpenSession rejected." }
                             try {
-                                FujiRecipeCamera(connection).writePreset(recipe.toPreset(targetSlot))
+                                FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs).writePreset(recipe.toPreset(targetSlot))
                             } finally {
                                 connection.closeSession()
                             }
@@ -416,7 +428,7 @@ class MainViewModel @Inject constructor(
                         connection.use {
                             check(connection.openSession()) { "OpenSession rejected." }
                             try {
-                                FujiRecipeCamera(connection).writePreset(recipe.toPreset(slot))
+                                FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs).writePreset(recipe.toPreset(slot))
                             } finally {
                                 connection.closeSession()
                             }
@@ -444,6 +456,101 @@ class MainViewModel @Inject constructor(
             }
             delay(UiTimings.TOAST_DISMISS_MS)
             _uiState.update { it.copy(writeToast = null) }
+        }
+    }
+
+    fun handleRearrangeCameraSlots(nextSlots: List<RecipeUiModel>) {
+        val state = _uiState.value
+        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
+        val ordered = CameraSlot.entries.mapIndexedNotNull { index, slot ->
+            nextSlots.getOrNull(index)?.copy(slot = slot.label, libraryId = null)
+        }
+        if (ordered.size != CameraSlot.entries.size) return
+        val writes = ordered.mapIndexedNotNull { index, recipe ->
+            val current = state.camera.slots.getOrNull(index)
+            if (current != null && current.sameRecipeIgnoringSlot(recipe)) null else CameraSlot.entries[index] to recipe
+        }
+        if (writes.isEmpty()) return
+
+        if (selected == null || !state.camera.connected) {
+            _uiState.update {
+                it.copy(camera = it.camera.copy(scanError = "Connect camera before rearranging recipes."))
+            }
+            return
+        }
+
+        if (!usbManager.hasPermission(selected.device)) {
+            _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
+            return
+        }
+
+        val previouslySelected = state.camera.slots.getOrNull(state.camera.selectedSlotIdx)
+        _uiState.update {
+            it.copy(
+                writeBusy = true,
+                camera = it.camera.copy(scanError = null),
+            )
+        }
+
+        viewModelScope.launch {
+            val writeResult = heartbeat.usbMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val connection = connectionFactory.open(selected.device)
+                            ?: error("Unable to open the camera's PTP USB interface.")
+                        connection.use {
+                            check(connection.openSession()) { "OpenSession rejected." }
+                            try {
+                                val camera = FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs)
+                                writes.mapNotNull { (slot, recipe) ->
+                                    val result = camera.writePreset(recipe.toPreset(slot))
+                                    if (result.isOk) null else slot.label
+                                }
+                            } finally {
+                                connection.closeSession()
+                            }
+                        }
+                    }
+                }
+            }
+
+            writeResult.fold(
+                onSuccess = { failed ->
+                    if (failed.isNotEmpty()) {
+                        _uiState.update {
+                            it.copy(
+                                writeBusy = false,
+                                camera = it.camera.copy(scanError = failed.joinToString(prefix = "Rearrange reported write errors for ", postfix = ".")),
+                            )
+                        }
+                        return@launch
+                    }
+                    val selectedIdx = previouslySelected
+                        ?.let { selectedRecipe -> ordered.indexOfFirst { it.sameRecipeIgnoringSlot(selectedRecipe) } }
+                        ?.takeIf { it >= 0 }
+                        ?: _uiState.value.camera.selectedSlotIdx.coerceIn(0, ordered.lastIndex)
+                    _uiState.update {
+                        it.copy(
+                            writeBusy = false,
+                            camera = it.camera.copy(
+                                slots = ordered,
+                                selectedSlotIdx = selectedIdx,
+                            ),
+                            writeToast = WriteToastState(slot = "", name = "Camera recipes rearranged"),
+                        )
+                    }
+                    delay(UiTimings.TOAST_DISMISS_MS)
+                    _uiState.update { it.copy(writeToast = null) }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            writeBusy = false,
+                            camera = it.camera.copy(scanError = error.message ?: "Rearrange failed."),
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -569,9 +676,11 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(ocrImportLoading = true, ocrImportError = null) }
         viewModelScope.launch(Dispatchers.IO) {
             val started = System.currentTimeMillis()
+            var capturedRaw: String? = null
             val result = runCatching {
-                val rawText = OcrRecipeParser.recognizeText(appContext, uri)
-                OcrRecipeParser.parse(rawText)
+                val input = OcrRecipeParser.recognizeText(appContext, uri)
+                capturedRaw = input.mlText.text
+                OcrRecipeParser.parse(input)
             }
             delay(minLoadMs(started))
             when {
@@ -579,12 +688,16 @@ class MainViewModel @Inject constructor(
                     it.copy(
                         ocrImportLoading = false,
                         ocrImportError = "Couldn't read this image. Make sure it's a clear screenshot.",
+                        ocrRawText = capturedRaw,
+                        ocrParseResult = null,
                     )
                 }
                 result.getOrNull() == null -> _uiState.update {
                     it.copy(
                         ocrImportLoading = false,
                         ocrImportError = "No recipe settings found in this screenshot. Try a clearer image with visible parameter labels.",
+                        ocrRawText = capturedRaw,
+                        ocrParseResult = null,
                     )
                 }
                 else -> {
@@ -615,6 +728,8 @@ class MainViewModel @Inject constructor(
                         it.copy(
                             ocrImportLoading  = false,
                             ocrImportError    = null,
+                            ocrRawText        = capturedRaw,
+                            ocrParseResult    = parsed,
                             creatingRecipe    = false,
                             editorRecipe      = uiModel,
                             editorReferenceImageUris = emptyList(),
@@ -626,7 +741,17 @@ class MainViewModel @Inject constructor(
     }
 
     fun handleOcrImportDismiss() {
-        _uiState.update { it.copy(ocrImportLoading = false, ocrImportError = null) }
+        _uiState.update { it.copy(ocrImportLoading = false, ocrImportError = null, ocrRawText = null, ocrParseResult = null) }
+    }
+
+    fun loadCaptureLog() {
+        val log = com.paeki.fujirecipes.capture.CaptureDiag.read(appContext)
+        _uiState.update { it.copy(captureLog = log.ifBlank { "(log is empty)" }) }
+    }
+
+    fun clearCaptureLog() {
+        com.paeki.fujirecipes.capture.CaptureDiag.clear(appContext)
+        _uiState.update { it.copy(captureLog = null) }
     }
 
     private fun minLoadMs(startedAt: Long, minMs: Long = 1400): Long =
@@ -748,7 +873,7 @@ class MainViewModel @Inject constructor(
     }
 
     fun closeRecipeEditor() = _uiState.update {
-        it.copy(creatingRecipe = false, editorRecipe = null, editorReferenceImageUris = emptyList())
+        it.copy(creatingRecipe = false, editorRecipe = null, editorReferenceImageUris = emptyList(), ocrRawText = null, ocrParseResult = null)
     }
 
     fun saveRecipeDraft(recipe: RecipeUiModel) {
@@ -826,6 +951,11 @@ class MainViewModel @Inject constructor(
         persistSettings()
     }
 
+    fun handleSetPropertyWriteDelay(ms: Long) {
+        _uiState.update { it.copy(settings = it.settings.copy(propertyWriteDelayMs = ms.coerceIn(0L, 300L))) }
+        persistSettings()
+    }
+
     fun setShowCameraImageTuner(show: Boolean) = _uiState.update { it.copy(camera = it.camera.copy(showImageTuner = show)) }
 
     fun handleToggleFavoriteById(recipeId: String) = libraryHolder.toggleFavorite(recipeId)
@@ -878,7 +1008,7 @@ class MainViewModel @Inject constructor(
 
     fun handleRenameCameraLabel(serial: String, label: String) {
         if (serial.isBlank()) return
-        val trimmed = LibraryNameValidator.sanitize(label).ifBlank { "My Camera" }
+        val trimmed = label.trim().ifBlank { "My Camera" }
         val oldName = _uiState.value.camera.cameraLabels[serial]
         _uiState.update { it.copy(camera = it.camera.copy(cameraLabels = it.camera.cameraLabels + (serial to trimmed))) }
         persistCameraLabels()
@@ -977,7 +1107,7 @@ class MainViewModel @Inject constructor(
                         connection.use {
                             check(connection.openSession()) { "OpenSession rejected." }
                             try {
-                                val camera = FujiRecipeCamera(connection)
+                                val camera = FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs)
                                 orderedBackup.mapIndexedNotNull { index, recipe ->
                                     _uiState.update {
                                         it.copy(camera = it.camera.copy(restoringSlotIndex = index))
@@ -996,35 +1126,26 @@ class MainViewModel @Inject constructor(
 
             failedSlots.fold(
                 onSuccess = { failed ->
-                    if (failed.isNotEmpty()) {
-                        _uiState.update {
-                            it.copy(
-                                writeBusy = false,
-                                camera = it.camera.copy(
-                                    scanError = "Could not restore ${failed.joinToString(", ")}.",
-                                    restoringSlots = false,
-                                    restoringSlotIndex = -1,
-                                ),
-                            )
-                        }
-                        return@launch
-                    }
+                    // Re-read all slots from camera after the restore pass to validate what actually landed.
                     _uiState.update {
                         it.copy(
                             writeBusy = false,
                             camera = it.camera.copy(
-                                slots = orderedBackup,
                                 connected = true,
-                                scanError = null,
+                                scanError = failed
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.joinToString(prefix = "Restore reported write errors for ", postfix = ". Validating camera slots now."),
                                 restoringSlots = false,
                                 restoringSlotIndex = -1,
+                                readingSlots = true,
+                                readingSlotIndex = -1,
+                                slots = emptyList(),
+                                isRestoringValidation = true,
                             ),
                             tab = AppTab.Camera,
-                            writeToast = WriteToastState(slot = "camera", name = "${orderedBackup.size} sets"),
                         )
                     }
-                    delay(UiTimings.TOAST_DISMISS_MS)
-                    _uiState.update { it.copy(writeToast = null) }
+                    readAllSlots(selected.device)
                 },
                 onFailure = { error ->
                     _uiState.update {
@@ -1108,6 +1229,9 @@ class MainViewModel @Inject constructor(
             this + recipe
         }
     }
+
+    private fun RecipeUiModel.sameRecipeIgnoringSlot(other: RecipeUiModel): Boolean =
+        copy(slot = "") == other.copy(slot = "")
 
     private fun List<String>.appendReferenceImages(uris: List<String>): List<String> =
         (this + uris).distinct().take(20)

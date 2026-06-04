@@ -12,6 +12,7 @@ import com.paeki.fujirecipes.data.ptp.PtpProtocolException
 import com.paeki.fujirecipes.data.ptp.PtpTransaction
 import com.paeki.fujirecipes.data.ptp.buildCommandPacket
 import com.paeki.fujirecipes.data.ptp.buildDataOutPacket
+import java.util.concurrent.atomic.AtomicInteger
 
 class UsbPtpConnection(
     private val usbManager: UsbManager,
@@ -66,7 +67,7 @@ data class OpenPtpConnection(
     val bulkIn: UsbEndpoint,
     val interruptIn: UsbEndpoint?,
 ) : AutoCloseable {
-    private var nextTransactionId = 1
+    private val nextTransactionId = AtomicInteger(1)
 
     fun openSession(sessionId: Int = 1): Boolean {
         val transaction = executeCommand(
@@ -96,7 +97,7 @@ data class OpenPtpConnection(
         params: List<Int> = emptyList(),
         timeoutMs: Int = PtpConstants.STANDARD_TIMEOUT_MS,
     ): PtpTransaction {
-        val transactionId = nextTransactionId++
+        val transactionId = nextTransactionId.getAndIncrement()
         send(buildCommandPacket(code, transactionId, params), timeoutMs)
 
         val first = receiveContainer(timeoutMs)
@@ -118,7 +119,7 @@ data class OpenPtpConnection(
         payload: ByteArray,
         timeoutMs: Int = PtpConstants.STANDARD_TIMEOUT_MS,
     ): PtpTransaction {
-        val transactionId = nextTransactionId++
+        val transactionId = nextTransactionId.getAndIncrement()
         send(buildCommandPacket(code, transactionId, params), timeoutMs)
         send(buildDataOutPacket(code, transactionId, payload), timeoutMs)
         return PtpTransaction(

@@ -20,12 +20,26 @@ class CameraPresetNameTest {
 
     @Test
     fun `sanitize replaces disallowed chars with spaces`() {
-        // '#', '@', '!' are not in ALLOWED — each becomes a space, collapsed to one
-        assertEquals("A B", CameraPresetName.sanitize("A#@!B"))
+        assertEquals("A B", CameraPresetName.sanitize("A🎞️B"))
     }
 
     @Test
-    fun `sanitize allows alphanumerics digits and apostrophe`() {
+    fun `sanitize allows camera keyboard punctuation`() {
+        listOf(
+            "!\"#$%&'()*+,-./",
+            ":;<=>?@[]\\^_{}|~",
+        ).forEach { input ->
+            assertEquals(input, CameraPresetName.sanitize(input))
+        }
+    }
+
+    @Test
+    fun `sanitize replaces unicode dash and middle dot with spaces`() {
+        assertEquals("A B C D E", CameraPresetName.sanitize("A–B—C―D·E"))
+    }
+
+    @Test
+    fun `sanitize allows alphanumerics digits and punctuation`() {
         val input = "Kodak's 400TX"
         assertEquals("Kodak's 400TX", CameraPresetName.sanitize(input))
     }
@@ -40,7 +54,7 @@ class CameraPresetNameTest {
 
     @Test
     fun `sanitize returns empty string for all-disallowed input`() {
-        assertEquals("", CameraPresetName.sanitize("###"))
+        assertEquals("", CameraPresetName.sanitize("🎞️"))
     }
 
     @Test
@@ -52,8 +66,8 @@ class CameraPresetNameTest {
 
     @Test
     fun `sanitize trims trailing spaces after truncation`() {
-        // 30 'A's + 5 spaces → truncate to 31 chars → trailing spaces stripped
-        val input = "A".repeat(30) + "     "
+        // MAX_LENGTH 'A's + spaces -> truncate, then strip the trailing space if it lands on the cut.
+        val input = "A".repeat(CameraPresetName.MAX_LENGTH) + "     "
         val result = CameraPresetName.sanitize(input)
         assertTrue(result.length <= CameraPresetName.MAX_LENGTH)
         assertTrue(!result.endsWith(" "))
@@ -63,7 +77,7 @@ class CameraPresetNameTest {
 
     @Test
     fun `sanitizeOrFallback returns fallback for empty-after-sanitize input`() {
-        assertEquals(CameraPresetName.FALLBACK, CameraPresetName.sanitizeOrFallback("###"))
+        assertEquals(CameraPresetName.FALLBACK, CameraPresetName.sanitizeOrFallback("🎞️"))
     }
 
     @Test

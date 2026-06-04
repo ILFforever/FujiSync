@@ -58,49 +58,52 @@ class FujiPtpProbe(
                 return FujiPtpProbeResult.NotReady("Camera rejected OpenSession.")
             }
 
-            val deviceInfoTransaction = connection.executeCommand(PtpConstants.GET_DEVICE_INFO)
-            val payload = deviceInfoTransaction.data?.payload
-                ?: return FujiPtpProbeResult.NotReady("Camera did not return DeviceInfo.")
+            try {
+                val deviceInfoTransaction = connection.executeCommand(PtpConstants.GET_DEVICE_INFO)
+                val payload = deviceInfoTransaction.data?.payload
+                    ?: return FujiPtpProbeResult.NotReady("Camera did not return DeviceInfo.")
 
-            if (!deviceInfoTransaction.isOk) {
-                return FujiPtpProbeResult.NotReady("Camera returned an error for DeviceInfo.")
-            }
+                if (!deviceInfoTransaction.isOk) {
+                    return FujiPtpProbeResult.NotReady("Camera returned an error for DeviceInfo.")
+                }
 
-            val deviceInfo = parseDeviceInfo(payload)
-            Log.d(
-                TAG,
-                "PTP DeviceInfo: manufacturer=${deviceInfo.manufacturer.ifBlank { "<blank>" }}, " +
-                    "model=${deviceInfo.model.ifBlank { "<blank>" }}, " +
-                    "version=${deviceInfo.deviceVersion.ifBlank { "<blank>" }}, " +
-                    "serial=${deviceInfo.serialNumber.ifBlank { "<blank>" }}, " +
-                    "usbDeviceSerial=${usbDeviceSerial.orCleanBlank() ?: "<blank>"}, " +
-                    "usbConnectionSerial=${usbConnectionSerial.orCleanBlank() ?: "<blank>"}, " +
-                    "props=${deviceInfo.supportedDeviceProperties.size}",
-            )
-            val propertyDumps = dumpDeviceProperties(connection, deviceInfo.supportedDeviceProperties)
-            val batteryPercent = parseBatteryPercent(propertyDumps)
-            val candidateDumps = dumpDeviceProperties(
-                connection = connection,
-                propertyCodes = BATTERY_CANDIDATE_PROPERTIES.filterNot {
-                    it in deviceInfo.supportedDeviceProperties
-                },
-                label = "Candidate",
-            )
-            connection.closeSession()
-
-            return if (deviceInfo.supportsFujiRecipeSlots) {
-                FujiPtpProbeResult.Ready(
-                    deviceInfo = deviceInfo,
-                    usbDeviceSerial = usbDeviceSerial,
-                    usbConnectionSerial = usbConnectionSerial,
-                    propertyDumps = propertyDumps,
-                    candidateDumps = candidateDumps,
-                    batteryPercent = batteryPercent,
+                val deviceInfo = parseDeviceInfo(payload)
+                Log.d(
+                    TAG,
+                    "PTP DeviceInfo: manufacturer=${deviceInfo.manufacturer.ifBlank { "<blank>" }}, " +
+                        "model=${deviceInfo.model.ifBlank { "<blank>" }}, " +
+                        "version=${deviceInfo.deviceVersion.ifBlank { "<blank>" }}, " +
+                        "serial=${deviceInfo.serialNumber.ifBlank { "<blank>" }}, " +
+                        "usbDeviceSerial=${usbDeviceSerial.orCleanBlank() ?: "<blank>"}, " +
+                        "usbConnectionSerial=${usbConnectionSerial.orCleanBlank() ?: "<blank>"}, " +
+                        "props=${deviceInfo.supportedDeviceProperties.size}",
                 )
-            } else {
-                FujiPtpProbeResult.NotReady(
-                    "Fuji recipe slots not available. On the camera go to MENU → SET UP → USB Setting and select \"USB RAW Conv. / Backup Restore\", then reconnect."
+                val propertyDumps = dumpDeviceProperties(connection, deviceInfo.supportedDeviceProperties)
+                val batteryPercent = parseBatteryPercent(propertyDumps)
+                val candidateDumps = dumpDeviceProperties(
+                    connection = connection,
+                    propertyCodes = BATTERY_CANDIDATE_PROPERTIES.filterNot {
+                        it in deviceInfo.supportedDeviceProperties
+                    },
+                    label = "Candidate",
                 )
+
+                return if (deviceInfo.supportsFujiRecipeSlots) {
+                    FujiPtpProbeResult.Ready(
+                        deviceInfo = deviceInfo,
+                        usbDeviceSerial = usbDeviceSerial,
+                        usbConnectionSerial = usbConnectionSerial,
+                        propertyDumps = propertyDumps,
+                        candidateDumps = candidateDumps,
+                        batteryPercent = batteryPercent,
+                    )
+                } else {
+                    FujiPtpProbeResult.NotReady(
+                        "Fuji recipe slots not available. On the camera go to MENU → SET UP → USB Setting and select \"USB RAW Conv. / Backup Restore\", then reconnect."
+                    )
+                }
+            } finally {
+                runCatching { connection.closeSession() }
             }
         }
     }

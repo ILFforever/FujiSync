@@ -41,14 +41,13 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# ---------- Reverse-engineering artifacts ----------
-reverse-engineering/
-
-# ---------- Handoff artifacts ----------
-handoff/
+RE/
 
 # ---------- APK files ----------
 *.apk
+
+# ---------- Working notes & design context ----------
+.impeccable.md
 
 # ---------- Claude / Codex working files ----------
 .claude/settings.local.json

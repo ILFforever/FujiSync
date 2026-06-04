@@ -4,7 +4,10 @@ import android.animation.ValueAnimator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
@@ -237,6 +240,8 @@ fun BackupSheet(
     }
 }
 
+private enum class RestorePhase { Idle, Working, Validating }
+
 @Composable
 fun RestoreSheet(
     meta: SlotBackupMeta?,
@@ -245,6 +250,11 @@ fun RestoreSheet(
     onConfirm: () -> Unit,
     onDelete: () -> Unit = {},
     onRename: (String) -> Unit = {},
+    restoreInProgress: Boolean = false,
+    isRestoringValidation: Boolean = false,
+    readingSlots: Boolean = false,
+    readingSlotIndex: Int = -1,
+    loadedSlots: List<RecipeUiModel> = emptyList(),
 ) {
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
@@ -252,15 +262,39 @@ fun RestoreSheet(
     var renaming by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
     var slotsExpanded by remember { mutableStateOf(false) }
+    var phase by remember { mutableStateOf(RestorePhase.Idle) }
     val chevronAngle by animateFloatAsState(if (slotsExpanded) 90f else 0f, label = "chevron")
 
     fun dismissWithMotion() {
+        if (restoreInProgress) return  // block only while writes are actively in flight
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
-    fun restore() { onConfirm(); dismissWithMotion() }
+    fun restore() {
+        phase = RestorePhase.Working
+        onConfirm()
+        // sheet stays open — loading overlay takes over, then reading animation
+    }
     fun confirmDelete() { onDelete(); dismissWithMotion() }
+
+    val showValidation = isRestoringValidation || phase == RestorePhase.Validating
+
+    // Transition Working → Validating when the VM starts its post-restore read; auto-dismiss when done.
+    LaunchedEffect(readingSlots, restoreInProgress, isRestoringValidation) {
+        if (isRestoringValidation) {
+            phase = RestorePhase.Validating
+            return@LaunchedEffect
+        }
+        when (phase) {
+            RestorePhase.Working -> if (readingSlots) phase = RestorePhase.Validating
+            RestorePhase.Validating -> if (!readingSlots) {
+                delay(500)
+                dismissWithMotion()
+            }
+            else -> {}
+        }
+    }
 
     BackHandler(onBack = ::dismissWithMotion)
     LaunchedEffect(motionEnabled) { visible = true }
@@ -310,7 +344,12 @@ fun RestoreSheet(
                         .clip(RoundedCornerShape(99.dp))
                         .background(TextDim.copy(alpha = 0.55f)),
                 )
-                Column(
+                if (showValidation) {
+                    RestoreReadingContent(
+                        readingSlotIndex = readingSlotIndex,
+                        loadedSlots = loadedSlots,
+                    )
+                } else Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
@@ -1030,6 +1069,122 @@ fun SaveAllSheet(
                     )
                     Spacer(Modifier.height(22.dp))
                     PrimaryCTA(label = "Save All to Library", onClick = ::save)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestoreReadingContent(
+    readingSlotIndex: Int,
+    loadedSlots: List<RecipeUiModel>,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "restore-read")
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "restore-read-pulse",
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 22.dp)
+            .padding(top = 18.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                text = "VALIDATING",
+                fontFamily = MonoFamily,
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
+                color = TextDim,
+            )
+            Text(
+                text = "Reading slots from camera",
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp,
+                letterSpacing = 0.4.sp,
+                color = TextPrimary,
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(BackupControlBg)
+                .border(1.dp, SheetBorder, RoundedCornerShape(12.dp)),
+        ) {
+            repeat(7) { idx ->
+                val slotLabel = "C${idx + 1}"
+                val loaded = loadedSlots.getOrNull(idx)
+                val isActive = idx == readingSlotIndex
+
+                if (idx > 0) Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SheetBorder))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = slotLabel,
+                        fontFamily = MonoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.5.sp,
+                        letterSpacing = 1.sp,
+                        color = when {
+                            loaded != null -> Gold
+                            isActive -> Gold.copy(alpha = pulse)
+                            else -> TextDim.copy(alpha = 0.4f)
+                        },
+                        modifier = Modifier.width(28.dp),
+                    )
+                    when {
+                        loaded != null -> {
+                            Text(
+                                text = loaded.name,
+                                fontFamily = SansFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = TextPrimary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = loaded.sim.trimEnd('.').uppercase(),
+                                fontFamily = MonoFamily,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.sp,
+                                color = TextMuted,
+                            )
+                        }
+                        isActive -> Text(
+                            text = "reading…",
+                            fontFamily = MonoFamily,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.8.sp,
+                            color = Gold.copy(alpha = pulse),
+                            modifier = Modifier.weight(1f),
+                        )
+                        else -> Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(SheetBorder.copy(alpha = 0.6f)),
+                        )
+                    }
                 }
             }
         }

@@ -1,14 +1,17 @@
 package com.paeki.fujirecipes.ui.discover
 
-import android.app.Application
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.paeki.fujirecipes.data.remote.FxwRecipe
 import com.paeki.fujirecipes.data.remote.FxwRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class DiscoverUiState(
     val recipes: List<FxwRecipe> = emptyList(),
@@ -20,7 +23,10 @@ data class DiscoverUiState(
     val source: FxwRepository.Source? = null,
 )
 
-class DiscoverViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class DiscoverViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
+) : ViewModel() {
     var state by mutableStateOf(DiscoverUiState())
         private set
 
@@ -53,7 +59,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
 
             runCatching {
                 FxwRepository.loadPage(
-                    context = getApplication<Application>().applicationContext,
+                    context = appContext,
                     page = page,
                     forceRefresh = forceRefresh,
                 )

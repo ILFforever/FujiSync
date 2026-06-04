@@ -3,6 +3,7 @@ package com.paeki.fujirecipes.ui.library
 import android.content.Context
 import app.cash.turbine.test
 import com.paeki.fujirecipes.data.local.LocalStore
+import com.paeki.fujirecipes.data.ptp.CameraPresetName
 import com.paeki.fujirecipes.ui.model.DuplicateMatchKind
 import com.paeki.fujirecipes.ui.model.LibraryRecipeSource
 import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
@@ -10,6 +11,7 @@ import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -44,7 +46,7 @@ class LibraryStateHolderTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        holder = LibraryStateHolder(context, localStore)
+        holder = LibraryStateHolder(context, localStore, TestScope(testDispatcher))
     }
 
     @After
@@ -85,26 +87,22 @@ class LibraryStateHolderTest {
     private fun seed(vararg recipes: LibraryRecipeUiModel) =
         recipes.forEach { holder.saveNewRecipe(it) }
 
-    // ── LibraryNameValidator ──────────────────────────────────────────
+    // ── LibraryRecipeName ─────────────────────────────────────────────
 
     @Test
-    fun `sanitize strips emoji`() {
-        assertEquals("Velvia", LibraryNameValidator.sanitize("Velvia 🎞️"))
+    fun `recipe name sanitize follows camera-safe rules`() {
+        assertEquals("Cafe 400!!!", LibraryRecipeName.sanitize("  Café 🎞️ 400!!!  "))
+        assertEquals("Nat's Recipe", LibraryRecipeName.sanitize("Nat’s Recipe"))
     }
 
     @Test
-    fun `sanitize truncates at 60 chars`() {
-        assertEquals(60, LibraryNameValidator.sanitize("A".repeat(80)).length)
+    fun `recipe name sanitize truncates at camera preset length`() {
+        assertEquals(CameraPresetName.MAX_LENGTH, LibraryRecipeName.sanitize("A".repeat(80)).length)
     }
 
     @Test
-    fun `isValid returns false for blank input`() {
-        assertFalse(LibraryNameValidator.isValid("   "))
-    }
-
-    @Test
-    fun `isValid returns true for a normal name`() {
-        assertTrue(LibraryNameValidator.isValid("Classic Chrome 400"))
+    fun `recipe name sanitize falls back when nothing camera-safe remains`() {
+        assertEquals("Untitled Recipe", LibraryRecipeName.sanitize("🎞️"))
     }
 
     // ── addRecipe ─────────────────────────────────────────────────────
@@ -114,6 +112,13 @@ class LibraryStateHolderTest {
         assertTrue(holder.addRecipe(incoming(name = "Velvia Street"), source))
         assertEquals("Velvia Street", holder.state.value.recipes.first().name)
         assertNull(holder.state.value.duplicateDialog)
+    }
+
+    @Test
+    fun `addRecipe stores camera-safe recipe name`() {
+        assertTrue(holder.addRecipe(incoming(name = "  Café 🎞️ 400!!!  "), source))
+
+        assertEquals("Cafe 400!!!", holder.state.value.recipes.first().name)
     }
 
     @Test
@@ -137,6 +142,19 @@ class LibraryStateHolderTest {
 
         // Different sim prevents exact-settings match; same name triggers SameName match
         val result = holder.addRecipe(incoming(name = "classic chrome", sim = "Velvia"), source)
+
+        assertFalse(result)
+        assertEquals(
+            DuplicateMatchKind.SameName,
+            holder.state.value.duplicateDialog?.topMatch?.kind,
+        )
+    }
+
+    @Test
+    fun `addRecipe duplicate check compares camera-normalized names`() {
+        seed(recipe(name = "Cafe 400!!!", sim = "Classic Chrome"))
+
+        val result = holder.addRecipe(incoming(name = "Café 🎞️ 400!!!", sim = "Velvia"), source)
 
         assertFalse(result)
         assertEquals(
@@ -259,6 +277,25 @@ class LibraryStateHolderTest {
         assertEquals("Velvia", r1.sim)
         assertEquals(mapOf("Sharpness" to "+1"), r1.tone)
         assertEquals("Untouched", holder.state.value.recipes.first { it.id == "r2" }.name)
+    }
+
+    @Test
+    fun `updateRecipe stores camera-safe recipe name`() {
+        seed(recipe(id = "r1", name = "Old Name", sim = "Provia"))
+
+        holder.updateRecipe(RecipeUiModel(
+            libraryId = "r1", slot = "", name = "Café 🎞️ 400!!!", sim = "Velvia",
+            pills = listOf("Velvia"),
+        ))
+
+        assertEquals("Cafe 400!!!", holder.state.value.recipes.first { it.id == "r1" }.name)
+    }
+
+    @Test
+    fun `saveNewRecipe stores camera-safe recipe name`() {
+        holder.saveNewRecipe(recipe(name = "Café 🎞️ 400!!!"))
+
+        assertEquals("Cafe 400!!!", holder.state.value.recipes.first().name)
     }
 
     // ── Groups ────────────────────────────────────────────────────────

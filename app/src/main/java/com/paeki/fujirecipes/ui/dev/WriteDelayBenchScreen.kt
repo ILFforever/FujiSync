@@ -34,11 +34,11 @@ import androidx.lifecycle.viewModelScope
 import com.paeki.fujirecipes.data.usb.BENCH_DELAY_CANDIDATES
 import com.paeki.fujirecipes.data.usb.CameraUsbMode
 import com.paeki.fujirecipes.data.usb.DelayBenchResult
-import com.paeki.fujirecipes.data.usb.FujiRecipeCamera
 import com.paeki.fujirecipes.data.usb.CameraHeartbeat
-import com.paeki.fujirecipes.data.usb.UsbCameraRepository
 import com.paeki.fujirecipes.data.usb.UsbPtpConnection
+import com.paeki.fujirecipes.domain.repository.CameraRepository
 import com.paeki.fujirecipes.data.usb.benchWriteDelay
+import com.paeki.fujirecipes.data.usb.randomBenchPreset
 import com.paeki.fujirecipes.domain.model.CameraSlot
 import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.theme.Bg
@@ -62,7 +62,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WriteDelayBenchViewModel @Inject constructor(
-    private val repository: UsbCameraRepository,
+    private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
     private val heartbeat: CameraHeartbeat,
 ) : ViewModel() {
@@ -96,9 +96,7 @@ class WriteDelayBenchViewModel @Inject constructor(
                             ?: throw IllegalStateException("Could not open camera USB interface.")
                         conn.use {
                             if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                            _state.value = State.Running("Reading 7 slots…")
-                            val camera = FujiRecipeCamera(conn)
-                            val presets = CameraSlot.entries.map { slot -> camera.readPreset(slot) }
+                            val presets = CameraSlot.entries.map { slot -> randomBenchPreset(slot) }
                             benchWriteDelay(conn, presets, BENCH_DELAY_CANDIDATES) { phase ->
                                 _state.value = State.Running(phase)
                             }
@@ -213,7 +211,7 @@ fun WriteDelayBenchScreen(
                 }
                 Text(
                     text = if (running) (state as WriteDelayBenchViewModel.State.Running).phase
-                    else "RUN BENCH  (reads + rewrites all 7 slots × 5 delays)",
+                    else "RUN BENCH  (writes bench recipe to all 7 slots × 5 delays)",
                     fontFamily = SansFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.5.sp,
@@ -223,7 +221,7 @@ fun WriteDelayBenchScreen(
             }
 
             Text(
-                text = "Camera must be connected in PTP mode. The bench reads all 7 slots then writes them back at each candidate delay, counting GeneralError responses. Camera data is unchanged.",
+                text = "Camera must be connected in PTP mode. The bench writes a known test recipe (Velvia, BENCH-Cx name) to all 7 slots at each candidate delay. Restore your backup afterwards.",
                 fontFamily = SansFamily,
                 fontSize = 11.sp,
                 color = TextDim,
@@ -349,5 +347,49 @@ private fun ResultsTable(results: List<DelayBenchResult>) {
             letterSpacing = 0.6.sp,
             color = Gold,
         )
+    }
+
+    // Show failing props from the first run (consistent across all delays)
+    val failedProps = results.firstOrNull()?.failedProps?.takeIf { it.isNotEmpty() }
+    if (failedProps != null) {
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "FAILING PROPERTIES",
+            fontFamily = MonoFamily,
+            fontSize = 9.sp,
+            letterSpacing = 1.4.sp,
+            color = TextDim,
+        )
+        Spacer(Modifier.height(6.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(PanelLow)
+                .border(1.dp, Gold.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            failedProps.entries.sortedByDescending { it.value }.forEach { (prop, count) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = prop?.displayName ?: "slot-select / name",
+                        fontFamily = MonoFamily,
+                        fontSize = 11.sp,
+                        color = TextMuted,
+                    )
+                    Text(
+                        text = "×$count",
+                        fontFamily = MonoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = Gold,
+                    )
+                }
+            }
+        }
     }
 }

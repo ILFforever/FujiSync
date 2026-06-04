@@ -56,7 +56,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.paeki.fujirecipes.ui.components.DeleteConfirmDialog
 import com.paeki.fujirecipes.ui.components.IconCheck
+import com.paeki.fujirecipes.ui.components.IconChevronRight
 import com.paeki.fujirecipes.ui.components.IconClose
+import com.paeki.fujirecipes.ui.components.IconEdit
 import com.paeki.fujirecipes.ui.components.IconFilter
 import com.paeki.fujirecipes.ui.components.IconFolder
 import com.paeki.fujirecipes.ui.components.IconMoreVertical
@@ -90,7 +92,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.emoji2.emojipicker.EmojiPickerView
 import com.paeki.fujirecipes.ui.components.IconMoreVertical
 import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.Wordmark
@@ -107,6 +111,10 @@ import com.paeki.fujirecipes.ui.theme.SansFamily
 import com.paeki.fujirecipes.ui.theme.TextDim
 import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -118,18 +126,31 @@ fun LibraryScreen(
     onOpenItem: (LibraryRecipeUiModel) -> Unit,
     onCreateRecipe: () -> Unit,
     onAddGroupImage: (String) -> Unit,
+    onImportFromPhoto: () -> Unit = {},
+    onImportFromScreenshot: () -> Unit = {},
+    onScanTileGuide: () -> Unit = {},
 ) {
     val vm: LibraryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val state by vm.screenState.collectAsState()
 
-    val enteredGroupIndices = remember { mutableSetOf<Int>() }
+    val enteredGroupIds = remember { mutableSetOf<String>() }
+    var groupEntranceRun by remember { mutableStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { enteredGroupIds.clear() } }
     var pullDistance by remember { mutableStateOf(0f) }
+    var showAddDrawer by remember { mutableStateOf(false) }
     val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     LaunchedEffect(scrollToTopSignal) {
         if (scrollToTopSignal) {
             vm.resetToTop()
             lazyListState.animateScrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(state.groupedView, state.openGroup) {
+        if (state.groupedView && state.openGroup == null) {
+            enteredGroupIds.clear()
+            groupEntranceRun += 1
         }
     }
 
@@ -161,7 +182,7 @@ fun LibraryScreen(
     }
 
     val groupById = state.visibleGroups.associateBy { it.id }
-    val grouped = remember(state.sorted, state.visibleGroups) {
+    val visibleGrouped = remember(state.sorted, state.visibleGroups) {
         state.sorted
             .flatMap { recipe ->
                 if (recipe.groupIds.isEmpty()) listOf(LibraryUngroupedFilterId to recipe)
@@ -169,7 +190,15 @@ fun LibraryScreen(
             }
             .groupBy({ it.first }, { it.second })
     }
-    val groupCounts = remember(grouped) { grouped.mapValues { (_, r) -> r.size } }
+    val allGrouped = remember(state.data.recipes, state.visibleGroups) {
+        state.data.recipes
+            .flatMap { recipe ->
+                if (recipe.groupIds.isEmpty()) listOf(LibraryUngroupedFilterId to recipe)
+                else recipe.groupIds.map { groupId -> groupId to recipe }
+            }
+            .groupBy({ it.first }, { it.second })
+    }
+    val groupCounts = remember(allGrouped) { allGrouped.mapValues { (_, r) -> r.size } }
     val searching = state.searchOpen || state.searchQuery.isNotBlank()
     val headerMotionEnabled = ValueAnimator.areAnimatorsEnabled()
     val headerEnterSpec = tween<Float>(durationMillis = if (headerMotionEnabled) 210 else 0, easing = FastOutSlowInEasing)
@@ -181,6 +210,7 @@ fun LibraryScreen(
     overlayStackOf(
         OverlayLayer(state.editingGroup != null) { vm.setEditingGroup(null) },
         OverlayLayer(state.selectedRecipeIds.isNotEmpty()) { vm.clearSelection() },
+        OverlayLayer(showAddDrawer) { showAddDrawer = false },
     ).BackHandler()
 
     Box(modifier = Modifier.fillMaxSize().background(Bg)) {
@@ -273,7 +303,7 @@ fun LibraryScreen(
                         exit = fadeOut(headerExitSpec),
                     ) {
                         Box(
-                            modifier = Modifier.size(28.dp).clip(CircleShape).background(Gold).clickable(onClick = onCreateRecipe),
+                            modifier = Modifier.size(28.dp).clip(CircleShape).background(Gold).clickable(onClick = { showAddDrawer = true }),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(IconPlus, contentDescription = "Add", tint = Bg, modifier = Modifier.size(18.dp))
@@ -342,17 +372,23 @@ fun LibraryScreen(
                     if (state.openGroup == null) {
                         val groupEntries = state.visibleGroups
                             .mapNotNull { group ->
-                                val groupRecipes = grouped[group.id].orEmpty()
+                                val groupRecipes = visibleGrouped[group.id].orEmpty()
                                 if (groupRecipes.isNotEmpty() || group.id.isGeneratedGroupId()) {
-                                    LibraryFolderGridItem(group = group, recipes = groupRecipes)
+                                    LibraryFolderGridItem(group = group, recipes = groupRecipes, count = groupCounts[group.id] ?: 0)
                                 } else {
                                     null
                                 }
                             }
                             .let { entries ->
-                                val ungroupedRecipes = grouped[LibraryUngroupedFilterId].orEmpty()
+                                val ungroupedRecipes = visibleGrouped[LibraryUngroupedFilterId].orEmpty()
                                 if (ungroupedRecipes.isEmpty()) entries
-                                else listOf(LibraryFolderGridItem(group = LibraryGroupUiModel(LibraryUngroupedFilterId, "Ungrouped"), recipes = ungroupedRecipes)) + entries
+                                else listOf(
+                                    LibraryFolderGridItem(
+                                        group = LibraryGroupUiModel(LibraryUngroupedFilterId, "Ungrouped"),
+                                        recipes = ungroupedRecipes,
+                                        count = groupCounts[LibraryUngroupedFilterId] ?: 0,
+                                    ),
+                                ) + entries
                             }
                         items(groupEntries.chunked(2).size, key = { rowIdx -> "group-card-row-$rowIdx" }) { rowIdx ->
                             val rowGroups = groupEntries.chunked(2)[rowIdx]
@@ -362,17 +398,20 @@ fun LibraryScreen(
                             ) {
                                 rowGroups.forEachIndexed { groupIdx, item ->
                                     val group = item.group
-                                    LibraryGroupCard(
-                                        label = group.name,
-                                        recipes = item.recipes,
-                                        style = state.data.groupStyles[group.id] ?: LibraryGroupStyle(),
-                                        entranceIndex = rowIdx * 2 + groupIdx,
-                                        alreadyEntered = (rowIdx * 2 + groupIdx) in enteredGroupIndices,
-                                        onEntered = { enteredGroupIndices.add(rowIdx * 2 + groupIdx) },
-                                        modifier = Modifier.weight(1f),
-                                        onOpen = { vm.setOpenGroup(group.id) },
-                                        onOpenEditor = { vm.setEditingGroup(group.id) },
-                                    )
+                                    androidx.compose.runtime.key(group.id, groupEntranceRun) {
+                                        LibraryGroupCard(
+                                            label = group.name,
+                                            count = item.count,
+                                            style = state.data.groupStyles[group.id] ?: LibraryGroupStyle(),
+                                            entranceIndex = rowIdx * 2 + groupIdx,
+                                            entranceRun = groupEntranceRun,
+                                            alreadyEntered = group.id in enteredGroupIds,
+                                            onEntered = { enteredGroupIds.add(group.id) },
+                                            modifier = Modifier.weight(1f),
+                                            onOpen = { vm.setOpenGroup(group.id) },
+                                            onOpenEditor = { if (state.editingGroup == null) vm.setEditingGroup(group.id) },
+                                        )
+                                    }
                                 }
                                 if (rowGroups.size == 1) Spacer(Modifier.weight(1f))
                             }
@@ -384,9 +423,9 @@ fun LibraryScreen(
                         } else {
                             groupById[groupId] ?: LibraryGroupUiModel(groupId, "Library")
                         }
-                        val groupRecipes = grouped[groupId].orEmpty()
+                        val groupRecipes = visibleGrouped[groupId].orEmpty()
                         item(key = "open-group-$groupId") {
-                            GroupHeader(label = group.name, count = groupRecipes.size, onBack = { vm.setOpenGroup(null) })
+                            GroupHeader(label = group.name, count = groupCounts[groupId] ?: 0, onBack = { vm.setOpenGroup(null) })
                         }
                         items(groupRecipes.size, key = { idx -> groupRecipes[idx].id }) { idx ->
                             val recipe = groupRecipes[idx]
@@ -448,11 +487,18 @@ fun LibraryScreen(
         }
 
         state.editingGroup?.let { groupId ->
-            val group = groupById[groupId] ?: LibraryGroupUiModel(groupId, "Library")
+            val group = if (groupId == LibraryUngroupedFilterId) {
+                LibraryGroupUiModel(groupId, "Ungrouped")
+            } else {
+                groupById[groupId] ?: LibraryGroupUiModel(groupId, "Library")
+            }
+            val isSystemGroup = groupId == LibraryUngroupedFilterId
             LibraryGroupEditorSheet(
                 group = group.name,
                 count = groupCounts[groupId] ?: 0,
                 style = state.data.groupStyles[groupId] ?: LibraryGroupStyle(),
+                canRename = !isSystemGroup,
+                canDelete = !isSystemGroup,
                 onChangeStyle = { vm.changeGroupStyle(groupId, it) },
                 onRename = { nextName ->
                     val renamed = nextName.trim()
@@ -504,6 +550,16 @@ fun LibraryScreen(
                     vm.createGroupForRecipes(state.selectedRecipeIds, name)
                     vm.setBulkGroupOpen(false)
                 },
+            )
+        }
+
+        if (showAddDrawer) {
+            AddRecipeDrawer(
+                onCreateRecipe = { showAddDrawer = false; onCreateRecipe() },
+                onImportFromPhoto = { showAddDrawer = false; onImportFromPhoto() },
+                onImportFromScreenshot = { showAddDrawer = false; onImportFromScreenshot() },
+                onScanTileGuide = { showAddDrawer = false; onScanTileGuide() },
+                onDismiss = { showAddDrawer = false },
             )
         }
     }
@@ -938,9 +994,10 @@ private fun SortTabItem(
 @Composable
 private fun LibraryGroupCard(
     label: String,
-    recipes: List<LibraryRecipeUiModel>,
+    count: Int,
     style: LibraryGroupStyle,
     entranceIndex: Int,
+    entranceRun: Int,
     alreadyEntered: Boolean = false,
     onEntered: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -965,8 +1022,8 @@ private fun LibraryGroupCard(
     }
     val accent = groupAccent(style.color)
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
-    var entered by remember { mutableStateOf(!motionEnabled || alreadyEntered) }
-    LaunchedEffect(Unit) {
+    var entered by remember(entranceRun) { mutableStateOf(!motionEnabled || alreadyEntered) }
+    LaunchedEffect(entranceRun, motionEnabled, alreadyEntered) {
         if (!entered) {
             kotlinx.coroutines.delay((entranceIndex * 55L).coerceAtMost(220L))
             entered = true
@@ -1054,7 +1111,7 @@ private fun LibraryGroupCard(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "${recipes.size} RECIPES",
+                text = "$count RECIPES",
                 fontFamily = MonoFamily,
                 fontSize = 10.sp,
                 letterSpacing = 1.sp,
@@ -1194,6 +1251,8 @@ private fun LibraryGroupEditorSheet(
     group: String,
     count: Int,
     style: LibraryGroupStyle,
+    canRename: Boolean = true,
+    canDelete: Boolean = true,
     onChangeStyle: (LibraryGroupStyle) -> Unit,
     onRename: (String) -> Unit,
     onAddImage: () -> Unit,
@@ -1314,16 +1373,20 @@ private fun LibraryGroupEditorSheet(
                             .padding(horizontal = 4.dp, vertical = 6.dp),
                     )
                 }
-                Spacer(Modifier.height(20.dp))
-                SheetSectionLabel("NAME")
-                SheetNameRow(
-                    value = nameDraft,
-                    originalValue = group,
-                    color = accent,
-                    onValueChange = { nameDraft = it },
-                    onSave = { onRename(nameDraft) },
-                )
-                Spacer(Modifier.height(18.dp))
+                if (canRename) {
+                    Spacer(Modifier.height(20.dp))
+                    SheetSectionLabel("NAME")
+                    SheetNameRow(
+                        value = nameDraft,
+                        originalValue = group,
+                        color = accent,
+                        onValueChange = { nameDraft = it },
+                        onSave = { onRename(nameDraft) },
+                    )
+                    Spacer(Modifier.height(18.dp))
+                } else {
+                    Spacer(Modifier.height(20.dp))
+                }
                 SheetSectionLabel("IDENTITY")
                 SheetIdentityRow(
                     icon = style.icon,
@@ -1349,23 +1412,25 @@ private fun LibraryGroupEditorSheet(
                         )
                     }
                 }
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    text = "DELETE GROUP",
-                    fontFamily = SansFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    letterSpacing = 1.4.sp,
-                    color = Color(0xFFD45B4A),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(LibrarySheetControlBg)
-                        .border(1.dp, Color(0xFFD45B4A).copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                        .clickable { pendingDeleteGroup = true }
-                        .padding(vertical = 13.dp),
-                )
+                if (canDelete) {
+                    Spacer(Modifier.height(22.dp))
+                    Text(
+                        text = "DELETE GROUP",
+                        fontFamily = SansFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.4.sp,
+                        color = Color(0xFFD45B4A),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(LibrarySheetControlBg)
+                            .border(1.dp, Color(0xFFD45B4A).copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                            .clickable { pendingDeleteGroup = true }
+                            .padding(vertical = 13.dp),
+                    )
+                }
                 } // inner scrollable Column
             }
         }
@@ -1455,16 +1520,6 @@ private fun SheetNameRow(
     }
 }
 
-private val GROUP_EMOJI_OPTIONS = listOf(
-    "📷", "📸", "🎞", "🎬", "🎥", "📽",
-    "🌅", "🌄", "🌇", "🌆", "🌃", "🌉",
-    "🏔", "🌊", "🌿", "🍂", "🌸", "🌺",
-    "🌙", "☀️", "⭐", "✨", "🔥", "❄️",
-    "🎨", "🖼", "🎭", "🌈", "🖤", "⚫",
-    "🏙", "🏛", "🏘", "🛤", "🚗", "✈️",
-    "👤", "👥", "🐾", "🌱", "🍃", "🌾",
-    "📁", "🗂", "📌", "❤️", "💛", "🤍",
-)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1528,46 +1583,38 @@ private fun SheetIdentityRow(
             }
         }
 
-        AnimatedVisibility(
-            visible = pickerOpen,
-            enter = fadeIn(tween(160, easing = FastOutSlowInEasing)) +
-                    slideInVertically(tween(220, easing = FastOutSlowInEasing)) { -it / 3 },
-            exit = fadeOut(tween(120, easing = FastOutSlowInEasing)) +
-                   slideOutVertically(tween(160, easing = FastOutSlowInEasing)) { -it / 3 },
-        ) {
-            Column {
-                Spacer(Modifier.height(13.dp))
-                Box(
+        if (pickerOpen) {
+            Dialog(onDismissRequest = { pickerOpen = false }) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(1.dp)
-                        .background(LibrarySheetBorder),
-                )
-                Spacer(Modifier.height(12.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                        .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                        .background(LibrarySheetBg)
+                        .navigationBarsPadding(),
                 ) {
-                    GROUP_EMOJI_OPTIONS.forEach { emoji ->
-                        val selected = emoji == icon
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) color.copy(alpha = 0.18f) else Bg.copy(alpha = 0.5f))
-                                .border(1.dp, if (selected) color.copy(alpha = 0.7f) else LibrarySheetBorder, RoundedCornerShape(10.dp))
-                                .clickable {
-                                    onIconChange(emoji)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 12.dp, bottom = 8.dp)
+                            .width(36.dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(TextDim.copy(alpha = 0.55f)),
+                    )
+                    AndroidView(
+                        factory = { ctx ->
+                            EmojiPickerView(ctx).apply {
+                                setOnEmojiPickedListener { item ->
+                                    onIconChange(item.emoji)
                                     pickerOpen = false
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(text = emoji, fontSize = 20.sp, textAlign = TextAlign.Center)
-                        }
-                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(380.dp),
+                    )
                 }
-                Spacer(Modifier.height(2.dp))
             }
         }
 
@@ -1696,6 +1743,14 @@ private fun GroupHeader(label: String, count: Int, onBack: (() -> Unit)? = null)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = if (onBack != null) {
+                Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onBack)
+                    .padding(end = 8.dp)
+            } else {
+                Modifier
+            },
         ) {
             if (onBack != null) {
                 Text(
@@ -1704,7 +1759,6 @@ private fun GroupHeader(label: String, count: Int, onBack: (() -> Unit)? = null)
                     fontWeight = FontWeight.Bold,
                     fontSize = 22.sp,
                     color = Gold,
-                    modifier = Modifier.clickable(onClick = onBack),
                 )
             }
             Text(
@@ -1714,6 +1768,7 @@ private fun GroupHeader(label: String, count: Int, onBack: (() -> Unit)? = null)
                 fontSize = 13.sp,
                 letterSpacing = 1.5.sp,
                 color = Gold,
+                modifier = Modifier.offset(y = 1.dp),
             )
         }
         Text(
@@ -1795,17 +1850,6 @@ private fun LibraryRecipeRow(
                 } else {
                     Box(modifier = Modifier.fillMaxSize().background(PanelGroupBg))
                 }
-                // Scrim so text below is readable but image reads as photography
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                1f to Bg.copy(alpha = 0.72f),
-                            )
-                        ),
-                )
                 // Sim label pinned top-left, selection/star top-right
                 Row(
                     modifier = Modifier
@@ -1920,7 +1964,7 @@ private fun LibraryRecipeRow(
                     color = TextPrimary,
                 )
                 val cameraSource = recipe.sourceCameraDisplayName()
-                if (cameraSource != null) {
+                if (cameraSource != null && useCardLayout) {
                     Spacer(Modifier.height(5.dp))
                     Text(
                         text = "FROM ${cameraSource.uppercase()}",
@@ -1928,6 +1972,18 @@ private fun LibraryRecipeRow(
                         fontSize = 10.sp,
                         letterSpacing = 1.sp,
                         color = TextDim,
+                    )
+                }
+                if (recipe.description.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = recipe.description,
+                        fontFamily = SansFamily,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = TextDim,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 if (organizing) {
@@ -2365,6 +2421,7 @@ private val LibrarySheetBorder = androidx.compose.ui.graphics.Color(0xFF26221C)
 private data class LibraryFolderGridItem(
     val group: LibraryGroupUiModel,
     val recipes: List<LibraryRecipeUiModel> = emptyList(),
+    val count: Int = recipes.size,
 )
 
 private fun String.isGeneratedGroupId(): Boolean =
@@ -2401,5 +2458,168 @@ private fun BottomDivider() {
             .height(1.dp)
             .background(Border),
     )
+}
+
+@Composable
+private fun AddRecipeDrawer(
+    onCreateRecipe: () -> Unit,
+    onImportFromPhoto: () -> Unit,
+    onImportFromScreenshot: () -> Unit,
+    onScanTileGuide: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val motionEnabled = android.animation.ValueAnimator.areAnimatorsEnabled()
+    val scope = rememberCoroutineScope()
+    var visible by remember { mutableStateOf(!motionEnabled) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+
+    fun dismissWithMotion() {
+        if (!motionEnabled) { onDismiss(); return }
+        scope.launch { visible = false; delay(180); onDismiss() }
+    }
+
+    LaunchedEffect(motionEnabled) { visible = true }
+
+    val overlayTransition = androidx.compose.animation.core.updateTransition(targetState = visible, label = "add-drawer-overlay")
+    val overlayAlpha by overlayTransition.animateFloat(
+        transitionSpec = { tween(if (targetState) 170 else 120, easing = FastOutSlowInEasing) },
+        label = "add-drawer-overlay-alpha",
+    ) { if (it) 1f else 0f }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LibrarySheetOverlay.copy(alpha = 0.88f * overlayAlpha))
+            .clickable(onClick = ::dismissWithMotion),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) + slideInVertically(
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                initialOffsetY = { it / 3 },
+            ),
+            exit = fadeOut(tween(105, easing = FastOutSlowInEasing)) + slideOutVertically(
+                animationSpec = tween(180, easing = FastOutSlowInEasing),
+                targetOffsetY = { it / 4 },
+            ),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, dragOffset.roundToInt().coerceAtLeast(0)) }
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(LibrarySheetBg)
+                    .border(1.dp, LibrarySheetBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .clickable(onClick = {})
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (dragOffset > 100.dp.toPx()) dismissWithMotion()
+                                else dragOffset = 0f
+                            },
+                            onDragCancel = { dragOffset = 0f },
+                        ) { _, amount -> dragOffset = (dragOffset + amount).coerceAtLeast(0f) }
+                    }
+                    .navigationBarsPadding(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 14.dp)
+                        .width(38.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(TextDim.copy(alpha = 0.55f)),
+                )
+                Column(modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
+                    Text(
+                        text = "ADD RECIPE",
+                        fontFamily = SansFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                        letterSpacing = 0.4.sp,
+                        color = TextPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Add a new recipe to your library.",
+                        fontFamily = SansFamily,
+                        fontSize = 13.sp,
+                        color = TextDim,
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+                DrawerOptionRow("New recipe", "Build a clean preset from scratch", icon = IconEdit, onClick = onCreateRecipe)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+                DrawerOptionRow("From JPEG", "Read EXIF from a camera photo", icon = com.paeki.fujirecipes.ui.components.IconCamera, onClick = onImportFromPhoto)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+                DrawerOptionRow("From screenshot", "Extract settings from recipe image", icon = com.paeki.fujirecipes.ui.components.IconImage, onClick = onImportFromScreenshot)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+                DrawerOptionRow("Scan tile", "Capture from app recipe tile", icon = com.paeki.fujirecipes.ui.components.IconScan, onClick = onScanTileGuide)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+                DrawerOptionRow("QR code", "Coming soon", icon = com.paeki.fujirecipes.ui.components.IconQrCode, enabled = false)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun DrawerOptionRow(
+    label: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit = {},
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 22.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) TextMuted else TextDim,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                color = if (enabled) TextPrimary else TextDim,
+            )
+            Text(
+                text = subtitle,
+                fontFamily = SansFamily,
+                fontSize = 12.sp,
+                color = TextDim,
+            )
+        }
+        if (!enabled) {
+            Text(
+                text = "SOON",
+                fontFamily = MonoFamily,
+                fontSize = 9.sp,
+                letterSpacing = 1.4.sp,
+                color = TextDim,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(LibrarySheetControlBg)
+                    .border(1.dp, LibrarySheetBorder, RoundedCornerShape(999.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
 }
 

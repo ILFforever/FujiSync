@@ -3,7 +3,10 @@ package com.paeki.fujirecipes.ui.library
 import android.content.Context
 import android.net.Uri
 import com.paeki.fujirecipes.data.local.LocalStore
+import com.paeki.fujirecipes.data.ptp.CameraPresetName
 import com.paeki.fujirecipes.data.remote.FxwRecipe
+import com.paeki.fujirecipes.domain.model.canonicalFilmSimLabel
+import com.paeki.fujirecipes.di.ApplicationScope
 import com.paeki.fujirecipes.ui.LibraryUiState
 import com.paeki.fujirecipes.ui.UiTimings
 import com.paeki.fujirecipes.ui.model.DuplicateDialogState
@@ -20,7 +23,6 @@ import com.paeki.fujirecipes.ui.model.SampleData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -31,6 +33,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -40,24 +45,27 @@ import javax.inject.Singleton
 
 private const val DEFAULT_LIBRARY_GROUP_ID = "group-library"
 private const val MAX_REFERENCE_IMAGES = 20
+private const val DISCOVER_IMAGE_CONNECT_TIMEOUT_MS = 10_000
+private const val DISCOVER_IMAGE_READ_TIMEOUT_MS = 15_000
+private const val MAX_DISCOVER_IMAGE_BYTES = 8L * 1024L * 1024L
 
-object LibraryNameValidator {
-    private const val MAX_LENGTH = 60
-    private val STRIP_CHARS = Regex("""[^\p{L}\p{N}\p{P}\p{Z}]""")
+
+object LibraryRecipeName {
+    const val FALLBACK = "Untitled Recipe"
 
     fun sanitize(raw: String): String =
-        raw.replace(STRIP_CHARS, "").trim().take(MAX_LENGTH)
+        CameraPresetName.sanitizeOrFallback(raw, FALLBACK)
 
-    fun isValid(raw: String): Boolean = sanitize(raw).isNotBlank()
+    fun sanitizeForMatching(raw: String): String =
+        CameraPresetName.sanitize(raw).lowercase(Locale.US)
 }
 
 @Singleton
 class LibraryStateHolder @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val localStore: LocalStore,
+    @ApplicationScope private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-
     private val _state = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
 
@@ -136,7 +144,7 @@ class LibraryStateHolder @Inject constructor(
                 recipes = it.recipes.map { existing ->
                     if (existing.id == recipe.libraryId) {
                         existing.copy(
-                            name = recipe.name,
+                            name = LibraryRecipeName.sanitize(recipe.name),
                             sim = recipe.sim,
                             pills = recipe.pills,
                             description = recipe.description,
@@ -157,7 +165,7 @@ class LibraryStateHolder @Inject constructor(
     }
 
     fun saveNewRecipe(saved: LibraryRecipeUiModel) {
-        _state.update { it.copy(recipes = listOf(saved) + it.recipes) }
+        _state.update { it.copy(recipes = listOf(saved.normalizedLibraryRecipe()) + it.recipes) }
         persist()
         confirmSave()
     }
@@ -165,7 +173,10 @@ class LibraryStateHolder @Inject constructor(
     fun cloneRecipe(recipe: RecipeUiModel) {
         val libraryId = recipe.libraryId ?: return
         val existing = _state.value.recipes.firstOrNull { it.id == libraryId } ?: return
-        val clone = existing.copy(id = "lib-${UUID.randomUUID()}", name = "Copy of ${existing.name}")
+        val clone = existing.copy(
+            id = "lib-${UUID.randomUUID()}",
+            name = LibraryRecipeName.sanitize("Copy of ${existing.name}"),
+        )
         _state.update { it.copy(recipes = listOf(clone) + it.recipes) }
         persist()
     }
@@ -208,14 +219,14 @@ class LibraryStateHolder @Inject constructor(
     }
 
     fun createGroupForRecipe(recipeId: String, name: String) {
-        val groupName = LibraryNameValidator.sanitize(name).ifBlank { return }
+        val groupName = name.trim().ifBlank { return }
         val groupId = "group-${UUID.randomUUID()}"
         _state.update { it.copy(groups = it.groups + LibraryGroupUiModel(id = groupId, name = groupName)) }
         changeRecipeGroup(recipeId, groupId)
     }
 
     fun createGroup(name: String) {
-        val groupName = LibraryNameValidator.sanitize(name).ifBlank { return }
+        val groupName = name.trim().ifBlank { return }
         val groupId = "group-${UUID.randomUUID()}"
         _state.update { it.copy(groups = it.groups + LibraryGroupUiModel(id = groupId, name = groupName)) }
         persist()
@@ -223,7 +234,7 @@ class LibraryStateHolder @Inject constructor(
 
     fun createGroupForRecipes(recipeIds: Set<String>, name: String) {
         if (recipeIds.isEmpty()) return
-        val groupName = LibraryNameValidator.sanitize(name).ifBlank { return }
+        val groupName = name.trim().ifBlank { return }
         val groupId = "group-${UUID.randomUUID()}"
         _state.update { it.copy(groups = it.groups + LibraryGroupUiModel(id = groupId, name = groupName)) }
         changeRecipesGroup(recipeIds, groupId)
@@ -235,7 +246,7 @@ class LibraryStateHolder @Inject constructor(
     }
 
     fun renameGroup(groupId: String, newName: String) {
-        val nextName = LibraryNameValidator.sanitize(newName).ifBlank { return }
+        val nextName = newName.trim().ifBlank { return }
         _state.update {
             it.copy(groups = it.groups.map { g -> if (g.id == groupId) g.copy(name = nextName) else g })
         }
@@ -321,7 +332,9 @@ class LibraryStateHolder @Inject constructor(
         val existingGroupIds = _state.value.groups.map { it.id }.toSet()
         _state.update {
             it.copy(
-                recipes = SampleData.library.filter { r -> r.id !in existingIds } + it.recipes,
+                recipes = SampleData.library
+                    .filter { r -> r.id !in existingIds }
+                    .map { it.normalizedLibraryRecipe() } + it.recipes,
                 groups = it.groups + SampleData.libraryGroups.filter { g -> g.id !in existingGroupIds },
             )
         }
@@ -338,26 +351,63 @@ class LibraryStateHolder @Inject constructor(
 
     private suspend fun downloadDiscoverImages(recipe: FxwRecipe): List<String> =
         withContext(Dispatchers.IO) {
-            val recipeDir = java.io.File(appContext.filesDir, "references/${recipe.slug}")
+            val recipeDir = File(appContext.filesDir, "references/${recipe.slug}")
                 .also { if (!it.exists()) it.mkdirs() }
             coroutineScope {
                 recipe.imageUrls
                     .take(MAX_REFERENCE_IMAGES)
                     .mapIndexed { idx, url ->
                         async {
-                            runCatching {
-                                val file = java.io.File(recipeDir, "image_$idx.jpg")
-                                java.net.URL(url).openStream().use { input ->
-                                    file.outputStream().use { output -> input.copyTo(output) }
-                                }
-                                android.net.Uri.fromFile(file).toString()
-                            }.getOrNull()
+                            downloadDiscoverImage(url, File(recipeDir, "image_$idx.jpg"))
                         }
                     }
                     .awaitAll()
                     .filterNotNull()
             }
         }
+
+    private fun downloadDiscoverImage(url: String, file: File): String? =
+        runCatching {
+            val parsed = URL(url)
+            if (parsed.protocol != "https") return@runCatching null
+
+            val connection = parsed.openConnection() as HttpURLConnection
+            connection.connectTimeout = DISCOVER_IMAGE_CONNECT_TIMEOUT_MS
+            connection.readTimeout = DISCOVER_IMAGE_READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", "FujiRecipes/1.0 Android")
+
+            try {
+                if (connection.responseCode !in 200..299) return@runCatching null
+                val contentLength = connection.contentLengthLong
+                if (contentLength > MAX_DISCOVER_IMAGE_BYTES) return@runCatching null
+
+                val tmp = File(file.parentFile, "${file.name}.tmp")
+                var total = 0L
+                connection.inputStream.use { input ->
+                    tmp.outputStream().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            total += read
+                            if (total > MAX_DISCOVER_IMAGE_BYTES) {
+                                tmp.delete()
+                                return@runCatching null
+                            }
+                            output.write(buffer, 0, read)
+                        }
+                    }
+                }
+                if (!tmp.renameTo(file)) {
+                    tmp.copyTo(file, overwrite = true)
+                    tmp.delete()
+                }
+                Uri.fromFile(file).toString()
+            } finally {
+                connection.disconnect()
+            }
+        }.getOrNull()
 
     // ── Persistence ───────────────────────────────────────────────────
 
@@ -402,7 +452,7 @@ class LibraryStateHolder @Inject constructor(
             if (match != null) {
                 skippedList.add(SaveAllSkipped(
                     slot = recipe.slot,
-                    name = recipe.name,
+                    name = LibraryRecipeName.sanitize(recipe.name),
                     sim = recipe.sim,
                     matchKind = match.kind,
                     matchedName = match.libraryRecipe.name,
@@ -422,12 +472,15 @@ class LibraryStateHolder @Inject constructor(
     private fun RecipeUiModel.isDuplicateSettings(existing: LibraryRecipeUiModel): Boolean =
         sim == existing.sim && effects == existing.effects && tone == existing.tone && wb == existing.wb
 
-    private fun RecipeUiModel.isSameName(existing: LibraryRecipeUiModel): Boolean =
-        name.trim().lowercase() == existing.name.trim().lowercase()
+    private fun RecipeUiModel.isSameName(existing: LibraryRecipeUiModel): Boolean {
+        val a = LibraryRecipeName.sanitizeForMatching(name)
+        val b = LibraryRecipeName.sanitizeForMatching(existing.name)
+        return a.isNotEmpty() && b.isNotEmpty() && a == b
+    }
 
     private fun RecipeUiModel.isSimilarName(existing: LibraryRecipeUiModel): Boolean {
-        val a = name.trim().lowercase()
-        val b = existing.name.trim().lowercase()
+        val a = LibraryRecipeName.sanitizeForMatching(name)
+        val b = LibraryRecipeName.sanitizeForMatching(existing.name)
         if (a.isEmpty() || b.isEmpty()) return false
         return a.contains(b) || b.contains(a) || wordOverlapRatio(a, b) >= 0.6f
     }
@@ -455,7 +508,7 @@ class LibraryStateHolder @Inject constructor(
     fun RecipeUiModel.toLibraryRecipe(source: LibraryRecipeSource?): LibraryRecipeUiModel =
         LibraryRecipeUiModel(
             id = "lib-${UUID.randomUUID()}",
-            name = name,
+            name = LibraryRecipeName.sanitize(name),
             sim = sim,
             pills = pills,
             saved = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM dd", Locale.US)),
@@ -478,8 +531,8 @@ class LibraryStateHolder @Inject constructor(
         val wbKeys = setOf("White Balance", "WB Shift R", "WB Shift B")
         return LibraryRecipeUiModel(
             id = "lib-${UUID.randomUUID()}",
-            name = name.trim(),
-            sim = filmSim,
+            name = LibraryRecipeName.sanitize(name),
+            sim = filmSim.canonicalFilmSimLabel(),
             pills = pillLabels(),
             saved = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM dd", Locale.US)),
             effects = normalized.filterKeys { it in effectKeys },
@@ -490,7 +543,10 @@ class LibraryStateHolder @Inject constructor(
     }
 
     fun LibraryRecipeUiModel.normalizedLibraryRecipe(): LibraryRecipeUiModel =
-        copy(wb = wb.normalizedWhiteBalanceSection())
+        copy(
+            name = LibraryRecipeName.sanitize(name),
+            wb = wb.normalizedWhiteBalanceSection(),
+        )
 
     private fun List<String>.appendReferenceImages(uris: List<String>): List<String> =
         (this + uris).distinct().take(MAX_REFERENCE_IMAGES)

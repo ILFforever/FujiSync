@@ -114,18 +114,22 @@ fun ProfileScreen(
     onExploreDemo: () -> Unit = {},
     onOpenExifBench: () -> Unit = {},
     onOpenWriteDelayBench: () -> Unit = {},
-    onImportFromPhoto: () -> Unit = {},
-    onImportFromScreenshot: () -> Unit = {},
+    onOpenNameBench: () -> Unit = {},
+    onOpenReadSlotsBench: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
+    onShowScanLog: () -> Unit = {},
+    onSetPropertyWriteDelay: (Long) -> Unit = {},
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var myCamerasOpen by remember { mutableStateOf(false) }
+    var devToolsOpen by remember { mutableStateOf(false) }
 
     overlayStackOf(
         OverlayLayer(settingsOpen) { settingsOpen = false },
         OverlayLayer(aboutOpen) { aboutOpen = false },
         OverlayLayer(myCamerasOpen) { myCamerasOpen = false },
+        OverlayLayer(devToolsOpen) { devToolsOpen = false },
     ).OverlayBackHandler()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -177,32 +181,7 @@ fun ProfileScreen(
 
                 Spacer(Modifier.height(24.dp))
 
-                // ── Tools ─────────────────────────────────────────────────
-                SectionLabel(text = "Tools")
-                Spacer(Modifier.height(8.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(PanelLow)
-                        .border(1.dp, Border, RoundedCornerShape(14.dp)),
-                ) {
-                    ProfileNavRow(
-                        label = "Camera JPEG — read EXIF",
-                        onClick = onImportFromPhoto,
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "Recipe screenshot — read text",
-                        onClick = onImportFromScreenshot,
-                        inCard = true,
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-
-                // ── Dev tools ─────────────────────────────────────────────
+                // ── Dev ────────────────────────────────────────────────────
                 SectionLabel(text = "Dev")
                 Spacer(Modifier.height(8.dp))
                 Column(
@@ -213,38 +192,8 @@ fun ProfileScreen(
                         .border(1.dp, Border, RoundedCornerShape(14.dp)),
                 ) {
                     ProfileNavRow(
-                        label = "Camera image tuner",
-                        onClick = onOpenCameraImageTuner,
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "Load sample library",
-                        onClick = onLoadSampleLibrary,
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "Explore without camera",
-                        onClick = onExploreDemo,
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "EXIF bench",
-                        onClick = onOpenExifBench,
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "Write delay bench",
-                        onClick = onOpenWriteDelayBench,
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "Add mock camera",
-                        onClick = onAddMockCamera,
+                        label = "Developer tools",
+                        onClick = { devToolsOpen = true },
                         inCard = true,
                     )
                 }
@@ -295,6 +244,29 @@ fun ProfileScreen(
                    slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
         ) {
             AboutScreen(onBack = { aboutOpen = false })
+        }
+
+        AnimatedVisibility(
+            visible = devToolsOpen,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                    slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+            exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                   slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+        ) {
+            DevToolsScreen(
+                onBack = { devToolsOpen = false },
+                onOpenCameraImageTuner = onOpenCameraImageTuner,
+                onLoadSampleLibrary = onLoadSampleLibrary,
+                onExploreDemo = onExploreDemo,
+                onOpenExifBench = onOpenExifBench,
+                onOpenWriteDelayBench = onOpenWriteDelayBench,
+                onOpenNameBench = onOpenNameBench,
+                onOpenReadSlotsBench = onOpenReadSlotsBench,
+                onAddMockCamera = onAddMockCamera,
+                onShowScanLog = onShowScanLog,
+                propertyWriteDelayMs = settings.propertyWriteDelayMs,
+                onSetPropertyWriteDelay = onSetPropertyWriteDelay,
+            )
         }
     }
 }
@@ -736,7 +708,7 @@ private fun ActionSheetRow(
 }
 
 @Composable
-private fun ProfileNavRow(
+internal fun ProfileNavRow(
     label: String,
     onClick: () -> Unit,
     inCard: Boolean = false,
@@ -780,7 +752,7 @@ private fun ProfileNavRow(
 }
 
 @Composable
-private fun ProfileDivider() {
+internal fun ProfileDivider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()

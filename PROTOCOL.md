@@ -22,7 +22,7 @@ USB attach → permission → claim PTP interface → OpenSession
                   → GetDeviceInfo  (called once during apply to refresh slot state)
                   → for each (prop, value) in pending changes:
                        SetDevicePropValue(prop, uint16LE/int16LE)
-                       delay 150 ms
+                       optional delay(propertyWriteDelayMs)
                   → SetDevicePropValue(PresetName, ptpString)
   → CloseSession → release interface → close connection
 ```
@@ -184,7 +184,7 @@ Source of truth: [`FujiPropertyCode`](reverse-engineering/fujirecipe_src/sources
 | `0xD192` | 53650 | `FILM_SIMULATION` | Film Simulation | `PROVIA` (1) | uint16LE |
 | `0xD193` | 53651 | `MONO_WC` | Mono WC | 0 | **int16LE** |
 | `0xD194` | 53652 | `MONO_MG` | Mono MG | 0 | **int16LE** |
-| `0xD195` | 53653 | `GRAIN_EFFECT` | Grain Effect | 6 | uint16LE |
+| `0xD195` | 53653 | `GRAIN_EFFECT` | Grain Effect | 1 | uint16LE |
 | `0xD196` | 53654 | `COLOR_CHROME` | Color Chrome | 1 | uint16LE |
 | `0xD197` | 53655 | `COLOR_CHROME_FX_BLUE` | Color Chrome FX Blue | 1 | uint16LE |
 | `0xD198` | 53656 | `SMOOTH_SKIN` | Smooth Skin | 1 | uint16LE |
@@ -263,7 +263,7 @@ The sentinel `-32768` (`Short.MIN_VALUE`) means **default / unset**. The referen
 
 > ⚠️ This was Open Question §14.7. **Resolved:** the PTP wire unit is dial × 10 (not the EXIF `dial × −16`, and not the raw dial). Writing the bare dial value (e.g. `2` for Color +2) is the classic bug — the camera clamps it toward 0, so Color/Sharpness/Clarity appear unchanged after a write.
 
-**Direct signed dials** (`int16LE`, no scale): `WB_SHIFT_RED`, `WB_SHIFT_BLUE`. Wire value = dial value directly.
+**Direct signed dials** (`int16LE`, no scale): `WB_SHIFT_RED`, `WB_SHIFT_BLUE`. Wire value = dial value directly. Observed camera dial range is `-9..+9`; validate or clamp before writing.
 
 **`HIGH_ISO_NR` (`0xD1A1`, `uint16LE`) — non-linear lookup** (default `8192` = dial 0 / Normal):
 
@@ -277,17 +277,18 @@ The sentinel `-32768` (`Short.MIN_VALUE`) means **default / unset**. The referen
 
 Unknown wire values have no dial mapping (reference renders them as raw hex). Writing the bare dial (e.g. `0` for Normal) is a bug — the camera reads wire `0` as dial **+2**.
 
-**`GRAIN_EFFECT` (`0xD195`, `uint16LE`)** — combined strength+size, default `6` (Off):
+**`GRAIN_EFFECT` (`0xD195`, `uint16LE`)** — combined strength+size:
 
 | Wire | Meaning |
 |---:|---|
-| 1, 6 | Off |
+| 1 | Off (**write value**) |
 | 2 | Weak Small |
 | 3 | Strong Small |
 | 4 | Weak Large |
 | 5 | Strong Large |
+| 6 | Off (read-only default — camera **rejects** writes of `6`) |
 
-> Off encodes to `6` (the camera default). Wire `0` is **not** a valid Grain value — do not write it.
+> The camera reads back `6` for Off on factory/default slots, but rejects `SET_DEVICE_PROP_VALUE` with `6`. Write `1` for Off. Wire `0` is also invalid — do not write it.
 
 **`COLOR_CHROME` / `COLOR_CHROME_FX_BLUE` / `SMOOTH_SKIN` (`uint16LE`)** — default `1` (Off): `1 = Off`, `2 = Weak`, `3 = Strong`.
 
@@ -307,8 +308,8 @@ bytes 1..  : char_count × uint16LE codeunits (last is 0x0000)
 Empty string is the single byte `0x00`. Builders use [`PtpPacketKt.toPtpString`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/usb/PtpPacketKt.java#L99-L118), parsers [`PtpPacketKt.parsePtpString`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/usb/PtpPacketKt.java#L120-L136).
 
 ### Camera-safe preset names ([`CameraPresetName`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/core/CameraPresetName.java))
-* Max 31 characters
-* Allowed: `A–Z`, `a–z`, `0–9`, space, and `'` (smart quotes folded to `'`)
+* Max 25 characters for preset names.
+* Allowed: `A–Z`, `a–z`, `0–9`, space, and protocol-safe camera keyboard punctuation (`! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ ] \ ^ _ { } | ~`). The camera may render `-` as a long dash in its UI; write ASCII `-`.
 * Accents NFD-decomposed and stripped (`é → e`)
 * Disallowed characters become spaces; runs of spaces collapsed; ends trimmed
 * If the result is empty, fall back to `"Untitled"` (or `"C<slot>"` from the read flow)
@@ -460,7 +461,7 @@ for (propCode, value) in settings:
     payload = isSignedInt16(prop) ? toInt16LE(value) : toUInt16LE(value)   # 2 bytes
     → SetDevicePropValue(propCode, payload)
     ← OK / GeneralError
-    delay 150 ms                                        # CRITICAL — camera needs settle time
+    optional delay(propertyWriteDelayMs)                # default 0ms; tune only if a body rejects writes
 
 # (5) name the preset (always after numeric props)
 → SetDevicePropValue(FUJI_PRESET_NAME 0xD18D, toPtpString(safeName))
@@ -471,7 +472,7 @@ for (propCode, value) in settings:
 * Order matters. `FILM_SIMULATION (0xD192)` is written before tone/grain/color props because some of those have different allowed ranges depending on the film sim. The decompiler shows the iteration order is the `settings` map's iteration order — the producing code orders it sensibly when building it.
 * When `FILM_SIMULATION` maps to a monochrome value, the apply loop **skips** color-only properties even if they were queued.
 * When `WHITE_BALANCE != COLOR_TEMP (0x8007)`, the `COLOR_TEMP (0xD19C)` write is suppressed.
-* The 150 ms inter-write delay is non-negotiable on bodies like the X-H2; cutting it under ~100 ms causes intermittent `GeneralError` responses on the next write.
+* Inter-write delay is configurable. Default 0 ms is confirmed safe on X-H2 fw 5.20; use `WriteDelayBench` before adding delay for a specific body.
 * Outcome tracking: `success`, `failed`, `skipped` counters → `ApplyOutcome` posted to `_lastApplyOutcome`.
 
 ### 9.7 Disconnect ([`UsbPtpService.disconnect`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/usb/UsbPtpService.java#L574-L590) + [`disconnect$1`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/usb/UsbPtpService$disconnect$1.java))
@@ -554,9 +555,9 @@ for code in 0xD18E..0xD1A5:
 → GET_DEVICE_INFO       txId=N+1                                        # refresh
 ← Data; RESPONSE_OK
 → SET_DEVICE_PROP_VALUE 0xD19E  txId=N+2  data=[0xFE,0xFF]              # shadow = -2 (int16LE)
-← RESPONSE_OK; sleep 150 ms
+← RESPONSE_OK; optional delay(propertyWriteDelayMs)
 → SET_DEVICE_PROP_VALUE 0xD1A2  txId=N+3  data=[0x03,0x00]              # clarity = +3
-← RESPONSE_OK; sleep 150 ms
+← RESPONSE_OK; optional delay(propertyWriteDelayMs)
 → SET_DEVICE_PROP_VALUE 0xD18D  txId=N+4  data=<ptpString "Pro 400H">   # name
 ← RESPONSE_OK
 
@@ -803,5 +804,5 @@ _(no pending tests — all parameters confirmed)_
 2. **`SetDevicePropValue` size.** Every observed write is 2 bytes (int16/uint16). `FUJI_PRESET_NAME` is the only variable-length one (PTP string).
 3. **Non-recipe properties in the block.** Codes `0xD18E, 0xD18F, 0xD191, 0xD1A3, 0xD1A4, 0xD1A5` are read but the app has no enum entry. Their meaning is unknown — a logger that captures them across slots would help map them. See also §13 for EXIF-side unknowns.
 4. **GetDeviceInfo during apply.** The decompile shows a `GetDeviceInfo` call early in the apply path (the `slotResult` continuation variable). It looks defensive — possibly to confirm the camera is still alive after writing the slot selector. Replicating it costs little, so do it.
-5. **Inter-write delay** is 150 ms in the apply loop and 100 ms after writing the slot selector during reads. Don't tune below those without testing on multiple bodies.
+5. **Inter-write delay** is configurable in the apply loop and defaults to 0 ms. The slot-selector settle delay is **50 ms** (reduced from the reference APK's 100 ms) — confirmed clean on X-H2 fw 5.20 (full 7-slot write bench, 0 errors, ~7.5s). Revert to 100 ms if another body returns corrupt or blank slot data.
 6. **Card-reader fallback.** If the camera enumerates with interface class `0x08` (or DeviceInfo lacks `0xD18C`), the app immediately calls `CloseSession`, releases the interface, and reports CARD_READER mode. Replicate that — leaving the interface claimed will block Android's MTP indexer.

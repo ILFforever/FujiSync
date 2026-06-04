@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -54,7 +53,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.paeki.fujirecipes.data.ptp.CameraPresetName
 import com.paeki.fujirecipes.domain.model.FujiFilmSimulation
+import com.paeki.fujirecipes.domain.model.canonicalFilmSimLabel
 import com.paeki.fujirecipes.ui.components.decodeSampledBitmap
 import com.paeki.fujirecipes.ui.components.FilmSimLabel
 import com.paeki.fujirecipes.ui.components.IconCC
@@ -73,7 +74,6 @@ import com.paeki.fujirecipes.ui.components.IconSmoothSkin
 import com.paeki.fujirecipes.ui.components.IconWB
 import com.paeki.fujirecipes.ui.components.IconWBShift
 import com.paeki.fujirecipes.ui.components.Pill
-import com.paeki.fujirecipes.ui.components.PrimaryCTA
 import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.theme.Bg
@@ -99,6 +99,8 @@ private val monoSims = setOf(
     "Acros + R",
     "Acros + G",
 )
+
+private const val RECIPE_NAME_FALLBACK = "Untitled Recipe"
 
 private val whiteBalanceOptions = listOf(
     "Auto",
@@ -155,7 +157,14 @@ fun RecipeEditorScreen(
     onSave: (RecipeUiModel) -> Unit,
 ) {
     val seed = initialRecipe ?: defaultRecipe()
-    var name by remember(seed) { mutableStateOf(seed.name.takeUnless { it == "New Recipe" }.orEmpty()) }
+    var name by remember(seed) {
+        mutableStateOf(
+            seed.name
+                .takeUnless { it == "New Recipe" }
+                ?.let(CameraPresetName::sanitizeForEditing)
+                .orEmpty(),
+        )
+    }
     var description by remember(seed) { mutableStateOf(seed.description) }
     var sim by remember(seed) { mutableStateOf(seed.sim.canonicalFilmSimLabel().ifBlank { FujiFilmSimulation.Provia.label }) }
     var simFamily by remember(seed) { mutableStateOf(filmSimFamilyFor(seed.sim.canonicalFilmSimLabel().ifBlank { FujiFilmSimulation.Provia.label }).label) }
@@ -168,8 +177,8 @@ fun RecipeEditorScreen(
     var colorTemp by remember(seed) { mutableIntStateOf(seed.wb["White Balance"]?.removeSuffix("K")?.toIntOrNull() ?: 5600) }
     var wbRed by remember(seed) { mutableIntStateOf(seed.wb["WB Shift R"].signedIntOrZero()) }
     var wbBlue by remember(seed) { mutableIntStateOf(seed.wb["WB Shift B"].signedIntOrZero()) }
-    var highlight by remember(seed) { mutableIntStateOf(seed.tone["Highlight Tone"].signedIntOrZero()) }
-    var shadow by remember(seed) { mutableIntStateOf(seed.tone["Shadow Tone"].signedIntOrZero()) }
+    var highlight by remember(seed) { mutableStateOf(seed.tone["Highlight Tone"].signedFloatOrZero()) }
+    var shadow by remember(seed) { mutableStateOf(seed.tone["Shadow Tone"].signedFloatOrZero()) }
     var color by remember(seed) { mutableIntStateOf(seed.tone["Color"].signedIntOrZero()) }
     var sharpness by remember(seed) { mutableIntStateOf(seed.tone["Sharpness"].signedIntOrZero()) }
     var highIsoNr by remember(seed) { mutableIntStateOf(seed.tone["High ISO NR"].signedIntOrZero()) }
@@ -209,7 +218,7 @@ fun RecipeEditorScreen(
     ) {
         buildRecipe(
             base = seed,
-            name = name.trim().ifBlank { "Untitled Recipe" },
+            name = CameraPresetName.sanitizeOrFallback(name, RECIPE_NAME_FALLBACK),
             description = description.trim(),
             sim = sim,
             dynamicRange = dynamicRange,
@@ -233,10 +242,15 @@ fun RecipeEditorScreen(
         )
     }
     val cleanSeed = remember(seed, initialRecipe) {
-        if (initialRecipe?.libraryId == null) seed.copy(name = "Untitled Recipe") else seed
+        val cleanName = if (initialRecipe?.libraryId == null) {
+            RECIPE_NAME_FALLBACK
+        } else {
+            CameraPresetName.sanitizeOrFallback(seed.name, RECIPE_NAME_FALLBACK)
+        }
+        seed.copy(name = cleanName)
     }
     val dirty = draft != cleanSeed
-    val canSave = name.trim().isNotBlank()
+    val canSave = CameraPresetName.sanitize(name).isNotBlank()
 
     LaunchedEffect(dirty) {
         onDirtyChange(dirty)
@@ -277,7 +291,7 @@ fun RecipeEditorScreen(
                         Spacer(Modifier.height(12.dp))
                         EditorTextField(
                             value = name,
-                            onValueChange = { name = it.take(42) },
+                            onValueChange = { name = CameraPresetName.sanitizeForEditing(it) },
                             placeholder = "Recipe name",
                             textStyle = TextStyle(
                                 fontFamily = SansFamily,
@@ -341,8 +355,8 @@ fun RecipeEditorScreen(
                     }
 
                     EditorSection("Tone Curve") {
-                        StepperControl("Highlight Tone", IconHighlight, highlight, -2, 4) { highlight = it }
-                        StepperControl("Shadow Tone", IconShadow, shadow, -2, 4) { shadow = it }
+                        HalfStepControl("Highlight Tone", IconHighlight, highlight, -2f, 4f) { highlight = it }
+                        HalfStepControl("Shadow Tone", IconShadow, shadow, -2f, 4f) { shadow = it }
                     }
 
                     EditorSection(if (isMono) "Monochrome Color" else "Color Response") {
@@ -387,22 +401,6 @@ fun RecipeEditorScreen(
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Bg)
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
-                Spacer(Modifier.height(12.dp))
-                PrimaryCTA(
-                    label = if (initialRecipe?.libraryId == null) "Save to Library" else "Save Changes",
-                    onClick = { onSave(draft) },
-                    enabled = canSave,
-                )
-            }
         }
     }
 }
@@ -436,7 +434,7 @@ private fun EditorHeader(
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
                 .clickable(enabled = canSave, onClick = onSave)
-                .padding(horizontal = 8.dp, vertical = 7.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -792,6 +790,42 @@ private fun StepperControl(
 }
 
 @Composable
+private fun HalfStepControl(
+    label: String,
+    icon: ImageVector,
+    value: Float,
+    min: Float,
+    max: Float,
+    onValueChange: (Float) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ControlLabel(label = label, icon = icon, modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(9.dp))
+                .border(1.dp, Border, RoundedCornerShape(9.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StepButton("−", enabled = value > min) { onValueChange((value - 0.5f).coerceAtLeast(min)) }
+            Box(
+                modifier = Modifier
+                    .width(68.dp)
+                    .height(42.dp)
+                    .background(Color(0xFF0A0908)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(value.signedDisplay(), fontFamily = MonoFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            }
+            StepButton("+", enabled = value < max) { onValueChange((value + 0.5f).coerceAtMost(max)) }
+        }
+    }
+}
+
+@Composable
 private fun StepButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
@@ -856,8 +890,8 @@ private fun buildRecipe(
     whiteBalance: String,
     wbRed: Int,
     wbBlue: Int,
-    highlight: Int,
-    shadow: Int,
+    highlight: Float,
+    shadow: Float,
     color: Int,
     sharpness: Int,
     highIsoNr: Int,
@@ -911,8 +945,8 @@ private fun buildPills(
     grain: String,
     colorChrome: String,
     colorChromeBlue: String,
-    highlight: Int,
-    shadow: Int,
+    highlight: Float,
+    shadow: Float,
     color: Int,
     clarity: Int,
     isMono: Boolean,
@@ -929,15 +963,18 @@ private fun buildPills(
     if (!isMono) {
         if (colorChrome != "Off") add("CC ${if (colorChrome == "Strong") "STRONG" else "WEAK"}")
         if (colorChromeBlue != "Off") add("FX BLUE ${if (colorChromeBlue == "Strong") "STR" else "WK"}")
-        if (shadow != 0) add("SH ${shadow.signedDisplay()}")
+        if (shadow != 0f) add("SH ${shadow.signedDisplay()}")
         if (color != 0) add("COLOR ${color.signedDisplay()}")
     }
-    if (highlight != 0) add("HL ${highlight.signedDisplay()}")
+    if (highlight != 0f) add("HL ${highlight.signedDisplay()}")
     if (clarity != 0) add("CLARITY ${clarity.signedDisplay()}")
 }
 
 private fun String?.signedIntOrZero(): Int =
     this?.replace("−", "-")?.replace("+", "")?.trim()?.toIntOrNull() ?: 0
+
+private fun String?.signedFloatOrZero(): Float =
+    this?.replace("−", "-")?.replace("+", "")?.trim()?.toFloatOrNull() ?: 0f
 
 private fun String?.editorWhiteBalanceMode(): String {
     val value = this?.trim().orEmpty()
@@ -955,25 +992,16 @@ private fun filmSimFamilyFor(sim: String): FilmSimFamily =
     filmSimFamilies.firstOrNull { family -> sim in family.sims }
         ?: filmSimFamilies.first()
 
-private fun String.canonicalFilmSimLabel(): String = when (trim().lowercase()) {
-    "acros+r", "acros +r", "acros+ r" -> "Acros + R"
-    "acros+y", "acros +y", "acros+ y" -> "Acros + Y"
-    "acros+g", "acros +g", "acros+ g" -> "Acros + G"
-    "monochrome+r", "monochrome +r", "monochrome+ r" -> "Monochrome + R"
-    "monochrome+y", "monochrome +y", "monochrome+ y" -> "Monochrome + Y"
-    "monochrome+g", "monochrome +g", "monochrome+ g" -> "Monochrome + G"
-    "classic neg" -> "Classic Neg"
-    "pro neg hi" -> "Pro Neg Hi"
-    "pro neg std" -> "Pro Neg Std"
-    "velvia" -> "Velvia / Vivid"
-    "astia" -> "Astia / Soft"
-    "provia" -> "Provia / Standard"
-    else -> trim()
-}
-
 
 private fun Int.signedDisplay(): String = when {
     this > 0 -> "+$this"
     this < 0 -> "−${-this}"
     else -> "0"
+}
+
+private fun Float.signedDisplay(): String {
+    if (this == 0f) return "0"
+    val prefix = if (this > 0f) "+" else "−"
+    val abs = kotlin.math.abs(this)
+    return if (abs == kotlin.math.floor(abs)) "$prefix${abs.toInt()}" else "$prefix$abs"
 }

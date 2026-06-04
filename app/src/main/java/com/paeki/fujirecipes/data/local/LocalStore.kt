@@ -143,6 +143,7 @@ class LocalStore(context: Context) {
     suspend fun saveSettings(settings: AppSettings) = mutex.withLock {
         write("settings.json", JSONObject().apply {
             put("showLibraryImages", settings.showLibraryImages)
+            put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
         }.toString())
     }
 
@@ -153,6 +154,7 @@ class LocalStore(context: Context) {
             val o = JSONObject(file.readText())
             AppSettings(
                 showLibraryImages = o.optBoolean("showLibraryImages", true),
+                propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
             )
         }.getOrElse { AppSettings() }
     }

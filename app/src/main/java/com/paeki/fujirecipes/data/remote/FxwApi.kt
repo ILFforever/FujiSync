@@ -34,7 +34,7 @@ object FxwApi {
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000
             conn.readTimeout = 15_000
-            conn.setRequestProperty("User-Agent", "FujiSync/1.0 Android")
+            conn.setRequestProperty("User-Agent", "FujiRecipes/1.0 Android")
             etag?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("If-None-Match", it) }
             lastModified?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("If-Modified-Since", it) }
             try {

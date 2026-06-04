@@ -7,11 +7,15 @@ import com.paeki.fujirecipes.data.usb.CameraHeartbeat
 import com.paeki.fujirecipes.data.usb.UsbCameraRepository
 import com.paeki.fujirecipes.data.usb.UsbCameraScanner
 import com.paeki.fujirecipes.data.usb.UsbPtpConnection
+import com.paeki.fujirecipes.domain.repository.CameraRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
 
 @Module
@@ -25,7 +29,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideUsbCameraRepository(usbManager: UsbManager): UsbCameraRepository =
+    fun provideCameraRepository(usbManager: UsbManager): CameraRepository =
         UsbCameraRepository(UsbCameraScanner(usbManager))
 
     @Provides
@@ -42,4 +46,10 @@ object AppModule {
     @Singleton
     fun provideLocalStore(@ApplicationContext context: Context): LocalStore =
         LocalStore(context)
+
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun provideApplicationScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 }

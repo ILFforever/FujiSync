@@ -1,5 +1,0 @@
-- create recipe drawer needs openning animation
-- if user change camera name in profile the library camera name for recipe should also update to match
-- Filter tab source is it grabbing camera name or camera model, it should be name
-- the search animation on click is jumpy and not smooth
-- when searh is pressed the search and filter button switch placesQ

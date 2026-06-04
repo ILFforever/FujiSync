@@ -5,8 +5,11 @@ import com.paeki.fujirecipes.data.ptp.MONO_SIM_CODES
 import com.paeki.fujirecipes.data.ptp.PtpConstants
 import com.paeki.fujirecipes.data.ptp.encodePtpString
 import com.paeki.fujirecipes.data.ptp.uint16Le
+import com.paeki.fujirecipes.domain.model.CameraSlot
 import com.paeki.fujirecipes.domain.model.FujiPropertyCode
 import com.paeki.fujirecipes.domain.model.RecipePreset
+import com.paeki.fujirecipes.ui.model.RecipeUiModel
+import com.paeki.fujirecipes.ui.model.toPreset
 import kotlinx.coroutines.delay
 
 data class DelayBenchResult(
@@ -14,11 +17,13 @@ data class DelayBenchResult(
     val success: Int,
     val failed: Int,
     val durationMs: Long,
+    // null key = slot-selector or name write failure
+    val failedProps: Map<FujiPropertyCode?, Int> = emptyMap(),
 ) {
     val total: Int get() = success + failed
 }
 
-val BENCH_DELAY_CANDIDATES: List<Long> = listOf(50L, 75L, 100L, 125L, 150L)
+val BENCH_DELAY_CANDIDATES: List<Long> = listOf(5L, 0L, 10L, 15L, 20L)
 
 private val COLOR_ONLY_PROPS = setOf(
     FujiPropertyCode.ColorChrome,
@@ -41,6 +46,7 @@ suspend fun benchWriteDelay(
     val started = System.currentTimeMillis()
     var success = 0
     var failed = 0
+    val failedProps = mutableMapOf<FujiPropertyCode?, Int>()
 
     for (preset in presets) {
         val slotTx = connection.executeCommandWithData(
@@ -48,7 +54,11 @@ suspend fun benchWriteDelay(
             params = listOf(PtpConstants.FUJI_SLOT_SELECTOR),
             payload = uint16Le(preset.slot.protocolValue),
         )
-        if (!slotTx.isOk) { failed++; continue }
+        if (!slotTx.isOk) {
+            failed++
+            failedProps[null] = (failedProps[null] ?: 0) + 1
+            continue
+        }
         delay(SLOT_SWITCH_DELAY_MS)
 
         connection.executeCommand(PtpConstants.GET_DEVICE_INFO)
@@ -74,8 +84,13 @@ suspend fun benchWriteDelay(
                 params = listOf(prop.code),
                 payload = uint16Le(value),
             )
-            if (tx.isOk) success++ else failed++
-            delay(delayMs)
+            if (tx.isOk) {
+                success++
+            } else {
+                failed++
+                failedProps[prop] = (failedProps[prop] ?: 0) + 1
+            }
+            if (delayMs > 0) delay(delayMs)
         }
 
         val safeName = CameraPresetName.sanitizeOrFallback(preset.name, fallback = preset.slot.label)
@@ -84,7 +99,10 @@ suspend fun benchWriteDelay(
             params = listOf(PtpConstants.FUJI_PRESET_NAME),
             payload = encodePtpString(safeName),
         )
-        if (nameTx.isOk) success++ else failed++
+        if (nameTx.isOk) success++ else {
+            failed++
+            failedProps[null] = (failedProps[null] ?: 0) + 1
+        }
     }
 
     DelayBenchResult(
@@ -92,7 +110,36 @@ suspend fun benchWriteDelay(
         success = success,
         failed = failed,
         durationMs = System.currentTimeMillis() - started,
+        failedProps = failedProps,
     )
 }
 
 private const val SLOT_SWITCH_DELAY_MS = 100L
+
+// Builds a bench preset via the standard UI→preset mapper so all values are correctly encoded.
+fun randomBenchPreset(slot: CameraSlot): RecipePreset = RecipeUiModel(
+    slot        = slot.label,
+    name        = "BENCH-${slot.label}",
+    sim         = "Velvia / Vivid",
+    pills       = emptyList(),
+    effects     = mapOf(
+        "Dynamic Range"        to "DR100%",
+        "Grain Effect"         to "Off",
+        "Color Chrome"         to "Off",
+        "Color Chrome FX Blue" to "Off",
+        "Smooth Skin"          to "Off",
+    ),
+    tone        = mapOf(
+        "Highlight Tone" to "+1",
+        "Shadow Tone"    to "0",
+        "Color"          to "+2",
+        "Sharpness"      to "0",
+        "High ISO NR"    to "0",
+        "Clarity"        to "0",
+    ),
+    wb          = mapOf(
+        "White Balance" to "Auto",
+        "WB Shift R"    to "+1",
+        "WB Shift B"    to "0",
+    ),
+).toPreset(slot)

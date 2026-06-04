@@ -2,6 +2,8 @@ package com.paeki.fujirecipes.data.usb
 
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import com.paeki.fujirecipes.domain.model.CameraSlot
+import com.paeki.fujirecipes.domain.model.RecipePreset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -12,6 +14,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 class CameraHeartbeat(
     private val usbManager: UsbManager,
@@ -20,28 +23,31 @@ class CameraHeartbeat(
     private val _alive = MutableStateFlow(false)
     val alive: StateFlow<Boolean> = _alive.asStateFlow()
 
+    private val _slots = MutableStateFlow<List<RecipePreset>>(emptyList())
+    val slots: StateFlow<List<RecipePreset>> = _slots.asStateFlow()
+
     // All USB-opening operations (reads, writes, heartbeat) must hold this before
     // calling connectionFactory.open(). Prevents the heartbeat from force-claiming
     // the USB interface while a read or write has it open.
     val usbMutex = Mutex()
 
-    private var consecutiveFailures = 0
+    private val consecutiveFailures = AtomicInteger(0)
 
     suspend fun monitor(device: UsbDevice) {
         _alive.value = true
-        consecutiveFailures = 0
+        consecutiveFailures.set(0)
 
         while (currentCoroutineContext().isActive) {
             delay(PULSE_INTERVAL_MS)
-            val ok = usbMutex.withLock {
-                withContext(Dispatchers.IO) { ping(device) }
+            val presets = usbMutex.withLock {
+                withContext(Dispatchers.IO) { readAllSlots(device) }
             }
-            if (ok) {
-                consecutiveFailures = 0
+            if (presets != null) {
+                consecutiveFailures.set(0)
                 _alive.value = true
+                _slots.value = presets
             } else {
-                consecutiveFailures++
-                if (consecutiveFailures >= FAILURES_BEFORE_DEAD) {
+                if (consecutiveFailures.incrementAndGet() >= FAILURES_BEFORE_DEAD) {
                     _alive.value = false
                     return
                 }
@@ -50,21 +56,27 @@ class CameraHeartbeat(
     }
 
     fun reset() {
-        consecutiveFailures = 0
+        consecutiveFailures.set(0)
         _alive.value = false
+        _slots.value = emptyList()
     }
 
-    private fun ping(device: UsbDevice): Boolean {
-        if (!usbManager.hasPermission(device)) return false
+    private suspend fun readAllSlots(device: UsbDevice): List<RecipePreset>? {
+        if (!usbManager.hasPermission(device)) return null
 
         return connectionFactory.open(device)?.use { connection ->
-            if (!connection.openSession()) return false
+            if (!connection.openSession()) return null
             try {
-                connection.ping()
+                val cam = FujiRecipeCamera(connection)
+                val results = mutableListOf<RecipePreset>()
+                for (slot in CameraSlot.entries) {
+                    results.add(runCatching { cam.readPreset(slot) }.getOrNull() ?: return null)
+                }
+                results
             } finally {
                 runCatching { connection.closeSession() }
             }
-        } ?: false
+        }
     }
 
     companion object {
