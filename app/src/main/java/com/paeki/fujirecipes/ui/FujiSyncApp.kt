@@ -114,6 +114,7 @@ import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
 import com.paeki.fujirecipes.ui.model.LibraryRecipeSource
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
+import com.paeki.fujirecipes.ui.model.SlotBackupSet
 import com.paeki.fujirecipes.ui.profile.ProfileScreen
 import com.paeki.fujirecipes.ui.qr.QrScannerScreen
 import com.paeki.fujirecipes.ui.theme.Bg
@@ -159,9 +160,12 @@ data class CameraUiState(
     val battery: String = "",
     val slots: List<RecipeUiModel> = emptyList(),
     val selectedSlotIdx: Int = 0,
+    val backingUpSlots: Boolean = false,
+    val backingUpSlotIndex: Int = -1,
     val hasSlotBackup: Boolean = false,
     val slotBackupMeta: SlotBackupMeta? = null,
     val slotBackupSlots: List<RecipeUiModel>? = null,
+    val slotBackupSets: List<SlotBackupSet> = emptyList(),
     val restoringSlots: Boolean = false,
     val restoringSlotIndex: Int = -1,
     val rearrangingSlots: Boolean = false,
@@ -207,6 +211,7 @@ data class FujiSyncUiState(
     val saveAllReport: SaveAllReport? = null,
     val captureLog: String? = null,
     val update: UpdateUiState = UpdateUiState(),
+    val backup: BackupUiState = BackupUiState(),
 )
 
 data class WriteToastState(val slot: String, val name: String, val savedToLibrary: Boolean = false)
@@ -220,6 +225,13 @@ data class UpdateUiState(
     val updateAvailable: Boolean = false,
     val downloaded: Boolean = false,
     val installPermissionRequired: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+)
+
+data class BackupUiState(
+    val exporting: Boolean = false,
+    val importing: Boolean = false,
     val message: String? = null,
     val error: String? = null,
 )
@@ -257,6 +269,7 @@ fun FujiSyncApp(
     onRestoreSlots: () -> Unit,
     onDeleteSlotBackup: () -> Unit,
     onRenameSlotBackup: (String) -> Unit,
+    onSelectSlotBackup: (String) -> Unit = {},
     onRearrangeCameraSlots: (List<RecipeUiModel>) -> Unit = {},
     onRenameCameraLabel: (String, String) -> Unit,
     onDeleteCamera: (String) -> Unit = {},
@@ -279,6 +292,10 @@ fun FujiSyncApp(
     onSetPropertyWriteDelay: (Long) -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
+    onExportBackup: () -> Unit = {},
+    onImportBackupMerge: () -> Unit = {},
+    onImportBackupReplace: () -> Unit = {},
+    onDismissBackupMessage: () -> Unit = {},
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showWriteDelayBench by remember { mutableStateOf(false) }
@@ -396,6 +413,8 @@ fun FujiSyncApp(
                                 readingSlots = state.camera.readingSlots,
                                 slots = state.camera.slots,
                                 selectedSlotIdx = state.camera.selectedSlotIdx,
+                                backingUpSlots = state.camera.backingUpSlots,
+                                backingUpSlotIndex = state.camera.backingUpSlotIndex,
                                 onSelectSlot = onSelectSlot,
                                 onOpenDetail = {
                                     state.camera.slots.getOrNull(state.camera.selectedSlotIdx)?.let(onOpenDetail)
@@ -406,11 +425,13 @@ fun FujiSyncApp(
                                 hasSlotBackup = state.camera.hasSlotBackup,
                                 slotBackupMeta = state.camera.slotBackupMeta,
                                 slotBackupSlots = state.camera.slotBackupSlots,
+                                slotBackupSets = state.camera.slotBackupSets,
                                 restoringSlots = state.camera.restoringSlots,
                                 onBackupSlots = onBackupSlots,
                                 onRestoreSlots = onRestoreSlots,
                                 onDeleteSlotBackup = onDeleteSlotBackup,
                                 onRenameSlotBackup = onRenameSlotBackup,
+                                onSelectSlotBackup = onSelectSlotBackup,
                                 onRearrangeSlots = onRearrangeCameraSlots,
                                 readingSlotIndex = state.camera.readingSlotIndex,
                                 isRestoringValidation = state.camera.isRestoringValidation,
@@ -468,6 +489,11 @@ fun FujiSyncApp(
                         update = state.update,
                         onCheckForUpdates = onCheckForUpdates,
                         onInstallUpdate = onInstallUpdate,
+                        backup = state.backup,
+                        onExportBackup = onExportBackup,
+                        onImportBackupMerge = onImportBackupMerge,
+                        onImportBackupReplace = onImportBackupReplace,
+                        onDismissBackupMessage = onDismissBackupMessage,
                     )
                 }
 
@@ -699,6 +725,7 @@ private fun BoxScope.AppOverlays(
             cameraName = cameraLabel,
             cameraSlots = state.camera.slots,
             onWriteToSlot = onWriteLibraryRecipeToSlot,
+            interactionsEnabled = !(state.creatingRecipe || state.editorRecipe != null),
         )
     }
 

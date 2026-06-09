@@ -42,6 +42,35 @@ object OcrRecipeParser {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
+    // ── Hoisted regex constants ────────────────────────────────────────────────
+    private val SIGN_ONE_RE        = Regex("""([+\-])[|lI\[!]""")
+    private val TYPO_STRRONG_RE    = Regex("""(?i)\bstrrong\b""")
+    private val TYPO_BOALANCE_RE   = Regex("""(?i)\bboalance\b""")
+    private val TYPO_EFECT_RE      = Regex("""(?i)\befect\b""")
+    private val TYPO_GOLOUR_RE     = Regex("""(?i)\bgolour\b""")
+    private val TYPO_GHOME_RE      = Regex("""(?i)\bghome\b""")
+    private val TYPO_GURVE_RE      = Regex("""(?i)\bgurve\b""")
+    private val TYPO_HIGHILIGHTS_RE = Regex("""(?i)\bhighilights\b""")
+    private val TYPO_NAJSE_RE      = Regex("""(?i)\bnajse\b""")
+    private val TYPO_IS0_RE        = Regex("""(?i)\bis0\b""")
+    private val TYPO_DRI_RE        = Regex("""(?i)\bdri(?=\d{2}\b)""")
+    private val TYPO_REUGHNESS_RE  = Regex("""(?i)\breughness\b""")
+    private val TYPO_SIZ2_RE       = Regex("""(?i)\bsiz2\b""")
+    private val TYPO_RAIN_RE       = Regex("""(?im)^rain\s*:""")
+    private val TYPO_LARITY_RE     = Regex("""(?im)^larity\s*:""")
+    private val BULLET_PLUS_RE     = Regex("""(:\s*)•(?=\d)""")
+    private val O_ZERO_RE          = Regex("""(?i)(:\s*)o(?=0\b)""")
+    private val LONE_LI_RE         = Regex("""\b[lI]\b""")
+    private val LONE_O_RE          = Regex("""\bO\b""")
+    private val CL_HINT_RE         = Regex("""\bCL\b""")
+    private val DR_HINT_RE         = Regex("""(?i)\bDR\d{3}\b""")
+    private val DRP_HINT_RE        = Regex("""(?i)\bDRP\b""")
+    private val CC_HINT_RE         = Regex("""(?i)(?<!\w)cc\s*[:\s]""")
+    private val COL_HINT_RE        = Regex("""\bCOL?\b""")
+    private val WB_HINT_RE         = Regex("""(?<!\w)WB[\s:]""")
+    private val WHITESPACE_RE      = Regex("""\s+""")
+    private val NON_ALNUM_RE       = Regex("""[^a-z0-9]+""")
+
     /** Run ML Kit OCR on [uri] and return text with spatial metadata. */
     suspend fun recognizeText(context: Context, uri: Uri): OcrInput {
         val image = InputImage.fromFilePath(context, uri)
@@ -72,33 +101,33 @@ object OcrRecipeParser {
             .replace('—', '-')
             // Sign-attached confusables for '1' — must run before '|' → ':' conversion
             // so that "+|" is caught as "+1" rather than becoming "+:" and failing to parse.
-            .replace(Regex("""([+\-])[|lI\[!]"""), "${"$"}11")
+            .replace(SIGN_ONE_RE, "${"$"}11")
             .replace('|', ':')
             .replace('│', ':')
             .replace('┃', ':')
             .replace(']', '1')  // OCR sometimes reads '1' as ']' in certain fonts
             .replace('İ', 'l')
             .replace('ļ', ' ')
-            .replace(Regex("""(?i)\bstrrong\b"""), "strong")
-            .replace(Regex("""(?i)\bboalance\b"""), "balance")
-            .replace(Regex("""(?i)\befect\b"""), "effect")
-            .replace(Regex("""(?i)\bgolour\b"""), "colour")
-            .replace(Regex("""(?i)\bghome\b"""), "chrome")
-            .replace(Regex("""(?i)\bgurve\b"""), "curve")
-            .replace(Regex("""(?i)\bhighilights\b"""), "highlights")
-            .replace(Regex("""(?i)\bnajse\b"""), "noise")
-            .replace(Regex("""(?i)\bis0\b"""), "iso")
-            .replace(Regex("""(?i)\bdri(?=\d{2}\b)"""), "DR1")
-            .replace(Regex("""(?i)\breughness\b"""), "roughness")
-            .replace(Regex("""(?i)\bsiz2\b"""), "size ")
-            .replace(Regex("""(?im)^rain\s*:"""), "Grain Effect:")
-            .replace(Regex("""(?im)^larity\s*:"""), "Clarity:")
-            .replace(Regex("""(:\s*)•(?=\d)"""), "${"$"}1+")
-            .replace(Regex("""(?i)(:\s*)o(?=0\b)"""), "${"$"}10")
+            .replace(TYPO_STRRONG_RE, "strong")
+            .replace(TYPO_BOALANCE_RE, "balance")
+            .replace(TYPO_EFECT_RE, "effect")
+            .replace(TYPO_GOLOUR_RE, "colour")
+            .replace(TYPO_GHOME_RE, "chrome")
+            .replace(TYPO_GURVE_RE, "curve")
+            .replace(TYPO_HIGHILIGHTS_RE, "highlights")
+            .replace(TYPO_NAJSE_RE, "noise")
+            .replace(TYPO_IS0_RE, "iso")
+            .replace(TYPO_DRI_RE, "DR1")
+            .replace(TYPO_REUGHNESS_RE, "roughness")
+            .replace(TYPO_SIZ2_RE, "size ")
+            .replace(TYPO_RAIN_RE, "Grain Effect:")
+            .replace(TYPO_LARITY_RE, "Clarity:")
+            .replace(BULLET_PLUS_RE, "${"$"}1+")
+            .replace(O_ZERO_RE, "${"$"}10")
             // Standalone whole-word confusables (word boundaries ensure we don't mangle
             // letters inside words like "Small", "Classic", "Off", "Color", etc.)
-            .replace(Regex("""\b[lI]\b"""), "1")  // 'l' or 'I' as whole word → '1'
-            .replace(Regex("""\bO\b"""), "0")     // capital 'O' as whole word → '0'
+            .replace(LONE_LI_RE, "1")  // 'l' or 'I' as whole word → '1'
+            .replace(LONE_O_RE, "0")   // capital 'O' as whole word → '0'
 
         // Prefer geometric column stitching (bounding-box based); fall back to the
         // text-heuristic stitcher for cases where geometry isn't available.
@@ -142,7 +171,7 @@ object OcrRecipeParser {
         val color   = track("Color",          parseColor(text),     hasColorHint(text))
         val sharp   = track("Sharpness",      parseSharpness(text), hasHint(text, "sharpness") || hasHint(text, "SHARP") || hasHint(text, "SHP"))
         val nr      = track("High ISO NR",    parseHighIsoNr(text), hasHint(text, "noise") || hasHint(text, "iso nr") || hasHint(text, " NR"))
-        val clarity = track("Clarity",        parseClarity(text),   hasHint(text, "clarity") || Regex("""\bCL\b""").containsMatchIn(text))
+        val clarity = track("Clarity",        parseClarity(text),   hasHint(text, "clarity") || CL_HINT_RE.containsMatchIn(text))
 
         // ── White balance + inline shifts ────────────────────────────────────
         val (wbDisplay, inlineR, inlineB) = parseWhiteBalanceWithShifts(text)
@@ -257,7 +286,7 @@ object OcrRecipeParser {
     }
 
     private fun hasDrHint(text: String) =
-        Regex("""(?i)\bDR\d{3}\b""").containsMatchIn(text) ||
+        DR_HINT_RE.containsMatchIn(text) ||
         text.contains("dynamic range", ignoreCase = true)
 
     private val DR_PRIORITY_RE = Regex(
@@ -276,7 +305,7 @@ object OcrRecipeParser {
     private fun hasDRangePriorityHint(text: String) =
         text.contains("d range priority", ignoreCase = true) ||
             text.contains("dynamic range priority", ignoreCase = true) ||
-            Regex("""(?i)\bDRP\b""").containsMatchIn(text)
+            DRP_HINT_RE.containsMatchIn(text)
 
     // ── Grain effect ────────────────────────────────────────────────────────────
 
@@ -322,7 +351,7 @@ object OcrRecipeParser {
     private fun parseSmoothSkin(text: String)  = parseOws(SKIN_RE, text)
 
     private fun hasCcHint(text: String)     = text.contains("color chrome", ignoreCase = true) ||
-        Regex("""(?i)(?<!\w)cc\s*[:\s]""").containsMatchIn(text)
+        CC_HINT_RE.containsMatchIn(text)
     private fun hasCcBlueHint(text: String) = text.contains("blue", ignoreCase = true) &&
         text.contains("chrome", ignoreCase = true)
 
@@ -364,7 +393,7 @@ object OcrRecipeParser {
             ?.toFloatOrNull()?.let { formatDial(it) }
 
     private fun hasColorHint(text: String) = COLOR_LONG_RE.containsMatchIn(text) ||
-        Regex("""\bCOL?\b""").containsMatchIn(text)
+        COL_HINT_RE.containsMatchIn(text)
 
     // ── Sharpness ─────────────────────────────────────────────────────────────
     // Long form: "Sharpness: +2"
@@ -466,7 +495,7 @@ object OcrRecipeParser {
 
     private fun hasWbHint(text: String) =
         text.contains("white balance", ignoreCase = true) ||
-        Regex("""(?<!\w)WB[\s:]""").containsMatchIn(text)
+        WB_HINT_RE.containsMatchIn(text)
 
     // ── Explicit WB shift lines ────────────────────────────────────────────────
     // "WB Shift R: +3" / "WB Shift Blue: -1"
@@ -785,11 +814,11 @@ object OcrRecipeParser {
     private fun isColumnValue(label: String, value: String): Boolean {
         val t = value.trim()
         // Dot-normalized form for film sim name matching ("Pro Neg. Hi" → "Pro Neg Hi").
-        val tNorm = t.replace(".", " ").replace(Regex("\\s+"), " ").trim()
+        val tNorm = t.replace(".", " ").replace(WHITESPACE_RE, " ").trim()
         return when (label) {
             "Film Simulation" ->
                 FujiFilmSimulation.entries.any { sim ->
-                    val labelNorm = sim.label.replace(".", " ").replace(Regex("\\s+"), " ")
+                    val labelNorm = sim.label.replace(".", " ").replace(WHITESPACE_RE, " ")
                     tNorm.contains(labelNorm, ignoreCase = true)
                 } ||
                 listOf("Bleach Bypass", "Nostalgic Neg", "Classic Chrome", "Classic Neg",
@@ -858,7 +887,7 @@ object OcrRecipeParser {
 
     private fun String.normalizedToken(): String =
         lowercase()
-            .replace(Regex("""[^a-z0-9]+"""), "")
+            .replace(NON_ALNUM_RE, "")
 
     private fun similarity(a: String, b: String): Float {
         if (a.isEmpty() || b.isEmpty()) return 0f

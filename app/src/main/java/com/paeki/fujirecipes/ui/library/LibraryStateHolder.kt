@@ -341,6 +341,82 @@ class LibraryStateHolder @Inject constructor(
         persist()
     }
 
+    fun exportData(): LocalStore.LibraryData {
+        val snapshot = _state.value
+        return LocalStore.LibraryData(
+            recipes = snapshot.recipes,
+            groups = snapshot.groups,
+            styles = snapshot.groupStyles,
+        )
+    }
+
+    fun replaceAll(data: LocalStore.LibraryData) {
+        _state.update {
+            it.copy(
+                recipes = data.recipes.map { recipe -> recipe.normalizedLibraryRecipe() },
+                groups = data.groups,
+                groupStyles = data.styles,
+                duplicateDialog = null,
+            )
+        }
+        persist()
+    }
+
+    fun mergeData(data: LocalStore.LibraryData): BackupMergeReport {
+        var report = BackupMergeReport()
+        _state.update { current ->
+            val groupIdMap = mutableMapOf<String, String>()
+            val groups = current.groups.toMutableList()
+            val styles = current.groupStyles.toMutableMap()
+
+            data.groups.forEach { incoming ->
+                val existing = groups.firstOrNull { it.id == incoming.id }
+                val targetId = when {
+                    existing == null -> incoming.id
+                    existing.name == incoming.name -> existing.id
+                    else -> "group-${UUID.randomUUID()}"
+                }
+                groupIdMap[incoming.id] = targetId
+                if (groups.none { it.id == targetId }) {
+                    groups.add(incoming.copy(id = targetId))
+                    report = report.copy(groupsImported = report.groupsImported + 1)
+                }
+                data.styles[incoming.id]?.let { style -> styles[targetId] = style }
+            }
+
+            val recipes = current.recipes.toMutableList()
+            data.recipes.map { incoming ->
+                incoming
+                    .copy(groupIds = incoming.groupIds.map { groupId -> groupIdMap[groupId] ?: groupId })
+                    .normalizedLibraryRecipe()
+            }.forEach { incoming ->
+                val duplicate = recipes.any { existing ->
+                    existing.id == incoming.id ||
+                        (existing.sim == incoming.sim &&
+                            existing.effects == incoming.effects &&
+                            existing.tone == incoming.tone &&
+                            existing.wb == incoming.wb)
+                }
+                if (duplicate) {
+                    report = report.copy(recipesSkipped = report.recipesSkipped + 1)
+                } else {
+                    val id = if (recipes.any { it.id == incoming.id }) "lib-${UUID.randomUUID()}" else incoming.id
+                    recipes.add(0, incoming.copy(id = id))
+                    report = report.copy(recipesImported = report.recipesImported + 1)
+                }
+            }
+
+            current.copy(
+                recipes = recipes,
+                groups = groups,
+                groupStyles = styles,
+                duplicateDialog = null,
+            )
+        }
+        persist()
+        return report
+    }
+
     suspend fun saveFromDiscover(recipe: FxwRecipe, name: String, includePhotos: Boolean = true) {
         val referenceUris = if (includePhotos) downloadDiscoverImages(recipe) else emptyList()
         val saved = recipe.toLibraryRecipeUiModel(name, referenceUris)
@@ -564,6 +640,12 @@ internal fun Map<String, String>.normalizedEffectsSection(): Map<String, String>
     private fun List<String>.toggle(groupId: String): List<String> =
         if (groupId in this) this - groupId else this + groupId
 }
+
+data class BackupMergeReport(
+    val recipesImported: Int = 0,
+    val recipesSkipped: Int = 0,
+    val groupsImported: Int = 0,
+)
 
 // ── WB normalization (shared utility) ────────────────────────────────
 

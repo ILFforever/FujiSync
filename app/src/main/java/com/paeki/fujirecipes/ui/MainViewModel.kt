@@ -35,6 +35,7 @@ import com.paeki.fujirecipes.ui.model.SaveAllReport
 import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
+import com.paeki.fujirecipes.ui.model.SlotBackupSet
 import com.paeki.fujirecipes.ui.model.toPreset
 import com.paeki.fujirecipes.ui.model.toUiModel
 import kotlinx.coroutines.Job
@@ -52,6 +53,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
@@ -65,7 +67,11 @@ sealed class MainViewModelEvent {
     object LaunchQrImagePicker : MainViewModelEvent()
     data class InstallApk(val uri: Uri) : MainViewModelEvent()
     object OpenInstallPermissionSettings : MainViewModelEvent()
+    data class LaunchBackupExport(val fileName: String) : MainViewModelEvent()
+    object LaunchBackupImport : MainViewModelEvent()
 }
+
+enum class BackupImportMode { Merge, Replace }
 
 private data class ReferenceImageTarget(
     val libraryId: String?,
@@ -100,6 +106,7 @@ class MainViewModel @Inject constructor(
     val events: SharedFlow<MainViewModelEvent> = _events.asSharedFlow()
     private var latestRelease: AppUpdateRelease? = null
     private var downloadedUpdateUri: Uri? = null
+    private var pendingBackupImportMode: BackupImportMode = BackupImportMode.Merge
 
     private var pendingReferenceTarget: ReferenceImageTarget? = null
     private var pendingGroupImageTarget: String? = null
@@ -1042,6 +1049,128 @@ class MainViewModel @Inject constructor(
         persistSettings()
     }
 
+    fun handleLaunchBackupExport() {
+        val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm", Locale.US))
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchBackupExport("fujisync-backup-$stamp.json")) }
+    }
+
+    fun handleLaunchBackupImport(mode: BackupImportMode) {
+        pendingBackupImportMode = mode
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchBackupImport) }
+    }
+
+    fun handleBackupExportDestination(uri: Uri?) {
+        uri ?: return
+        _uiState.update { it.copy(backup = it.backup.copy(exporting = true, message = null, error = null)) }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val state = _uiState.value
+                    val json = localStore.backupJson(
+                        settings = state.settings,
+                        cameraLabels = state.camera.cameraLabels,
+                        cameraModels = state.camera.cameraModels,
+                        cameraFirmwares = state.camera.cameraFirmwares,
+                        libraryData = libraryHolder.exportData(),
+                    )
+                    appContext.contentResolver.openOutputStream(uri)?.use { output ->
+                        output.write(json.toByteArray(Charsets.UTF_8))
+                    } ?: error("Could not open export file.")
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    backup = it.backup.copy(
+                        exporting = false,
+                        message = if (result.isSuccess) "Backup exported." else null,
+                        error = result.exceptionOrNull()?.message,
+                    )
+                )
+            }
+        }
+    }
+
+    fun handleBackupImportResult(uri: Uri?) {
+        uri ?: return
+        _uiState.update { it.copy(backup = it.backup.copy(importing = true, message = null, error = null)) }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val content = appContext.contentResolver.openInputStream(uri)?.use { input ->
+                        input.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    } ?: error("Could not open backup file.")
+                    localStore.parseBackupJson(content)
+                }
+            }
+            result
+                .onSuccess { backup ->
+                    val mode = pendingBackupImportMode
+                    val mergeReport = if (mode == BackupImportMode.Merge) {
+                        libraryHolder.mergeData(backup.library)
+                    } else {
+                        libraryHolder.replaceAll(backup.library)
+                        null
+                    }
+                    _uiState.update {
+                        val nextLabels = when (mode) {
+                            BackupImportMode.Merge -> it.camera.cameraLabels + backup.cameraLabels
+                            BackupImportMode.Replace -> backup.cameraLabels
+                        }
+                        val nextModels = when (mode) {
+                            BackupImportMode.Merge -> it.camera.cameraModels + backup.cameraModels
+                            BackupImportMode.Replace -> backup.cameraModels
+                        }
+                        val nextFirmwares = when (mode) {
+                            BackupImportMode.Merge -> it.camera.cameraFirmwares + backup.cameraFirmwares
+                            BackupImportMode.Replace -> backup.cameraFirmwares
+                        }
+                        it.copy(
+                            settings = backup.settings,
+                            camera = it.camera.copy(
+                                cameraLabels = nextLabels,
+                                cameraModels = nextModels,
+                                cameraFirmwares = nextFirmwares,
+                            ),
+                            backup = it.backup.copy(
+                                importing = false,
+                                message = when (mode) {
+                                    BackupImportMode.Merge -> {
+                                        val report = mergeReport
+                                        if (report == null) "Backup merged." else
+                                            "Backup merged. Added ${report.recipesImported} recipes and ${report.groupsImported} groups. Skipped ${report.recipesSkipped} duplicate recipes."
+                                    }
+                                    BackupImportMode.Replace -> "Backup imported. Current data was replaced."
+                                },
+                                error = null,
+                            ),
+                        )
+                    }
+                    val importedState = _uiState.value
+                    viewModelScope.launch(Dispatchers.IO) {
+                        localStore.saveSettings(importedState.settings)
+                        localStore.saveCameraLabels(importedState.camera.cameraLabels)
+                        localStore.saveCameraModels(importedState.camera.cameraModels)
+                        localStore.saveCameraFirmwares(importedState.camera.cameraFirmwares)
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            backup = it.backup.copy(
+                                importing = false,
+                                message = null,
+                                error = error.message ?: "Could not import backup.",
+                            )
+                        )
+                    }
+                }
+        }
+    }
+
+    fun handleBackupMessageDismiss() {
+        _uiState.update { it.copy(backup = it.backup.copy(message = null, error = null)) }
+    }
+
     fun handleCheckForUpdates() {
         if (_uiState.value.update.checking || _uiState.value.update.downloading) return
         _uiState.update {
@@ -1239,35 +1368,168 @@ class MainViewModel @Inject constructor(
     }
 
     fun handleBackupSlots(label: String) {
-        val slots = _uiState.value.camera.slots
-        if (slots.isEmpty()) return
+        val state = _uiState.value
+        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
+
+        if (selected == null || !state.camera.connected) {
+            _uiState.update {
+                it.copy(camera = it.camera.copy(scanError = "Connect a camera before backing up slots."))
+            }
+            return
+        }
+
+        if (!usbManager.hasPermission(selected.device)) {
+            _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
+            return
+        }
+
         val savedAt = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
-        val meta = SlotBackupMeta(label.trim().ifBlank { "C1–C7 · $savedAt" }, savedAt)
-        viewModelScope.launch(Dispatchers.IO) {
-            localStore.saveSlotBackup(slots)
-            localStore.saveSlotBackupMeta(meta.label, meta.savedAt)
-            _uiState.update { it.copy(camera = it.camera.copy(hasSlotBackup = true, slotBackupMeta = meta, slotBackupSlots = slots)) }
+        val meta = SlotBackupMeta(
+            label = label.trim().ifBlank { "C1–C7 · $savedAt" },
+            savedAt = savedAt,
+            id = "slot-backup-${UUID.randomUUID()}",
+        )
+        viewModelScope.launch {
+            val startedAt = System.currentTimeMillis()
+            _uiState.update {
+                it.copy(
+                    camera = it.camera.copy(
+                        backingUpSlots = true,
+                        backingUpSlotIndex = -1,
+                        scanError = null,
+                    )
+                )
+            }
+
+            val readResult = heartbeat.usbMutex.withLock {
+                val conn = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val c = connectionFactory.open(selected.device) ?: return@runCatching null
+                        if (!c.openSession()) { c.close(); return@runCatching null }
+                        c
+                    }.getOrNull()
+                }
+
+                if (conn == null) {
+                    Result.failure(IllegalStateException("Could not open camera for backup."))
+                } else {
+                    conn.use {
+                        val readSlots = mutableListOf<RecipeUiModel>()
+                        val failedSlots = mutableListOf<String>()
+                        for ((idx, slot) in CameraSlot.entries.withIndex()) {
+                            _uiState.update { current ->
+                                current.copy(camera = current.camera.copy(backingUpSlotIndex = idx))
+                            }
+                            val preset = withContext(Dispatchers.IO) {
+                                runCatching { FujiRecipeCamera(conn).readPreset(slot) }.getOrNull()
+                            }
+                            if (preset != null) {
+                                readSlots += preset.toUiModel()
+                            } else {
+                                failedSlots += slot.label
+                            }
+                        }
+                        withContext(Dispatchers.IO) { runCatching { conn.closeSession() } }
+
+                        if (failedSlots.isEmpty()) {
+                            Result.success(readSlots.toList())
+                        } else {
+                            Result.failure(
+                                IllegalStateException(
+                                    "Could not back up ${failedSlots.joinToString(", ")}. Reconnect and try again.",
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+
+            val result = readResult.mapCatching { slots ->
+                withContext(Dispatchers.IO) {
+                    localStore.saveSlotBackupSet(meta, slots)
+                    slots to localStore.loadSlotBackupSets()
+                }
+            }
+            val remainingAnimationMs = 900L - (System.currentTimeMillis() - startedAt)
+            if (remainingAnimationMs > 0L) delay(remainingAnimationMs)
+
+            result
+                .onSuccess { (slots, sets) ->
+                    _uiState.update {
+                        it.copy(
+                            camera = it.camera.copy(
+                                backingUpSlots = false,
+                                backingUpSlotIndex = -1,
+                                hasSlotBackup = sets.isNotEmpty(),
+                                slotBackupMeta = meta,
+                                slotBackupSlots = slots,
+                                slotBackupSets = sets,
+                                slots = slots,
+                            )
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            camera = it.camera.copy(
+                                backingUpSlots = false,
+                                backingUpSlotIndex = -1,
+                                scanError = error.message ?: "Could not save backup set.",
+                            )
+                        )
+                    }
+                }
         }
     }
 
     fun handleDeleteSlotBackup() {
+        val selectedId = _uiState.value.camera.slotBackupMeta?.id ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            localStore.deleteSlotBackup()
-            _uiState.update { it.copy(camera = it.camera.copy(hasSlotBackup = false, slotBackupMeta = null, slotBackupSlots = null)) }
+            localStore.deleteSlotBackup(selectedId)
+            val sets = localStore.loadSlotBackupSets()
+            val next = sets.firstOrNull()
+            _uiState.update {
+                it.copy(
+                    camera = it.camera.copy(
+                        hasSlotBackup = sets.isNotEmpty(),
+                        slotBackupMeta = next?.meta,
+                        slotBackupSlots = next?.slots,
+                        slotBackupSets = sets,
+                    )
+                )
+            }
         }
     }
 
     fun handleRenameSlotBackup(newLabel: String) {
         val meta = _uiState.value.camera.slotBackupMeta ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            localStore.saveSlotBackupMeta(newLabel, meta.savedAt)
-            _uiState.update { state -> state.copy(camera = state.camera.copy(slotBackupMeta = meta.copy(label = newLabel))) }
+            localStore.renameSlotBackup(meta.id, newLabel)
+            val sets = localStore.loadSlotBackupSets()
+            val selected = sets.firstOrNull { it.meta.id == meta.id }
+            _uiState.update { state ->
+                state.copy(
+                    camera = state.camera.copy(
+                        slotBackupMeta = selected?.meta,
+                        slotBackupSlots = selected?.slots,
+                        slotBackupSets = sets,
+                    )
+                )
+            }
+        }
+    }
+
+    fun handleSelectSlotBackup(id: String) {
+        val selected = _uiState.value.camera.slotBackupSets.firstOrNull { it.meta.id == id } ?: return
+        _uiState.update { state ->
+            state.copy(camera = state.camera.copy(slotBackupMeta = selected.meta, slotBackupSlots = selected.slots))
         }
     }
 
     fun handleRestoreSlots() {
         viewModelScope.launch {
-            val backup = withContext(Dispatchers.IO) { localStore.loadSlotBackup() }
+            val backup = _uiState.value.camera.slotBackupSlots
             if (backup.isNullOrEmpty()) return@launch
 
             val state = _uiState.value
@@ -1374,11 +1636,8 @@ class MainViewModel @Inject constructor(
     private fun loadPersistedState() {
         libraryHolder.load()
         viewModelScope.launch {
-            val hasBackup = withContext(Dispatchers.IO) { localStore.hasSlotBackup() }
-            val meta = withContext(Dispatchers.IO) {
-                localStore.loadSlotBackupMeta()?.let { SlotBackupMeta(it.first, it.second) }
-            }
-            val backupSlots = withContext(Dispatchers.IO) { if (hasBackup) localStore.loadSlotBackup() else null }
+            val backupSets = withContext(Dispatchers.IO) { localStore.loadSlotBackupSets() }
+            val selectedBackup = backupSets.firstOrNull()
             val cameraLabels = withContext(Dispatchers.IO) { localStore.loadCameraLabels() }
             val cameraModels = withContext(Dispatchers.IO) { localStore.loadCameraModels() }
             val cameraFirmwares = withContext(Dispatchers.IO) { localStore.loadCameraFirmwares() }
@@ -1386,9 +1645,10 @@ class MainViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     camera = it.camera.copy(
-                        hasSlotBackup = hasBackup,
-                        slotBackupMeta = meta,
-                        slotBackupSlots = backupSlots,
+                        hasSlotBackup = backupSets.isNotEmpty(),
+                        slotBackupMeta = selectedBackup?.meta,
+                        slotBackupSlots = selectedBackup?.slots,
+                        slotBackupSets = backupSets,
                         cameraLabels = cameraLabels,
                         cameraModels = cameraModels,
                         cameraFirmwares = cameraFirmwares,

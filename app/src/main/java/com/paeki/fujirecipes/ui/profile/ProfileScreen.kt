@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.paeki.fujirecipes.R
+import com.paeki.fujirecipes.ui.BackupUiState
 import com.paeki.fujirecipes.ui.UpdateUiState
 import com.paeki.fujirecipes.ui.camera.CameraImageTuning
 import com.paeki.fujirecipes.ui.camera.cameraImageTuning
@@ -124,16 +125,23 @@ fun ProfileScreen(
     update: UpdateUiState = UpdateUiState(),
     onCheckForUpdates: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
+    backup: BackupUiState = BackupUiState(),
+    onExportBackup: () -> Unit = {},
+    onImportBackupMerge: () -> Unit = {},
+    onImportBackupReplace: () -> Unit = {},
+    onDismissBackupMessage: () -> Unit = {},
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var myCamerasOpen by remember { mutableStateOf(false) }
+    var backupOpen by remember { mutableStateOf(false) }
     var devToolsOpen by remember { mutableStateOf(false) }
 
     overlayStackOf(
         OverlayLayer(settingsOpen) { settingsOpen = false },
         OverlayLayer(aboutOpen) { aboutOpen = false },
         OverlayLayer(myCamerasOpen) { myCamerasOpen = false },
+        OverlayLayer(backupOpen) { backupOpen = false },
         OverlayLayer(devToolsOpen) { devToolsOpen = false },
     ).OverlayBackHandler()
 
@@ -180,6 +188,8 @@ fun ProfileScreen(
                     ProfileNavRow(label = "My Cameras", badge = cameraLabels.size.takeIf { it > 0 }?.toString(), onClick = { myCamerasOpen = true }, inCard = true)
                     ProfileDivider()
                     ProfileNavRow(label = "Settings", onClick = { settingsOpen = true }, inCard = true)
+                    ProfileDivider()
+                    ProfileNavRow(label = "Backup & restore", onClick = { backupOpen = true }, inCard = true)
                     ProfileDivider()
                     ProfileNavRow(label = "About", onClick = { aboutOpen = true }, inCard = true)
                 }
@@ -242,6 +252,23 @@ fun ProfileScreen(
         }
 
         AnimatedVisibility(
+            visible = backupOpen,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                    slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+            exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                   slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+        ) {
+            BackupRestoreScreen(
+                backup = backup,
+                onExportBackup = onExportBackup,
+                onImportBackupMerge = onImportBackupMerge,
+                onImportBackupReplace = onImportBackupReplace,
+                onDismissBackupMessage = onDismissBackupMessage,
+                onBack = { backupOpen = false },
+            )
+        }
+
+        AnimatedVisibility(
             visible = aboutOpen,
             enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
                     slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
@@ -279,6 +306,164 @@ fun ProfileScreen(
                 onSetPropertyWriteDelay = onSetPropertyWriteDelay,
             )
         }
+    }
+}
+
+@Composable
+private fun BackupRestoreScreen(
+    backup: BackupUiState,
+    onExportBackup: () -> Unit,
+    onImportBackupMerge: () -> Unit,
+    onImportBackupReplace: () -> Unit,
+    onDismissBackupMessage: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Bg)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "‹",
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                color = Gold,
+                modifier = Modifier
+                    .clickable(onClick = onBack)
+                    .padding(end = 12.dp, top = 2.dp, bottom = 2.dp),
+            )
+            Text(
+                text = "BACKUP & RESTORE",
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp,
+                letterSpacing = 0.4.sp,
+                color = TextPrimary,
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+        ) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "DATA",
+                fontFamily = MonoFamily,
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
+                color = TextDim,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(PanelLow)
+                    .border(1.dp, Border, RoundedCornerShape(14.dp)),
+            ) {
+                BackupActionRow(
+                    label = if (backup.exporting) "Exporting..." else "Export backup",
+                    description = "Save app settings, cameras, groups, and film simulation recipes to one JSON file.",
+                    enabled = !backup.exporting && !backup.importing,
+                    onClick = onExportBackup,
+                )
+                ProfileDivider()
+                BackupActionRow(
+                    label = if (backup.importing) "Importing..." else "Merge backup",
+                    description = "Add cameras, groups, and film simulation recipes from a backup. Settings are updated.",
+                    enabled = !backup.exporting && !backup.importing,
+                    onClick = onImportBackupMerge,
+                )
+                ProfileDivider()
+                BackupActionRow(
+                    label = if (backup.importing) "Importing..." else "Replace all",
+                    description = "Replace current settings, cameras, groups, and film simulation recipes from a backup file.",
+                    enabled = !backup.exporting && !backup.importing,
+                    destructive = true,
+                    onClick = onImportBackupReplace,
+                )
+            }
+
+            val status = backup.error ?: backup.message
+            if (status != null) {
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(PanelLow)
+                        .border(1.dp, if (backup.error != null) Gold.copy(alpha = 0.5f) else Border, RoundedCornerShape(14.dp))
+                        .clickable(onClick = onDismissBackupMessage)
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        text = status,
+                        fontFamily = SansFamily,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = if (backup.error != null) Gold else TextMuted,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(40.dp))
+        }
+    }
+}
+
+@Composable
+private fun BackupActionRow(
+    label: String,
+    description: String,
+    enabled: Boolean,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontFamily = SansFamily,
+                fontSize = 14.5.sp,
+                color = when {
+                    !enabled -> TextDim
+                    destructive -> Color(0xFFE05A4F)
+                    else -> TextPrimary
+                },
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = description,
+                fontFamily = SansFamily,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                color = TextDim,
+            )
+        }
+        Text(
+            text = "›",
+            fontFamily = MonoFamily,
+            fontSize = 14.sp,
+            color = if (enabled) TextMuted else TextDim,
+        )
     }
 }
 

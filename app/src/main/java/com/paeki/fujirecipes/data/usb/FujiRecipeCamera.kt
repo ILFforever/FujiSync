@@ -27,7 +27,7 @@ class FujiRecipeCamera(
     private val propertyWriteDelayMs: Long = 0L,
 ) {
     suspend fun readPreset(slot: CameraSlot): RecipePreset {
-        selectSlot(slot)
+        check(selectSlot(slot)) { "Failed to select slot ${slot.label}" }
         delay(SLOT_SWITCH_DELAY_MS)
 
         val name = readPresetName().ifBlank { slot.label }

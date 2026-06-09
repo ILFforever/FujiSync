@@ -4,11 +4,14 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import com.paeki.fujirecipes.ui.model.AppSettings
 import com.paeki.fujirecipes.ui.model.LibraryGroupStyle
 import com.paeki.fujirecipes.ui.model.LibraryGroupUiModel
 import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
+import com.paeki.fujirecipes.ui.model.SlotBackupMeta
+import com.paeki.fujirecipes.ui.model.SlotBackupSet
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -49,13 +52,22 @@ class LocalStore(context: Context) {
                     if (f.exists()) stylesFromJson(JSONObject(f.readText())) else emptyMap()
                 },
             )
-        }.getOrNull()
+        }.onFailure { Log.e("LocalStore", "Library parse failed — file may be corrupt", it) }
+         .getOrNull()
     }
 
     // ── Slot backup ───────────────────────────────────────────────────
 
     suspend fun saveSlotBackup(slots: List<RecipeUiModel>) = mutex.withLock {
         write("slot_backup.json", slotsToJson(slots).toString())
+    }
+
+    suspend fun saveSlotBackupSet(meta: SlotBackupMeta, slots: List<RecipeUiModel>) = mutex.withLock {
+        val id = meta.id.ifBlank { "slot-backup-${UUID.randomUUID()}" }
+        val normalizedMeta = meta.copy(id = id)
+        val sets = loadSlotBackupSetsLocked().filterNot { it.meta.id == id } +
+            SlotBackupSet(normalizedMeta, slots)
+        write("slot_backups.json", slotBackupSetsToJson(sets).toString())
     }
 
     suspend fun loadSlotBackup(): List<RecipeUiModel>? = mutex.withLock {
@@ -65,7 +77,7 @@ class LocalStore(context: Context) {
     }
 
     suspend fun hasSlotBackup(): Boolean = mutex.withLock {
-        File(dir, "slot_backup.json").exists()
+        loadSlotBackupSetsLocked().isNotEmpty()
     }
 
     suspend fun saveSlotBackupMeta(label: String, savedAt: String) = mutex.withLock {
@@ -78,6 +90,22 @@ class LocalStore(context: Context) {
     suspend fun deleteSlotBackup() = mutex.withLock {
         File(dir, "slot_backup.json").delete()
         File(dir, "slot_backup_meta.json").delete()
+        File(dir, "slot_backups.json").delete()
+    }
+
+    suspend fun deleteSlotBackup(id: String) = mutex.withLock {
+        val remaining = loadSlotBackupSetsLocked().filterNot { it.meta.id == id }
+        write("slot_backups.json", slotBackupSetsToJson(remaining).toString())
+        if (remaining.isEmpty()) {
+            File(dir, "slot_backups.json").delete()
+        }
+    }
+
+    suspend fun renameSlotBackup(id: String, label: String) = mutex.withLock {
+        val updated = loadSlotBackupSetsLocked().map { set ->
+            if (set.meta.id == id) set.copy(meta = set.meta.copy(label = label)) else set
+        }
+        write("slot_backups.json", slotBackupSetsToJson(updated).toString())
     }
 
     suspend fun loadSlotBackupMeta(): Pair<String, String>? = mutex.withLock {
@@ -159,10 +187,58 @@ class LocalStore(context: Context) {
         }.getOrElse { AppSettings() }
     }
 
+    suspend fun loadSlotBackupSets(): List<SlotBackupSet> = mutex.withLock {
+        loadSlotBackupSetsLocked()
+    }
+
+    suspend fun backupJson(
+        settings: AppSettings,
+        cameraLabels: Map<String, String>,
+        cameraModels: Map<String, String>,
+        cameraFirmwares: Map<String, String>,
+        libraryData: LibraryData,
+    ): String = mutex.withLock {
+        JSONObject().apply {
+            put("format", "fujisync-backup")
+            put("version", 1)
+            put("settings", settingsToJson(settings))
+            put("cameras", JSONObject().apply {
+                put("labels", stringMapToJson(cameraLabels))
+                put("models", stringMapToJson(cameraModels))
+                put("firmwares", stringMapToJson(cameraFirmwares))
+            })
+            put("library", JSONObject().apply {
+                put("recipes", recipesToJson(libraryData.recipes))
+                put("groups", groupsToJson(libraryData.groups))
+                put("styles", stylesToJson(libraryData.styles))
+            })
+        }.toString(2)
+    }
+
+    suspend fun parseBackupJson(content: String): BackupData = mutex.withLock {
+        val root = JSONObject(content)
+        if (root.optString("format") != "fujisync-backup") {
+            error("This is not a FujiSync backup file.")
+        }
+        val cameras = root.optJSONObject("cameras") ?: JSONObject()
+        val library = root.optJSONObject("library") ?: JSONObject()
+        BackupData(
+            settings = root.optJSONObject("settings")?.let(::settingsFromJson) ?: AppSettings(),
+            cameraLabels = cameras.optJSONObject("labels")?.toStringMap() ?: emptyMap(),
+            cameraModels = cameras.optJSONObject("models")?.toStringMap() ?: emptyMap(),
+            cameraFirmwares = cameras.optJSONObject("firmwares")?.toStringMap() ?: emptyMap(),
+            library = LibraryData(
+                recipes = library.optJSONArray("recipes")?.let(::recipesFromJson) ?: emptyList(),
+                groups = library.optJSONArray("groups")?.let(::groupsFromJson) ?: emptyList(),
+                styles = library.optJSONObject("styles")?.let(::stylesFromJson) ?: emptyMap(),
+            ),
+        )
+    }
+
     // ── Camera labels ─────────────────────────────────────────────────
 
     suspend fun saveCameraLabels(labels: Map<String, String>) = mutex.withLock {
-        write("camera_labels.json", JSONObject(labels as Map<*, *>).toString())
+        write("camera_labels.json", stringMapToJson(labels).toString())
     }
 
     suspend fun loadCameraLabels(): Map<String, String> = mutex.withLock {
@@ -175,7 +251,7 @@ class LocalStore(context: Context) {
     }
 
     suspend fun saveCameraModels(models: Map<String, String>) = mutex.withLock {
-        write("camera_models.json", JSONObject(models as Map<*, *>).toString())
+        write("camera_models.json", stringMapToJson(models).toString())
     }
 
     suspend fun loadCameraModels(): Map<String, String> = mutex.withLock {
@@ -188,7 +264,7 @@ class LocalStore(context: Context) {
     }
 
     suspend fun saveCameraFirmwares(firmwares: Map<String, String>) = mutex.withLock {
-        write("camera_firmwares.json", JSONObject(firmwares as Map<*, *>).toString())
+        write("camera_firmwares.json", stringMapToJson(firmwares).toString())
     }
 
     suspend fun loadCameraFirmwares(): Map<String, String> = mutex.withLock {
@@ -216,6 +292,46 @@ class LocalStore(context: Context) {
             throw e
         }
     }
+
+    private fun loadSlotBackupSetsLocked(): List<SlotBackupSet> {
+        val multiFile = File(dir, "slot_backups.json")
+        if (multiFile.exists()) {
+            return runCatching {
+                slotBackupSetsFromJson(JSONArray(multiFile.readText()))
+            }.getOrDefault(emptyList())
+        }
+
+        val legacySlots = File(dir, "slot_backup.json")
+        if (!legacySlots.exists()) return emptyList()
+        return runCatching {
+            val metaFile = File(dir, "slot_backup_meta.json")
+            val meta = if (metaFile.exists()) {
+                val o = JSONObject(metaFile.readText())
+                SlotBackupMeta(
+                    label = o.optString("label").ifBlank { "C1-C7 Backup" },
+                    savedAt = o.optString("savedAt").ifBlank { "" },
+                    id = "slot-backup-${UUID.randomUUID()}",
+                )
+            } else {
+                SlotBackupMeta("C1-C7 Backup", "", "slot-backup-${UUID.randomUUID()}")
+            }
+            listOf(SlotBackupSet(meta, slotsFromJson(JSONArray(legacySlots.readText()))))
+        }.getOrDefault(emptyList())
+    }
+
+    private fun settingsToJson(settings: AppSettings): JSONObject = JSONObject().apply {
+        put("showLibraryImages", settings.showLibraryImages)
+        put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
+    }
+
+    private fun settingsFromJson(o: JSONObject): AppSettings =
+        AppSettings(
+            showLibraryImages = o.optBoolean("showLibraryImages", true),
+            propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
+        )
+
+    private fun stringMapToJson(map: Map<String, String>): JSONObject =
+        JSONObject().also { obj -> map.forEach { (key, value) -> obj.put(key, value) } }
 
     // Library recipes
 
@@ -334,6 +450,33 @@ class LocalStore(context: Context) {
     private fun slotsFromJson(arr: JSONArray): List<RecipeUiModel> =
         (0 until arr.length()).map { slotFromJson(arr.getJSONObject(it)) }
 
+    private fun slotBackupSetsToJson(sets: List<SlotBackupSet>): JSONArray =
+        JSONArray().also { arr ->
+            sets.forEach { set ->
+                arr.put(JSONObject().apply {
+                    put("id", set.meta.id)
+                    put("label", set.meta.label)
+                    put("savedAt", set.meta.savedAt)
+                    put("slots", slotsToJson(set.slots))
+                })
+            }
+        }
+
+    private fun slotBackupSetsFromJson(arr: JSONArray): List<SlotBackupSet> =
+        (0 until arr.length()).mapNotNull { index ->
+            runCatching {
+                val o = arr.getJSONObject(index)
+                SlotBackupSet(
+                    meta = SlotBackupMeta(
+                        label = o.getString("label"),
+                        savedAt = o.optString("savedAt"),
+                        id = o.optString("id").ifBlank { "slot-backup-${UUID.randomUUID()}" },
+                    ),
+                    slots = slotsFromJson(o.getJSONArray("slots")),
+                )
+            }.getOrNull()
+        }
+
     private fun slotFromJson(o: JSONObject) = RecipeUiModel(
         libraryId = o.optString("libraryId").ifEmpty { null },
         slot = o.getString("slot"),
@@ -372,5 +515,13 @@ class LocalStore(context: Context) {
         val recipes: List<LibraryRecipeUiModel>,
         val groups: List<LibraryGroupUiModel>,
         val styles: Map<String, LibraryGroupStyle>,
+    )
+
+    data class BackupData(
+        val settings: AppSettings,
+        val cameraLabels: Map<String, String>,
+        val cameraModels: Map<String, String>,
+        val cameraFirmwares: Map<String, String>,
+        val library: LibraryData,
     )
 }

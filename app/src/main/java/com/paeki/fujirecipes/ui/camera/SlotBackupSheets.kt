@@ -3,6 +3,8 @@ package com.paeki.fujirecipes.ui.camera
 import android.animation.ValueAnimator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -10,8 +12,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -63,6 +67,7 @@ import com.paeki.fujirecipes.ui.model.DuplicateMatchKind
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.SaveAllReport
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
+import com.paeki.fujirecipes.ui.model.SlotBackupSet
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
 import com.paeki.fujirecipes.ui.theme.GoldDim
@@ -84,6 +89,8 @@ private val BackupControlBg = Color(0xFF141210)
 
 @Composable
 fun BackupSheet(
+    saving: Boolean = false,
+    savingSlotIndex: Int = -1,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
@@ -94,8 +101,11 @@ fun BackupSheet(
         "C1–C7 · " + LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
     }
     var label by remember { mutableStateOf(defaultLabel) }
+    var submitted by remember { mutableStateOf(false) }
+    var observedSaving by remember { mutableStateOf(false) }
 
     fun dismissWithMotion() {
+        if (saving) return
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
@@ -104,8 +114,13 @@ fun BackupSheet(
 
     fun save() {
         val trimmed = label.trim().ifBlank { defaultLabel }
+        submitted = true
         onConfirm(trimmed)
-        dismissWithMotion()
+    }
+
+    LaunchedEffect(saving, submitted) {
+        if (saving) observedSaving = true
+        if (submitted && observedSaving && !saving) dismissWithMotion()
     }
 
     LaunchedEffect(motionEnabled) { visible = true }
@@ -120,6 +135,7 @@ fun BackupSheet(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.72f * overlayAlpha))
+            .imePadding()
             .clickable(onClick = ::dismissWithMotion),
         contentAlignment = Alignment.BottomCenter,
     ) {
@@ -143,8 +159,7 @@ fun BackupSheet(
                     .background(SheetBg)
                     .border(1.dp, SheetBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .clickable(onClick = {})
-                    .navigationBarsPadding()
-                    .imePadding(),
+                    .navigationBarsPadding(),
             ) {
                 Box(
                     modifier = Modifier
@@ -193,7 +208,7 @@ fun BackupSheet(
                             color = Gold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(999.dp))
-                                .clickable(onClick = ::dismissWithMotion)
+                                .clickable(enabled = !saving, onClick = ::dismissWithMotion)
                                 .padding(horizontal = 4.dp, vertical = 6.dp),
                         )
                     }
@@ -210,6 +225,7 @@ fun BackupSheet(
                     BasicTextField(
                         value = label,
                         onValueChange = { label = it },
+                        enabled = !saving,
                         singleLine = true,
                         textStyle = TextStyle(
                             fontFamily = SansFamily,
@@ -226,14 +242,124 @@ fun BackupSheet(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Saves all 7 custom slots to this device.",
+                        text = "Reads C1–C7 from the camera, then saves a global backup set to this device.",
                         fontFamily = SansFamily,
                         fontSize = 12.sp,
                         lineHeight = 17.sp,
                         color = TextDim,
                     )
+                    AnimatedVisibility(visible = saving) {
+                        Column {
+                            Spacer(Modifier.height(16.dp))
+                            BackupReadProgress(currentSlotIndex = savingSlotIndex)
+                        }
+                    }
                     Spacer(Modifier.height(22.dp))
-                    PrimaryCTA(label = "Save Set", onClick = ::save)
+                    PrimaryCTA(
+                        label = if (saving) "Reading Camera" else "Save Set",
+                        busy = saving,
+                        enabled = !saving,
+                        onClick = ::save,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupReadProgress(currentSlotIndex: Int) {
+    val transition = rememberInfiniteTransition(label = "backup-read-pulse")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(720, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "backup-read-pulse-alpha",
+    )
+    val safeIndex = currentSlotIndex.coerceIn(-1, 6)
+    val statusText = if (safeIndex >= 0) {
+        "Reading C${safeIndex + 1} from camera"
+    } else {
+        "Opening camera session"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(PanelHigh.copy(alpha = 0.72f))
+            .border(1.dp, GoldDim.copy(alpha = 0.35f + (0.18f * pulse)), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "VALIDATING CAMERA",
+                fontFamily = MonoFamily,
+                fontSize = 10.sp,
+                letterSpacing = 1.4.sp,
+                color = Gold,
+            )
+            Text(
+                text = statusText.uppercase(Locale.US),
+                fontFamily = SansFamily,
+                fontSize = 11.sp,
+                color = TextMuted,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(7) { index ->
+                val active = safeIndex == index || (safeIndex < 0 && index == 0)
+                val complete = safeIndex > index
+                val slotAlpha = when {
+                    active -> 0.18f + (0.20f * pulse)
+                    complete -> 0.28f
+                    else -> 0.08f
+                }
+                val scale by animateFloatAsState(
+                    targetValue = if (active) 1.06f else 1f,
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    label = "backup-slot-scale-$index",
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Gold.copy(alpha = slotAlpha))
+                        .border(
+                            1.dp,
+                            when {
+                                active -> Gold.copy(alpha = 0.82f)
+                                complete -> GoldDim.copy(alpha = 0.62f)
+                                else -> Border.copy(alpha = 0.65f)
+                            },
+                            RoundedCornerShape(8.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "C${index + 1}",
+                        fontFamily = MonoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = if (complete || active) TextPrimary else TextMuted,
+                    )
                 }
             }
         }
@@ -246,10 +372,12 @@ private enum class RestorePhase { Idle, Working, Validating }
 fun RestoreSheet(
     meta: SlotBackupMeta?,
     backupSlots: List<RecipeUiModel>? = null,
+    backupSets: List<SlotBackupSet> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     onDelete: () -> Unit = {},
     onRename: (String) -> Unit = {},
+    onSelectBackup: (String) -> Unit = {},
     restoreInProgress: Boolean = false,
     isRestoringValidation: Boolean = false,
     readingSlots: Boolean = false,
@@ -263,8 +391,16 @@ fun RestoreSheet(
     var confirmingDelete by remember { mutableStateOf(false) }
     var slotsExpanded by remember { mutableStateOf(false) }
     var phase by remember { mutableStateOf(RestorePhase.Idle) }
-    val chevronAngle by animateFloatAsState(if (slotsExpanded) 90f else 0f, label = "chevron")
+    val chevronAngle by animateFloatAsState(
+        targetValue = if (slotsExpanded) 90f else 0f,
+        animationSpec = tween(if (motionEnabled) 220 else 0, easing = FastOutSlowInEasing),
+        label = "chevron",
+    )
     val showValidation = isRestoringValidation || phase == RestorePhase.Validating
+    val selectedId = meta?.id
+    val visibleBackupSets = backupSets.ifEmpty {
+        if (meta != null && backupSlots != null) listOf(SlotBackupSet(meta, backupSlots)) else emptyList()
+    }
 
     fun dismissWithMotion() {
         if (showValidation && readingSlots) return
@@ -402,155 +538,220 @@ fun RestoreSheet(
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(BackupControlBg)
-                            .border(
-                                1.dp,
-                                if (meta != null && !confirmingDelete) Gold else SheetBorder,
-                                RoundedCornerShape(12.dp),
-                            ),
-                    ) {
-                        if (meta != null) {
-                            // ── Main row ──────────────────────────────────────
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = meta.label,
-                                        fontFamily = SansFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        color = TextPrimary,
-                                    )
-                                    Spacer(Modifier.height(3.dp))
-                                    Text(
-                                        text = meta.savedAt.uppercase(),
-                                        fontFamily = MonoFamily,
-                                        fontSize = 10.sp,
-                                        letterSpacing = 1.4.sp,
-                                        color = TextDim,
-                                    )
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    if (visibleBackupSets.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            visibleBackupSets.forEach { set ->
+                                val selected = set.meta.id == selectedId
+                                val cardBorder by animateColorAsState(
+                                    targetValue = if (selected && !confirmingDelete) Gold else SheetBorder,
+                                    animationSpec = tween(if (motionEnabled) 220 else 0, easing = FastOutSlowInEasing),
+                                    label = "restore-set-border-${set.meta.id}",
+                                )
+                                val cardBg by animateColorAsState(
+                                    targetValue = if (selected) BackupControlBg.copy(alpha = 0.96f) else BackupControlBg,
+                                    animationSpec = tween(if (motionEnabled) 220 else 0, easing = FastOutSlowInEasing),
+                                    label = "restore-set-bg-${set.meta.id}",
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateContentSize(
+                                            animationSpec = tween(if (motionEnabled) 260 else 0, easing = FastOutSlowInEasing),
+                                        )
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(cardBg)
+                                        .border(
+                                            1.dp,
+                                            cardBorder,
+                                            RoundedCornerShape(12.dp),
+                                        ),
                                 ) {
-                                    IconButton(IconEdit, tint = TextMuted, onClick = { renaming = true; confirmingDelete = false })
-                                    if (backupSlots != null) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable { slotsExpanded = !slotsExpanded },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                IconChevronRight,
-                                                contentDescription = "View slots",
-                                                tint = TextMuted,
-                                                modifier = Modifier
-                                                    .size(16.dp)
-                                                    .graphicsLayer { rotationZ = chevronAngle },
-                                            )
-                                        }
-                                    }
-                                    IconButton(IconTrash, tint = Color(0xFFD94040), onClick = { confirmingDelete = true })
-                                }
-                            }
-
-                            // ── Slot preview (expandable) ─────────────────────
-                            if (slotsExpanded && backupSlots != null) {
-                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SheetBorder))
-                                backupSlots.forEach { slot ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 9.dp),
+                                            .background(if (selected) Gold.copy(alpha = 0.08f) else Color.Transparent)
+                                            .clickable {
+                                                onSelectBackup(set.meta.id)
+                                                confirmingDelete = false
+                                                renaming = false
+                                                slotsExpanded = false
+                                            }
+                                            .padding(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 14.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Text(
-                                            text = slot.slot,
-                                            fontFamily = MonoFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 10.5.sp,
-                                            letterSpacing = 1.sp,
-                                            color = Gold,
-                                            modifier = Modifier.width(28.dp),
-                                        )
-                                        Text(
-                                            text = slot.name,
-                                            fontFamily = SansFamily,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 13.sp,
-                                            color = TextPrimary,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        Text(
-                                            text = slot.sim.trimEnd('.').uppercase(),
-                                            fontFamily = MonoFamily,
-                                            fontSize = 10.sp,
-                                            letterSpacing = 1.sp,
-                                            color = TextMuted,
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = set.meta.label,
+                                                fontFamily = SansFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = TextPrimary,
+                                            )
+                                            Spacer(Modifier.height(3.dp))
+                                            Text(
+                                                text = set.meta.savedAt.uppercase(),
+                                                fontFamily = MonoFamily,
+                                                fontSize = 10.sp,
+                                                letterSpacing = 1.4.sp,
+                                                color = if (selected) Gold else TextDim,
+                                            )
+                                        }
+                                        if (selected) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                            ) {
+                                                IconButton(IconEdit, tint = TextMuted, onClick = { renaming = true; confirmingDelete = false })
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable { slotsExpanded = !slotsExpanded },
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Icon(
+                                                        IconChevronRight,
+                                                        contentDescription = "View slots",
+                                                        tint = TextMuted,
+                                                        modifier = Modifier
+                                                            .size(16.dp)
+                                                            .graphicsLayer { rotationZ = chevronAngle },
+                                                    )
+                                                }
+                                                IconButton(IconTrash, tint = Color(0xFFD94040), onClick = { confirmingDelete = true })
+                                            }
+                                        }
                                     }
-                                }
-                            }
 
-                            // ── Delete confirmation ───────────────────────────
-                            if (confirmingDelete) {
-                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SheetBorder))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = "Delete this set?",
-                                        fontFamily = SansFamily,
-                                        fontSize = 13.sp,
-                                        color = TextMuted,
-                                    )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = "CANCEL",
-                                            fontFamily = SansFamily,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 11.sp,
-                                            letterSpacing = 1.2.sp,
-                                            color = TextMuted,
+                                    AnimatedVisibility(
+                                        visible = selected && slotsExpanded,
+                                        enter = fadeIn(tween(if (motionEnabled) 140 else 0, easing = FastOutSlowInEasing)) +
+                                            expandVertically(
+                                                animationSpec = tween(if (motionEnabled) 260 else 0, easing = FastOutSlowInEasing),
+                                                expandFrom = Alignment.Top,
+                                            ) +
+                                            slideInVertically(
+                                                animationSpec = tween(if (motionEnabled) 220 else 0, easing = FastOutSlowInEasing),
+                                                initialOffsetY = { -it / 10 },
+                                            ),
+                                        exit = fadeOut(tween(if (motionEnabled) 100 else 0, easing = FastOutSlowInEasing)) +
+                                            shrinkVertically(
+                                                animationSpec = tween(if (motionEnabled) 180 else 0, easing = FastOutSlowInEasing),
+                                                shrinkTowards = Alignment.Top,
+                                            ) +
+                                            slideOutVertically(
+                                                animationSpec = tween(if (motionEnabled) 150 else 0, easing = FastOutSlowInEasing),
+                                                targetOffsetY = { -it / 12 },
+                                            ),
+                                    ) {
+                                        Column {
+                                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SheetBorder))
+                                            set.slots.forEachIndexed { index, slot ->
+                                                val rowAlpha by animateFloatAsState(
+                                                    targetValue = if (selected && slotsExpanded) 1f else 0.74f,
+                                                    animationSpec = tween(
+                                                        durationMillis = if (motionEnabled) 180 else 0,
+                                                        delayMillis = if (motionEnabled) index * 18 else 0,
+                                                        easing = FastOutSlowInEasing,
+                                                    ),
+                                                    label = "restore-slot-row-${set.meta.id}-$index",
+                                                )
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .graphicsLayer { alpha = rowAlpha }
+                                                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    Text(
+                                                        text = slot.slot,
+                                                        fontFamily = MonoFamily,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 10.5.sp,
+                                                        letterSpacing = 1.sp,
+                                                        color = Gold,
+                                                        modifier = Modifier.width(28.dp),
+                                                    )
+                                                    Text(
+                                                        text = slot.name,
+                                                        fontFamily = SansFamily,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 13.sp,
+                                                        color = TextPrimary,
+                                                        modifier = Modifier.weight(1f),
+                                                    )
+                                                    Text(
+                                                        text = slot.sim.trimEnd('.').uppercase(),
+                                                        fontFamily = MonoFamily,
+                                                        fontSize = 10.sp,
+                                                        letterSpacing = 1.sp,
+                                                        color = TextMuted,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (selected && confirmingDelete) {
+                                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SheetBorder))
+                                        Row(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(999.dp))
-                                                .clickable { confirmingDelete = false }
-                                                .padding(horizontal = 8.dp, vertical = 5.dp),
-                                        )
-                                        Text(
-                                            text = "DELETE",
-                                            fontFamily = SansFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            letterSpacing = 1.2.sp,
-                                            color = Color(0xFFD94040),
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(999.dp))
-                                                .background(Color(0xFFD94040).copy(alpha = 0.12f))
-                                                .clickable(onClick = ::confirmDelete)
-                                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                                        )
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = "Delete this set?",
+                                                fontFamily = SansFamily,
+                                                fontSize = 13.sp,
+                                                color = TextMuted,
+                                            )
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(
+                                                    text = "CANCEL",
+                                                    fontFamily = SansFamily,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 11.sp,
+                                                    letterSpacing = 1.2.sp,
+                                                    color = TextMuted,
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(999.dp))
+                                                        .clickable { confirmingDelete = false }
+                                                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                                                )
+                                                Text(
+                                                    text = "DELETE",
+                                                    fontFamily = SansFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp,
+                                                    letterSpacing = 1.2.sp,
+                                                    color = Color(0xFFD94040),
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(999.dp))
+                                                        .background(Color(0xFFD94040).copy(alpha = 0.12f))
+                                                        .clickable(onClick = ::confirmDelete)
+                                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        } else {
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(BackupControlBg)
+                                .border(1.dp, SheetBorder, RoundedCornerShape(12.dp)),
+                        ) {
                             Text(
                                 text = "No saved sets yet.",
                                 fontFamily = SansFamily,
@@ -615,6 +816,7 @@ private fun RenameSheet(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.55f * overlayAlpha))
+            .imePadding()
             .clickable(onClick = ::dismissWithMotion),
         contentAlignment = Alignment.BottomCenter,
     ) {
@@ -637,8 +839,7 @@ private fun RenameSheet(
                     .background(SheetBg)
                     .border(1.dp, SheetBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .clickable(onClick = {})
-                    .navigationBarsPadding()
-                    .imePadding(),
+                    .navigationBarsPadding(),
             ) {
                 Box(
                     modifier = Modifier

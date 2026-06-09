@@ -1,4 +1,4 @@
-package com.paeki.fujirecipes.data.remote
+﻿package com.paeki.fujirecipes.data.remote
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,7 +34,7 @@ object FxwApi {
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000
             conn.readTimeout = 15_000
-            conn.setRequestProperty("User-Agent", "FujiRecipes/1.0 Android")
+            conn.setRequestProperty("User-Agent", "FujiRecipes/${com.paeki.fujirecipes.BuildConfig.VERSION_NAME} Android")
             etag?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("If-None-Match", it) }
             lastModified?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("If-Modified-Since", it) }
             try {
@@ -139,11 +139,25 @@ object FxwApi {
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
+        .replace("&apos;", "’")
+        .replace("&#39;", "’")
+        .replace("&#x27;", "’")
         .replace("&#8217;", "’")
         .replace("&#8216;", "‘")
-        .replace("&#8220;", "“")
-        .replace("&#8221;", "”")
+        .replace("&#8220;", """)
+        .replace("&#8221;", """)
         .replace("&#8211;", "–")
         .replace("&#8212;", "—")
+        .replace("&#8230;", "…")
+        .replace("&hellip;", "…")
+        .replace("&#8226;", "•")
+        .replace("&bull;", "•")
+        .replace("&ndash;", "–")
+        .replace("&mdash;", "—")
+        .replace("&lsquo;", "‘")
+        .replace("&rsquo;", "’")
+        .replace("&ldquo;", """)
+        .replace("&rdquo;", """)
+        .replace("&#160;", " ")
         .replace("&nbsp;", " ")
 }

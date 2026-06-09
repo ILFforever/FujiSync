@@ -26,6 +26,7 @@ enum class FujiPropertyCode(
     Clarity(0xD1A2, "Clarity", signed = true);
 
     companion object {
-        fun fromCode(code: Int): FujiPropertyCode? = entries.firstOrNull { it.code == code }
+        private val byCode = entries.associateBy { it.code }
+        fun fromCode(code: Int): FujiPropertyCode? = byCode[code]
     }
 }

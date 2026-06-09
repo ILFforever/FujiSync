@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import com.paeki.fujirecipes.capture.CaptureDiag
 import com.paeki.fujirecipes.capture.OcrCaptureService
 import com.paeki.fujirecipes.ui.FujiSyncApp
+import com.paeki.fujirecipes.ui.BackupImportMode
 import com.paeki.fujirecipes.ui.MainViewModel
 import com.paeki.fujirecipes.ui.MainViewModelEvent
 import com.paeki.fujirecipes.ui.SplashScreen
@@ -65,6 +66,14 @@ class MainActivity : ComponentActivity() {
     private val qrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.handleQrImportResult(uri)
+    }
+
+    private val backupExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        viewModel.handleBackupExportDestination(uri)
+    }
+
+    private val backupImportPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.handleBackupImportResult(uri)
     }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
@@ -136,6 +145,7 @@ class MainActivity : ComponentActivity() {
                     onRestoreSlots = viewModel::handleRestoreSlots,
                     onDeleteSlotBackup = viewModel::handleDeleteSlotBackup,
                     onRenameSlotBackup = viewModel::handleRenameSlotBackup,
+                    onSelectSlotBackup = viewModel::handleSelectSlotBackup,
                     onRearrangeCameraSlots = viewModel::handleRearrangeCameraSlots,
                     onRenameCameraLabel = { serial, label -> viewModel.handleRenameCameraLabel(serial, label) },
                     onDeleteCamera = viewModel::handleDeleteCamera,
@@ -158,6 +168,10 @@ class MainActivity : ComponentActivity() {
                     onSetPropertyWriteDelay = viewModel::handleSetPropertyWriteDelay,
                     onCheckForUpdates = viewModel::handleCheckForUpdates,
                     onInstallUpdate = viewModel::handleInstallUpdate,
+                    onExportBackup = viewModel::handleLaunchBackupExport,
+                    onImportBackupMerge = { viewModel.handleLaunchBackupImport(BackupImportMode.Merge) },
+                    onImportBackupReplace = { viewModel.handleLaunchBackupImport(BackupImportMode.Replace) },
+                    onDismissBackupMessage = viewModel::handleBackupMessageDismiss,
                     )
                 } // else
             }
@@ -176,6 +190,8 @@ class MainActivity : ComponentActivity() {
                     MainViewModelEvent.LaunchQrImagePicker -> qrImagePicker.launch(arrayOf("image/*"))
                     is MainViewModelEvent.InstallApk -> openApkInstaller(event.uri)
                     MainViewModelEvent.OpenInstallPermissionSettings -> openInstallPermissionSettings()
+                    is MainViewModelEvent.LaunchBackupExport -> backupExportPicker.launch(event.fileName)
+                    MainViewModelEvent.LaunchBackupImport -> backupImportPicker.launch(arrayOf("application/json", "text/*", "*/*"))
                 }
             }
         }

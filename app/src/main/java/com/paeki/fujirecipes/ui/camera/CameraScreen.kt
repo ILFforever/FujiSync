@@ -98,6 +98,7 @@ import com.paeki.fujirecipes.ui.model.LibraryRecipeSource
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.SaveAllReport
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
+import com.paeki.fujirecipes.ui.model.SlotBackupSet
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -141,6 +142,8 @@ fun CameraConnected(
     readingSlots: Boolean = false,
     slots: List<RecipeUiModel>,
     selectedSlotIdx: Int,
+    backingUpSlots: Boolean = false,
+    backingUpSlotIndex: Int = -1,
     onSelectSlot: (Int) -> Unit,
     onOpenDetail: () -> Unit,
     onSaveToLibrary: (LibraryRecipeSource) -> Unit,
@@ -149,11 +152,13 @@ fun CameraConnected(
     hasSlotBackup: Boolean = false,
     slotBackupMeta: SlotBackupMeta? = null,
     slotBackupSlots: List<RecipeUiModel>? = null,
+    slotBackupSets: List<SlotBackupSet> = emptyList(),
     restoringSlots: Boolean = false,
     onBackupSlots: (String) -> Unit = {},
     onRestoreSlots: () -> Unit = {},
     onDeleteSlotBackup: () -> Unit = {},
     onRenameSlotBackup: (String) -> Unit = {},
+    onSelectSlotBackup: (String) -> Unit = {},
     onRearrangeSlots: (List<RecipeUiModel>) -> Unit = {},
     readingSlotIndex: Int = -1,
     isRestoringValidation: Boolean = false,
@@ -280,17 +285,24 @@ fun CameraConnected(
         } // end if (recipe != null)
 
         if (showBackupSheet) {
-            BackupSheet(onDismiss = { showBackupSheet = false }, onConfirm = { label -> onBackupSlots(label) })
+            BackupSheet(
+                saving = backingUpSlots,
+                savingSlotIndex = backingUpSlotIndex,
+                onDismiss = { showBackupSheet = false },
+                onConfirm = { label -> onBackupSlots(label) },
+            )
         }
 
         if (showRestoreSheet) {
             RestoreSheet(
                 meta = slotBackupMeta,
                 backupSlots = slotBackupSlots,
+                backupSets = slotBackupSets,
                 onDismiss = { showRestoreSheet = false },
                 onConfirm = { onRestoreSlots() },
                 onDelete = onDeleteSlotBackup,
                 onRename = onRenameSlotBackup,
+                onSelectBackup = onSelectSlotBackup,
                 restoreInProgress = restoringSlots,
                 isRestoringValidation = isRestoringValidation,
                 readingSlots = readingSlots,

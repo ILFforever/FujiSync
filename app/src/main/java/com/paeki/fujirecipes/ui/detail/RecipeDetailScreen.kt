@@ -131,6 +131,7 @@ fun RecipeDetailScreen(
     cameraName: String = "",
     cameraSlots: List<RecipeUiModel> = emptyList(),
     onWriteToSlot: ((String) -> Unit)? = null,
+    interactionsEnabled: Boolean = true,
 ) {
     var expandedImageIndex by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf(false) }
@@ -194,7 +195,17 @@ fun RecipeDetailScreen(
     ) {
         val visibleRecipe = displayedRecipe ?: return@AnimatedVisibility
 
-        BackHandler(onBack = onClose)
+        BackHandler(enabled = interactionsEnabled, onBack = onClose)
+
+        LaunchedEffect(interactionsEnabled) {
+            if (!interactionsEnabled) {
+                pendingDelete = false
+                pendingConfirmWrite = false
+                slotPickerOpen = false
+                qrRecipe = null
+                expandedImageIndex = null
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -218,7 +229,7 @@ fun RecipeDetailScreen(
                 ) {
                     Row(
                         modifier = Modifier
-                            .clickable(onClick = onClose)
+                            .clickable(enabled = interactionsEnabled, onClick = onClose)
                             .padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -235,7 +246,14 @@ fun RecipeDetailScreen(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         var moreExpanded by remember { mutableStateOf(false) }
-                        IconButton(onClick = { onToggleFavorite(visibleRecipe) }, modifier = Modifier.size(32.dp)) {
+                        LaunchedEffect(interactionsEnabled) {
+                            if (!interactionsEnabled) moreExpanded = false
+                        }
+                        IconButton(
+                            onClick = { onToggleFavorite(visibleRecipe) },
+                            enabled = interactionsEnabled,
+                            modifier = Modifier.size(32.dp),
+                        ) {
                             Icon(
                                 if (visibleRecipe.favorite) IconStarFilled else IconStar,
                                 contentDescription = if (visibleRecipe.favorite) "Remove favorite" else "Add favorite",
@@ -243,15 +261,23 @@ fun RecipeDetailScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = { onEdit(visibleRecipe) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(
+                            onClick = { onEdit(visibleRecipe) },
+                            enabled = interactionsEnabled,
+                            modifier = Modifier.size(32.dp),
+                        ) {
                             Icon(IconEdit, contentDescription = "Edit", tint = TextMuted, modifier = Modifier.size(18.dp))
                         }
                         Box {
-                            IconButton(onClick = { moreExpanded = true }, modifier = Modifier.size(32.dp)) {
+                            IconButton(
+                                onClick = { moreExpanded = true },
+                                enabled = interactionsEnabled,
+                                modifier = Modifier.size(32.dp),
+                            ) {
                                 Icon(IconMore, contentDescription = "More", tint = TextMuted, modifier = Modifier.size(20.dp))
                             }
                             DropdownMenu(
-                                expanded = moreExpanded,
+                                expanded = interactionsEnabled && moreExpanded,
                                 onDismissRequest = { moreExpanded = false },
                                 offset = DpOffset(x = 0.dp, y = 4.dp),
                                 containerColor = PanelHigh,
@@ -270,7 +296,7 @@ fun RecipeDetailScreen(
                                 ) {
                                     Row(
                                         modifier = Modifier
-                                            .clickable(onClick = onClick)
+                                            .clickable(enabled = interactionsEnabled, onClick = onClick)
                                             .padding(horizontal = 16.dp, vertical = 11.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -335,6 +361,7 @@ fun RecipeDetailScreen(
                             onAddReferenceImage = { onAddReferenceImage(visibleRecipe) },
                             onRemoveReferenceImage = { uri -> onRemoveReferenceImage(visibleRecipe, uri) },
                             onExpandImage = { index -> expandedImageIndex = index },
+                            interactionsEnabled = interactionsEnabled,
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -430,7 +457,7 @@ fun RecipeDetailScreen(
                         label = ctaLabel,
                         onClick = if (isLibraryRecipe) { { slotPickerOpen = true } } else { { pendingConfirmWrite = true } },
                         busy = writeBusy,
-                        enabled = if (isLibraryRecipe) (connected && !writeBusy) else (connected || visibleRecipe.slot.isEmpty()),
+                        enabled = interactionsEnabled && if (isLibraryRecipe) (connected && !writeBusy) else (connected || visibleRecipe.slot.isEmpty()),
                     )
                 }
             }
@@ -497,6 +524,7 @@ private fun RecipeReferenceImage(
     onAddReferenceImage: () -> Unit,
     onRemoveReferenceImage: (String) -> Unit,
     onExpandImage: (Int) -> Unit,
+    interactionsEnabled: Boolean = true,
 ) {
     val context = LocalContext.current
     val bitmaps = remember(referenceImageUris) {
@@ -506,6 +534,9 @@ private fun RecipeReferenceImage(
     }
     val hasImages = bitmaps.any { it.second != null }
     var isEditing by remember { mutableStateOf(false) }
+    LaunchedEffect(interactionsEnabled) {
+        if (!interactionsEnabled) isEditing = false
+    }
 
     Spacer(Modifier.height(14.dp))
     if (hasImages) {
@@ -555,7 +586,7 @@ private fun RecipeReferenceImage(
                             color = Gold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable(onClick = onAddReferenceImage)
+                                .clickable(enabled = interactionsEnabled, onClick = onAddReferenceImage)
                                 .padding(horizontal = 10.dp, vertical = 7.dp),
                         )
                     }
@@ -569,7 +600,7 @@ private fun RecipeReferenceImage(
                             color = Gold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { isEditing = false }
+                                .clickable(enabled = interactionsEnabled) { isEditing = false }
                                 .padding(horizontal = 10.dp, vertical = 7.dp),
                         )
                     } else {
@@ -577,7 +608,7 @@ private fun RecipeReferenceImage(
                             modifier = Modifier
                                 .size(30.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { isEditing = true },
+                                .clickable(enabled = interactionsEnabled) { isEditing = true },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -605,7 +636,7 @@ private fun RecipeReferenceImage(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Bg)
-                                .clickable { onExpandImage(index) },
+                                .clickable(enabled = interactionsEnabled) { onExpandImage(index) },
                         )
                         if (isEditing) {
                             Box(
@@ -615,7 +646,7 @@ private fun RecipeReferenceImage(
                                     .size(20.dp)
                                     .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.65f))
-                                    .clickable { onRemoveReferenceImage(uriString) },
+                                    .clickable(enabled = interactionsEnabled) { onRemoveReferenceImage(uriString) },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -637,7 +668,7 @@ private fun RecipeReferenceImage(
                 .clip(RoundedCornerShape(12.dp))
                 .background(PanelHigh)
                 .border(1.dp, Border, RoundedCornerShape(12.dp))
-                .clickable(onClick = onAddReferenceImage)
+                .clickable(enabled = interactionsEnabled, onClick = onAddReferenceImage)
                 .padding(horizontal = 14.dp, vertical = 13.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
