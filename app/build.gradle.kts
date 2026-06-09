@@ -18,10 +18,12 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.0.0"
+        buildConfigField("String", "GITHUB_REPO", "\"ILFforever/FujiSync\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     signingConfigs {
@@ -67,6 +69,7 @@ android {
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+    val cameraXVersion = "1.4.1"
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
@@ -75,6 +78,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.camera:camera-camera2:$cameraXVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
+    implementation("androidx.camera:camera-view:$cameraXVersion")
+    implementation("com.google.guava:guava:33.3.1-android")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("io.coil-kt:coil-compose:2.7.0")
@@ -90,6 +98,7 @@ dependencies {
 
     implementation("com.drewnoakes:metadata-extractor:2.19.0")
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

@@ -49,6 +49,9 @@ RE/
 # ---------- Working notes & design context ----------
 .impeccable.md
 
+# ---------- Internal protocol docs ----------
+PROTOCOL.md
+
 # ---------- Claude / Codex working files ----------
 .claude/settings.local.json
 .claude/.cache/

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="ocr_captures" path="ocr_captures/" />
+    <cache-path name="qr_codes" path="qr_codes/" />
+    <cache-path name="qr_captures" path="qr_captures/" />
+    <cache-path name="github_updates" path="github_updates/" />
 </paths>

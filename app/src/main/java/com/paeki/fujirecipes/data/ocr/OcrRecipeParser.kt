@@ -124,6 +124,7 @@ object OcrRecipeParser {
 
         // ── Dynamic range ─────────────────────────────────────────────────────
         val dr = track("Dynamic Range", parseDynamicRange(text), hasDrHint(text))
+        val dRangePriority = track("D Range Priority", parseDRangePriority(text), hasDRangePriorityHint(text))
 
         // ── Grain effect ──────────────────────────────────────────────────────
         val grain = track("Grain Effect", parseGrainEffect(text), hasHint(text, "grain"))
@@ -159,6 +160,7 @@ object OcrRecipeParser {
             sim = sim,
             effects = buildMap {
                 put("Dynamic Range",        dr     ?: "DR Auto")
+                put("D Range Priority",     dRangePriority ?: "Off")
                 put("Grain Effect",         grain  ?: "Off")
                 put("Color Chrome",         cc     ?: "Off")
                 put("Color Chrome FX Blue", ccBlue ?: "Off")
@@ -257,6 +259,24 @@ object OcrRecipeParser {
     private fun hasDrHint(text: String) =
         Regex("""(?i)\bDR\d{3}\b""").containsMatchIn(text) ||
         text.contains("dynamic range", ignoreCase = true)
+
+    private val DR_PRIORITY_RE = Regex(
+        """(?i)\b(?:d\s*range|dynamic\s+range|dr)\s*priority\s*[:\-_ ]*\s*\b(off|weak|strong|auto)\b""",
+    )
+    private val DR_PRIORITY_SHORT_RE = Regex("""(?i)\bDRP\s*[:\-_ ]*\s*\b(off|weak|strong|auto)\b""")
+
+    private fun parseDRangePriority(text: String): String? {
+        val raw = (DR_PRIORITY_RE.find(text) ?: DR_PRIORITY_SHORT_RE.find(text))
+            ?.groupValues
+            ?.get(1)
+            ?: return null
+        return raw.toPriorityLabel()
+    }
+
+    private fun hasDRangePriorityHint(text: String) =
+        text.contains("d range priority", ignoreCase = true) ||
+            text.contains("dynamic range priority", ignoreCase = true) ||
+            Regex("""(?i)\bDRP\b""").containsMatchIn(text)
 
     // ── Grain effect ────────────────────────────────────────────────────────────
 
@@ -575,6 +595,10 @@ object OcrRecipeParser {
         "wb blue"                  to "WB Shift B",
         "dynamic"                  to "Dynamic Range",
         "dynamic range"            to "Dynamic Range",
+        "d range priority"         to "D Range Priority",
+        "dynamic range priority"   to "D Range Priority",
+        "dr priority"              to "D Range Priority",
+        "drp"                      to "D Range Priority",
         "highlights"               to "Highlight Tone",
         "highlight"                to "Highlight Tone",
         "highlight tone"           to "Highlight Tone",
@@ -608,6 +632,7 @@ object OcrRecipeParser {
         "White Balance",
         "WB Shift R",
         "WB Shift B",
+        "D Range Priority",
         "Dynamic Range",
         "Highlight Tone",
         "Shadow Tone",
@@ -626,7 +651,7 @@ object OcrRecipeParser {
             .toSet()
         if (presentLabels.size < 6) return null
 
-        val valueLines = lines.takeWhile { !isSocialFooterStart(it) }
+        val valueLines = recipeValueLines(lines)
         val candidates = valueLines
             .mapIndexed { i, line -> i to line }
             .filterNot { (_, line) -> LABEL_CANON.containsKey(line.trimEnd(':').trim().lowercase()) }
@@ -659,14 +684,10 @@ object OcrRecipeParser {
                 .firstOrNull { it.first > labelIndex }
                 ?.first
                 ?: valueLines.size
-            val localMatch = candidates.firstOrNull { (i, value) ->
-                i !in used && i > labelIndex && i < nextLabelIndex && isColumnValue(label, value)
-            }
+            val localMatch = selectColumnMatch(label, candidates, used, labelIndex, nextLabelIndex)
             val globalMatch =
                 if (preferLocalMatches) null
-                else candidates.firstOrNull { (i, value) ->
-                    i !in used && isColumnValue(label, value)
-                }
+                else selectColumnMatch(label, candidates, used)
             val match = localMatch ?: globalMatch ?: continue
             used += match.first
             result.appendLine("$label: ${columnValueFor(label, match.second)}")
@@ -686,7 +707,7 @@ object OcrRecipeParser {
         if (orderedLabels.size < 3) return null
 
         val labelIndices = orderedLabels.map { it.first }.toSet()
-        val valueLines = lines.takeWhile { !isSocialFooterStart(it) }
+        val valueLines = recipeValueLines(lines)
         val candidates = valueLines
             .mapIndexed { i, line -> i to line.trim() }
             .filter { (i, t) -> i !in labelIndices && t.isNotBlank() && t.length <= 60 }
@@ -711,7 +732,9 @@ object OcrRecipeParser {
     private val COL_DIAL_RE   = Regex("""^[+-]?[0-5](?:[.,]5)?$""")
     private val COL_WB_SHIFT_RE = Regex("""^[+-]?[0-9]$""")
     private val COL_DR_RE     = Regex("""(?i)^(dr\s*(100|200|400|auto)|\d{3}%)$""")
+    private val COL_DR_PRIORITY_RE = Regex("""(?i)^(off|weak|strong|auto)$""")
     private val COL_GRAIN_RE  = Regex("""(?i)^(off|(weak|strong)(?:\s*[,/]\s*|\s+)(small|large)?)$""")
+    private val COL_GRAIN_WITH_SIZE_RE = Regex("""(?i)^(weak|strong)(?:\s*[,/]\s*|\s+)(small|large)$""")
     private val COL_TOGGLE_RE = Regex("""(?i)^(off|weak|strong)$""")
     private val COL_TOGGLE_EFFECT_RE = Regex("""(?i)^effect\s+(off|weak|strong)$""")
     private val COL_WB_RE     = Regex("""(?i)(auto|daylight|shade|incandescent|underwater|fluorescent|\d{4,5}\s*k)""")
@@ -719,9 +742,45 @@ object OcrRecipeParser {
         """(?i)^(?:color\s+chrome\s*:\s*fx\s+blue|white\s+balance\s*:|exp\.\s*compensation\s*:|iso\s+auto\s*,?\s*:?)"""
     )
 
-    private fun isSocialFooterStart(line: String): Boolean =
-        line.equals("follow", ignoreCase = true) ||
-            line.equals("likes", ignoreCase = true)
+    private fun isEngagementFooterStart(line: String): Boolean =
+        line.equals("likes", ignoreCase = true)
+
+    private fun recipeValueLines(lines: List<String>): List<String> {
+        val likesIndex = lines.indexOfFirst { isEngagementFooterStart(it) }
+        val hardEnd = if (likesIndex >= 0) likesIndex else lines.size
+        val followIndex = lines.indexOfFirst { it.equals("follow", ignoreCase = true) }
+        if (followIndex in 0 until hardEnd) {
+            val afterFollow = lines.subList(followIndex + 1, hardEnd)
+            val hasRecipeValuesAfterFollow = afterFollow.any { line ->
+                val t = line.trim()
+                COL_GRAIN_WITH_SIZE_RE.matches(t) ||
+                    COL_DR_RE.matches(t) ||
+                    COL_WB_RE.containsMatchIn(t) ||
+                    t.contains("red", ignoreCase = true) ||
+                    t.contains("blue", ignoreCase = true)
+            }
+            if (!hasRecipeValuesAfterFollow) return lines.take(followIndex)
+        }
+        return lines.take(hardEnd)
+    }
+
+    private fun selectColumnMatch(
+        label: String,
+        candidates: List<Pair<Int, String>>,
+        used: Set<Int>,
+        afterIndex: Int = -1,
+        beforeIndex: Int = Int.MAX_VALUE,
+    ): Pair<Int, String>? {
+        val matches = candidates.filter { (i, value) ->
+            i !in used && i > afterIndex && i < beforeIndex && isColumnValue(label, value)
+        }
+        return when (label) {
+            "Grain Effect" -> matches.firstOrNull { (_, value) ->
+                COL_GRAIN_WITH_SIZE_RE.matches(value.trim())
+            } ?: matches.firstOrNull()
+            else -> matches.firstOrNull()
+        }
+    }
 
     private fun isColumnValue(label: String, value: String): Boolean {
         val t = value.trim()
@@ -738,6 +797,7 @@ object OcrRecipeParser {
             "Grain Effect"                             -> COL_GRAIN_RE.matches(t)
             "Color Chrome", "Color Chrome FX Blue",
             "Smooth Skin"                              -> COL_TOGGLE_RE.matches(t) || COL_TOGGLE_EFFECT_RE.matches(t)
+            "D Range Priority"                         -> COL_DR_PRIORITY_RE.matches(t)
             "Dynamic Range"                            -> COL_DR_RE.matches(t)
             "White Balance"                            -> COL_WB_RE.containsMatchIn(t)
             "WB Shift R", "WB Shift B"                  -> COL_WB_SHIFT_RE.matches(t)
@@ -749,10 +809,12 @@ object OcrRecipeParser {
     }
 
     private fun columnValueFor(label: String, value: String): String =
-        if (label == "Color Chrome" || label == "Color Chrome FX Blue" || label == "Smooth Skin")
-            COL_TOGGLE_EFFECT_RE.find(value.trim())?.groupValues?.get(1) ?: value
-        else
-            value
+        when (label) {
+            "Color Chrome", "Color Chrome FX Blue", "Smooth Skin" ->
+                COL_TOGGLE_EFFECT_RE.find(value.trim())?.groupValues?.get(1) ?: value
+            "D Range Priority" -> value.toPriorityLabel() ?: value
+            else -> value
+        }
 
     // ── WB shift value parser ──────────────────────────────────────────
     // OCR sometimes reads '+' as 't' (e.g. "R t2" instead of "R+2").
@@ -784,6 +846,14 @@ object OcrRecipeParser {
         i == 0 -> "0"
         i > 0  -> "+$i"
         else   -> "$i"
+    }
+
+    private fun String.toPriorityLabel(): String? = when (trim().lowercase()) {
+        "off" -> "Off"
+        "strong" -> "Strong"
+        "weak" -> "Weak"
+        "auto" -> "Auto"
+        else -> null
     }
 
     private fun String.normalizedToken(): String =

@@ -3,6 +3,8 @@ package com.paeki.fujirecipes.di
 import android.content.Context
 import android.hardware.usb.UsbManager
 import com.paeki.fujirecipes.data.local.LocalStore
+import com.paeki.fujirecipes.BuildConfig
+import com.paeki.fujirecipes.data.update.GitHubReleaseUpdater
 import com.paeki.fujirecipes.data.usb.CameraHeartbeat
 import com.paeki.fujirecipes.data.usb.UsbCameraRepository
 import com.paeki.fujirecipes.data.usb.UsbCameraScanner
@@ -46,6 +48,11 @@ object AppModule {
     @Singleton
     fun provideLocalStore(@ApplicationContext context: Context): LocalStore =
         LocalStore(context)
+
+    @Provides
+    @Singleton
+    fun provideGitHubReleaseUpdater(@ApplicationContext context: Context): GitHubReleaseUpdater =
+        GitHubReleaseUpdater(context, BuildConfig.GITHUB_REPO)
 
     @Provides
     @Singleton

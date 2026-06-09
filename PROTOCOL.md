@@ -129,6 +129,7 @@ Builders / parsers: [`PtpPacketKt.buildCommandPacket`](reverse-engineering/fujir
 | `0x2001` | 8193 | `RESPONSE_OK` |
 | `0x2002` | 8194 | `RESPONSE_GENERAL_ERROR` |
 | `0x2003` | 8195 | `RESPONSE_SESSION_NOT_OPEN` |
+| `0x201C` | 8220 | observed non-OK response when writing Dynamic Range while DR Priority is active |
 | `0x201E` | 8222 | `RESPONSE_SESSION_ALREADY_OPEN` |
 
 Source: [`PTPConstants.java`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/core/PTPConstants.java).
@@ -181,6 +182,7 @@ Source of truth: [`FujiPropertyCode`](reverse-engineering/fujirecipe_src/sources
 | Hex | Dec | Symbol | Display | Default | Encoding |
 |---|---|---|---|---|---|
 | `0xD190` | 53648 | `DYNAMIC_RANGE` | Dynamic Range | 100 | uint16LE |
+| `0xD191` | 53649 | `D_RANGE_PRIORITY` | D Range Priority | 0 | uint16LE |
 | `0xD192` | 53650 | `FILM_SIMULATION` | Film Simulation | `PROVIA` (1) | uint16LE |
 | `0xD193` | 53651 | `MONO_WC` | Mono WC | 0 | **int16LE** |
 | `0xD194` | 53652 | `MONO_MG` | Mono MG | 0 | **int16LE** |
@@ -199,7 +201,7 @@ Source of truth: [`FujiPropertyCode`](reverse-engineering/fujirecipe_src/sources
 | `0xD1A1` | 53665 | `HIGH_ISO_NR` | High ISO NR | 8192 | uint16LE |
 | `0xD1A2` | 53666 | `CLARITY` | Clarity | 0 | **int16LE** |
 
-Read decoder picks signed vs unsigned via `FujiPropertyCode.isSignedInt16()`. The remaining codes in the block (`0xD18E, 0xD18F, 0xD191, 0xD1A3, 0xD1A4, 0xD1A5`) are queried during read but the app has no enum entry for them — they're silently ignored, but a sniffer-style implementation should still issue `GetDevicePropValue` across the full range to match what the app does (the camera may set undocumented internal state if a slot read is partial).
+Read decoder picks signed vs unsigned via `FujiPropertyCode.isSignedInt16()`. The remaining codes in the block (`0xD18E, 0xD18F, 0xD1A3, 0xD1A4, 0xD1A5`) are queried during read but are still unmapped — they're silently ignored by older builds, but a sniffer-style implementation should still issue `GetDevicePropValue` across the full range to match what the app does (the camera may set undocumented internal state if a slot read is partial).
 
 Read loop reference: [`UsbPtpService$readAllProperties$1`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/usb/UsbPtpService$readAllProperties$1.java) and [`UsbPtpService$readPreset$1`](reverse-engineering/fujirecipe_src/sources/com/example/fujirecipe/data/usb/UsbPtpService$readPreset$1.java).
 
@@ -293,6 +295,8 @@ Unknown wire values have no dial mapping (reference renders them as raw hex). Wr
 **`COLOR_CHROME` / `COLOR_CHROME_FX_BLUE` / `SMOOTH_SKIN` (`uint16LE`)** — default `1` (Off): `1 = Off`, `2 = Weak`, `3 = Strong`.
 
 **`DYNAMIC_RANGE` (`0xD190`, `uint16LE`)** — wire is the literal percentage: `100`/`200`/`400`; `0` = Auto.
+
+**`D_RANGE_PRIORITY` (`0xD191`, `uint16LE`)** — `0 = Off`, `1 = Weak`, `2 = Strong`, `32768` (`0x8000`) = Auto. When this value is not Off, the camera controls Dynamic Range and rejects direct writes to `DYNAMIC_RANGE (0xD190)`. X-H2 fw 5.20 bench result: priority write returned `0x2001`, priority readback matched, the following DR write returned `0x201C`, DR readback stayed at its previous value, and priority remained active. Writers should skip `0xD190` whenever `0xD191 != 0`.
 
 ---
 
@@ -458,6 +462,7 @@ Outer guard: `_isApplying` flag, set true on entry, cleared in `finally`.
 for (propCode, value) in settings:
     if isMonochrome(filmSim) and prop is color-only: skip
     if whiteBalance != COLOR_TEMP and prop == COLOR_TEMP: skip
+    if dRangePriority != OFF and prop == DYNAMIC_RANGE: skip
     payload = isSignedInt16(prop) ? toInt16LE(value) : toUInt16LE(value)   # 2 bytes
     → SetDevicePropValue(propCode, payload)
     ← OK / GeneralError
@@ -472,6 +477,7 @@ for (propCode, value) in settings:
 * Order matters. `FILM_SIMULATION (0xD192)` is written before tone/grain/color props because some of those have different allowed ranges depending on the film sim. The decompiler shows the iteration order is the `settings` map's iteration order — the producing code orders it sensibly when building it.
 * When `FILM_SIMULATION` maps to a monochrome value, the apply loop **skips** color-only properties even if they were queued.
 * When `WHITE_BALANCE != COLOR_TEMP (0x8007)`, the `COLOR_TEMP (0xD19C)` write is suppressed.
+* When `D_RANGE_PRIORITY (0xD191)` is Weak, Strong, or Auto, the apply loop must suppress `DYNAMIC_RANGE (0xD190)`. Bench testing showed the camera rejects `0xD190` writes with response `0x201C` while DR Priority is active, and readback remains unchanged.
 * Inter-write delay is configurable. Default 0 ms is confirmed safe on X-H2 fw 5.20; use `WriteDelayBench` before adding delay for a specific body.
 * Outcome tracking: `success`, `failed`, `skipped` counters → `ApplyOutcome` posted to `_lastApplyOutcome`.
 
@@ -796,13 +802,13 @@ _(no pending tests — all parameters confirmed)_
 
 8. **Grain EXIF → PTP combined value.** The EXIF side uses two tags (`0x1047` strength, `0x104c` size); the PTP side uses one combined `GRAIN_EFFECT (0xD195)` value: **`1`/`6`=Off, `2`=Weak Small, `3`=Strong Small, `4`=Weak Large, `5`=Strong Large** (see §6.3; default `6`). In all observed test shots both EXIF tags are 0 when grain is Off. If an EXIF import produces strength≠0 but size=0 (invalid camera state), treat the whole grain setting as Off — picking a size silently would be worse than dropping it.
 
-9. **DR Priority.** Fuji cameras have a "Dynamic Range Priority" setting (Off / Weak / Strong / Auto) that overrides the manual DR100/200/400 setting when active. It does not appear in the `PRESET_BLOCK_RANGE (0xD18E–0xD1A5)` PTP properties from the reverse-engineered APK — it may not be exposed over USB. Not observed in any EXIF test shots (all used manual DR). Rarely used in practice; treat as unsupported for now.
+9. **DR Priority — RESOLVED for X-H2 fw 5.20.** Fuji cameras expose Dynamic Range Priority at `0xD191` inside the preset block: `0=Off`, `1=Weak`, `2=Strong`, `32768/0x8000=Auto`. It overrides the manual Dynamic Range property. While `0xD191` is active, a direct `SET_DEVICE_PROP_VALUE` to `DYNAMIC_RANGE (0xD190)` is rejected with response `0x201C`; readback of `0xD190` remains unchanged and `0xD191` remains active. Recipe writers should write `0xD191` first and omit `0xD190` unless priority is Off.
 
 ---
 
 1. **Slot count.** The APK does not hard-code "7" anywhere visible in the protocol layer — it's the model that exposes 7 slots on X-H2. If you target older bodies (X-T3 etc.) you may need to clamp differently.
 2. **`SetDevicePropValue` size.** Every observed write is 2 bytes (int16/uint16). `FUJI_PRESET_NAME` is the only variable-length one (PTP string).
-3. **Non-recipe properties in the block.** Codes `0xD18E, 0xD18F, 0xD191, 0xD1A3, 0xD1A4, 0xD1A5` are read but the app has no enum entry. Their meaning is unknown — a logger that captures them across slots would help map them. See also §13 for EXIF-side unknowns.
+3. **Non-recipe properties in the block.** Codes `0xD18E, 0xD18F, 0xD1A3, 0xD1A4, 0xD1A5` are read but still unmapped. Their meaning is unknown — a logger that captures them across slots would help map them. See also §13 for EXIF-side unknowns.
 4. **GetDeviceInfo during apply.** The decompile shows a `GetDeviceInfo` call early in the apply path (the `slotResult` continuation variable). It looks defensive — possibly to confirm the camera is still alive after writing the slot selector. Replicating it costs little, so do it.
 5. **Inter-write delay** is configurable in the apply loop and defaults to 0 ms. The slot-selector settle delay is **50 ms** (reduced from the reference APK's 100 ms) — confirmed clean on X-H2 fw 5.20 (full 7-slot write bench, 0 errors, ~7.5s). Revert to 100 ms if another body returns corrupt or blank slot data.
 6. **Card-reader fallback.** If the camera enumerates with interface class `0x08` (or DeviceInfo lacks `0xD18C`), the app immediately calls `CloseSession`, releases the interface, and reports CARD_READER mode. Replicate that — leaving the interface claimed will block Android's MTP indexer.

@@ -1,6 +1,5 @@
 package com.paeki.fujirecipes.ui.profile
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -8,8 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -94,22 +91,28 @@ fun SlotReadingAnimationMockup(
         label = "progress",
     )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(200)),
-        exit = fadeOut(tween(200)),
+    // The content eases in/out, but the backdrop is mounted instantly (no fade)
+    // the whole time the overlay is up. Cross-fading the backdrop in would ramp
+    // it up from transparent and briefly reveal the camera image behind it — so
+    // we snap the backdrop in and only animate the content on top of it.
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "reading-content-alpha",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.97f)),
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.97f)),
+                .graphicsLayer { alpha = contentAlpha }
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
                 Spacer(Modifier.height(96.dp))
 
                 Text(
@@ -216,7 +219,6 @@ fun SlotReadingAnimationMockup(
             }
         }
     }
-}
 
 @Composable
 private fun SlotReadingCard(

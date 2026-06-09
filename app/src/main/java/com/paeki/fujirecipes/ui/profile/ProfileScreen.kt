@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.paeki.fujirecipes.R
+import com.paeki.fujirecipes.ui.UpdateUiState
 import com.paeki.fujirecipes.ui.camera.CameraImageTuning
 import com.paeki.fujirecipes.ui.camera.cameraImageTuning
 import com.paeki.fujirecipes.ui.components.DeleteConfirmDialog
@@ -116,9 +117,13 @@ fun ProfileScreen(
     onOpenWriteDelayBench: () -> Unit = {},
     onOpenNameBench: () -> Unit = {},
     onOpenReadSlotsBench: () -> Unit = {},
+    onOpenDrPriorityBench: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
     onShowScanLog: () -> Unit = {},
     onSetPropertyWriteDelay: (Long) -> Unit = {},
+    update: UpdateUiState = UpdateUiState(),
+    onCheckForUpdates: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
@@ -243,7 +248,12 @@ fun ProfileScreen(
             exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
                    slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
         ) {
-            AboutScreen(onBack = { aboutOpen = false })
+            AboutScreen(
+                update = update,
+                onCheckForUpdates = onCheckForUpdates,
+                onInstallUpdate = onInstallUpdate,
+                onBack = { aboutOpen = false },
+            )
         }
 
         AnimatedVisibility(
@@ -262,6 +272,7 @@ fun ProfileScreen(
                 onOpenWriteDelayBench = onOpenWriteDelayBench,
                 onOpenNameBench = onOpenNameBench,
                 onOpenReadSlotsBench = onOpenReadSlotsBench,
+                onOpenDrPriorityBench = onOpenDrPriorityBench,
                 onAddMockCamera = onAddMockCamera,
                 onShowScanLog = onShowScanLog,
                 propertyWriteDelayMs = settings.propertyWriteDelayMs,

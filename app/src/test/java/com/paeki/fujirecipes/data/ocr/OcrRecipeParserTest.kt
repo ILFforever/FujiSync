@@ -17,6 +17,21 @@ class OcrRecipeParserTest {
     }
 
     @Test
+    fun `parse D Range Priority`() {
+        val result = OcrRecipeParser.parse(
+            """
+                Film Simulation: Classic Chrome
+                D Range Priority: Strong
+                Dynamic Range: DR400
+            """.trimIndent(),
+        )
+
+        assertNotNull(result)
+        assertEquals("Strong", result!!.effects["D Range Priority"])
+        assertEquals("DR400%", result.effects["Dynamic Range"])
+    }
+
+    @Test
     fun `parse instagram split-column recipe dump`() {
         val raw = """
             2:03 E
@@ -149,6 +164,71 @@ class OcrRecipeParserTest {
         assertEquals("0", result.tone["Clarity"])
         assertTrue("Color Chrome FX Blue" !in result.unmatchedFields)
         assertTrue("White Balance" !in result.unmatchedFields)
+    }
+
+    @Test
+    fun `parse social screenshot where follow appears between split-column values`() {
+        val raw = """
+            3:29 @EO
+            Explore
+            Tonkin Mist
+            Film Simulation
+            Grain Effect
+            Color Chrome Effect
+            Color Chrome FX Blue
+            White Balance
+            Dynamic Range
+            _fatihurgun
+            Fujifilm recipe time!
+            Curves
+            Noise Reduction
+            Color
+            Add comment...
+            Sharpness
+            Clarity
+            Classic Negative
+            Strong
+            Follow
+            Weak /Small
+            Weak
+            (o) DR 400
+            * 5200K, +3 Red, -4 Blue
+            L H:1 S: +2
+            +4
+            Vo
+            +2
+            WIFi ll 58
+            4
+            -2
+            I recently spent some time exploring Ninh Binh i...
+            1159
+            36
+            114
+        """.trimIndent()
+
+        val result = OcrRecipeParser.parse(raw)
+
+        assertNotNull(result)
+        assertEquals("Classic Neg", result!!.sim)
+        assertEquals("DR400%", result.effects["Dynamic Range"])
+        assertEquals("Weak Small", result.effects["Grain Effect"])
+        assertEquals("Strong", result.effects["Color Chrome"])
+        assertEquals("Weak", result.effects["Color Chrome FX Blue"])
+        assertEquals("5200K", result.wb["White Balance"])
+        assertEquals("+3", result.wb["WB Shift R"])
+        assertEquals("-4", result.wb["WB Shift B"])
+        assertEquals("+1", result.tone["Highlight Tone"])
+        assertEquals("+2", result.tone["Shadow Tone"])
+        assertEquals("+4", result.tone["Color"])
+        assertEquals("+2", result.tone["Sharpness"])
+        assertEquals("+4", result.tone["High ISO NR"])
+        assertEquals("-2", result.tone["Clarity"])
+        assertTrue("Grain Effect" !in result.unmatchedFields)
+        assertTrue("Color Chrome" !in result.unmatchedFields)
+        assertTrue("Color Chrome FX Blue" !in result.unmatchedFields)
+        assertTrue("Sharpness" !in result.unmatchedFields)
+        assertTrue("High ISO NR" !in result.unmatchedFields)
+        assertTrue("Clarity" !in result.unmatchedFields)
     }
 
     @Test
@@ -972,6 +1052,7 @@ class OcrRecipeParserTest {
         assertNotNull(result)
         assertEquals(sim, result!!.sim)
         assertEquals(dr, result.effects["Dynamic Range"])
+        assertEquals("Off", result.effects["D Range Priority"])
         assertEquals(grain, result.effects["Grain Effect"])
         assertEquals(cc, result.effects["Color Chrome"])
         assertEquals(ccBlue, result.effects["Color Chrome FX Blue"])

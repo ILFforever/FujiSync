@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +49,8 @@ import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
 
 private const val MAX_PROPERTY_WRITE_DELAY_MS = 300L
+private val DevWarningRed = Color(0xFFFF6B5F)
+private val DevWarningBg = Color(0xFF241312)
 
 @Composable
 fun DevToolsScreen(
@@ -59,6 +62,7 @@ fun DevToolsScreen(
     onOpenWriteDelayBench: () -> Unit,
     onOpenNameBench: () -> Unit,
     onOpenReadSlotsBench: () -> Unit,
+    onOpenDrPriorityBench: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
     propertyWriteDelayMs: Long = 0L,
@@ -106,6 +110,9 @@ fun DevToolsScreen(
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
+            DeveloperWarningCard()
+            Spacer(Modifier.height(18.dp))
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -144,6 +151,8 @@ fun DevToolsScreen(
                 ProfileNavRow(label = "Name bench", onClick = onOpenNameBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Read slots bench", onClick = onOpenReadSlotsBench, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "DR Priority bench", onClick = onOpenDrPriorityBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Write delay bench", onClick = onOpenWriteDelayBench, inCard = true)
                 ProfileDivider()
@@ -184,6 +193,44 @@ fun DevToolsScreen(
 
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun DeveloperWarningCard() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DevWarningBg)
+            .border(1.dp, DevWarningRed.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+            .padding(16.dp),
+    ) {
+        Text(
+            text = "DEVELOPER ONLY",
+            fontFamily = SansFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            letterSpacing = 1.4.sp,
+            color = DevWarningRed,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "These tools can write directly to camera slots, change preset data, send raw PTP commands, and overwrite values without the normal app safeguards. Use only for active development with backed-up recipes and a camera you are prepared to reset.",
+            fontFamily = SansFamily,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            color = TextPrimary,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "Incorrect use may cause recipe loss, invalid camera settings, failed writes, or confusing readback results.",
+            fontFamily = MonoFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 10.5.sp,
+            lineHeight = 16.sp,
+            color = DevWarningRed,
+        )
     }
 }
 

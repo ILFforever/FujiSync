@@ -1,5 +1,8 @@
 package com.paeki.fujirecipes.data.remote
 
+import com.paeki.fujirecipes.ui.library.normalizedDRangePriorityLabel
+import com.paeki.fujirecipes.ui.library.normalizedDynamicRangeLabel
+
 data class FxwRecipe(
     val id: Int,
     val slug: String,
@@ -18,6 +21,12 @@ data class FxwRecipe(
         return raw
     }
     val dynamicRange: String get() = params["Dynamic Range"] ?: ""
+    val dRangePriority: String
+        get() = params["D Range Priority"]
+            ?: params["Dynamic Range Priority"]
+            ?: params["DR Priority"]
+            ?: params["DRP"]
+            ?: ""
     val highlight: String get() = params["Highlight"] ?: ""
     val shadow: String get() = params["Shadow"] ?: ""
     val color: String get() = params["Color"] ?: ""
@@ -31,7 +40,12 @@ data class FxwRecipe(
     val colorChromeFxBlue: String get() = params["Color Chrome FX Blue"] ?: ""
 
     fun pillLabels(): List<String> = buildList {
-        if (dynamicRange.isNotBlank()) add(dynamicRange.normalizedDynamicRangePill())
+        val priority = dRangePriority.normalizedDRangePriorityLabel()
+        if (priority.isNotBlank() && priority != "Off") {
+            add("DRP ${priority.uppercase()}")
+        } else if (dynamicRange.isNotBlank()) {
+            add(dynamicRange.normalizedDynamicRangeLabel().uppercase())
+        }
         if (grainEffect.isNotBlank() && !grainEffect.lowercase().startsWith("off")) {
             add("GRAIN ${grainEffect.normalizedGrainPill()}")
         }
@@ -40,11 +54,6 @@ data class FxwRecipe(
         if (color.isNotBlank() && color != "0") add("COLOR $color")
         if (clarity.isNotBlank() && clarity != "0") add("CLARITY $clarity")
     }
-
-    private fun String.normalizedDynamicRangePill(): String =
-        trim().uppercase()
-            .replace("DR ", "DR")
-            .let { value -> if (value.matches(Regex("""DR\d{3}"""))) "$value%" else value }
 
     private fun String.normalizedGrainPill(): String {
         val lower = lowercase()

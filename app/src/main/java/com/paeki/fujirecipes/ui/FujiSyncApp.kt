@@ -10,6 +10,7 @@ import com.paeki.fujirecipes.ui.overlay.overlayStackOf
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -39,7 +40,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import android.animation.ValueAnimator
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -75,12 +82,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.paeki.fujirecipes.ui.camera.CameraCardUiModel
 import com.paeki.fujirecipes.ui.camera.CameraConnected
 import com.paeki.fujirecipes.ui.camera.CameraImageTunerScreen
+import com.paeki.fujirecipes.ui.dev.DrPriorityBenchScreen
+import com.paeki.fujirecipes.ui.dev.DrPriorityBenchViewModel
 import com.paeki.fujirecipes.ui.dev.ExifBenchScreen
 import com.paeki.fujirecipes.ui.dev.NameBenchScreen
 import com.paeki.fujirecipes.ui.dev.NameBenchViewModel
@@ -105,6 +115,7 @@ import com.paeki.fujirecipes.ui.model.LibraryRecipeSource
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
 import com.paeki.fujirecipes.ui.profile.ProfileScreen
+import com.paeki.fujirecipes.ui.qr.QrScannerScreen
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -153,6 +164,10 @@ data class CameraUiState(
     val slotBackupSlots: List<RecipeUiModel>? = null,
     val restoringSlots: Boolean = false,
     val restoringSlotIndex: Int = -1,
+    val rearrangingSlots: Boolean = false,
+    val rearrangingSlotIndex: Int = -1,
+    val rearrangingWriteIndex: Int = -1,
+    val rearrangingWriteTotal: Int = 0,
     val isRestoringValidation: Boolean = false,
     val cameraLabels: Map<String, String> = emptyMap(),
     val cameraModels: Map<String, String> = emptyMap(),
@@ -186,12 +201,28 @@ data class FujiSyncUiState(
     val ocrImportError: String? = null,
     val ocrRawText: String? = null,
     val ocrParseResult: com.paeki.fujirecipes.data.ocr.OcrParseResult? = null,
+    val qrImportLoading: Boolean = false,
+    val qrImportError: String? = null,
     val saveAllSlotsConfirmed: Boolean = false,
     val saveAllReport: SaveAllReport? = null,
     val captureLog: String? = null,
+    val update: UpdateUiState = UpdateUiState(),
 )
 
 data class WriteToastState(val slot: String, val name: String, val savedToLibrary: Boolean = false)
+
+data class UpdateUiState(
+    val checking: Boolean = false,
+    val downloading: Boolean = false,
+    val latestVersion: String? = null,
+    val releaseName: String? = null,
+    val assetName: String? = null,
+    val updateAvailable: Boolean = false,
+    val downloaded: Boolean = false,
+    val installPermissionRequired: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+)
 
 @Composable
 fun FujiSyncApp(
@@ -237,18 +268,25 @@ fun FujiSyncApp(
     onExifImportErrorDismiss: () -> Unit = {},
     onImportFromScreenshot: () -> Unit = {},
     onOcrImportErrorDismiss: () -> Unit = {},
+    onQrRecipeDetected: (RecipeUiModel) -> Unit = {},
+    onImportQrFromImage: () -> Unit = {},
+    onQrImportErrorDismiss: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
     onSaveAllToLibrary: (LibraryRecipeSource) -> Unit = {},
     onSaveAllReportDismiss: () -> Unit = {},
     onLoadCaptureLog: () -> Unit = {},
     onClearCaptureLog: () -> Unit = {},
     onSetPropertyWriteDelay: (Long) -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showWriteDelayBench by remember { mutableStateOf(false) }
     var showNameBench by remember { mutableStateOf(false) }
     var showReadSlotsBench by remember { mutableStateOf(false) }
+    var showDrPriorityBench by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
+    var showQrScanner by remember { mutableStateOf(false) }
     var cameraSheetRevealProgress by rememberSaveable { mutableStateOf(0f) }
     val cameraLabel = state.camera.cameraLabels[state.camera.cameraSerial] ?: "My Camera"
     var cameraDetail by remember { mutableStateOf<Pair<Int, CameraCardUiModel>?>(null) }
@@ -311,15 +349,20 @@ fun FujiSyncApp(
         OverlayLayer(state.detailRecipe != null) { onCloseDetail() },
         OverlayLayer(showImportFromPhotoGuide) { showImportFromPhotoGuide = false },
         OverlayLayer(showImportFromScreenshotGuide) { showImportFromScreenshotGuide = false },
+        OverlayLayer(showQrScanner) { showQrScanner = false },
         OverlayLayer(state.exifImportError != null) { onExifImportErrorDismiss() },
         OverlayLayer(state.exifImportLoading) { },  // blocks back during import, no dismiss action
         OverlayLayer(state.ocrImportError != null) { onOcrImportErrorDismiss() },
         OverlayLayer(state.ocrImportLoading) { },
+        OverlayLayer(state.qrImportError != null) { onQrImportErrorDismiss() },
+        OverlayLayer(state.qrImportLoading) { },
         OverlayLayer(state.camera.restoringSlots) { },  // blocks back while writing the set to camera
+        OverlayLayer(state.camera.rearrangingSlots) { }, // blocks back while rearranging camera slots
         OverlayLayer(showExifBench) { showExifBench = false },
         OverlayLayer(showWriteDelayBench) { showWriteDelayBench = false },
         OverlayLayer(showNameBench) { showNameBench = false },
         OverlayLayer(showReadSlotsBench) { showReadSlotsBench = false },
+        OverlayLayer(showDrPriorityBench) { showDrPriorityBench = false },
         OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
@@ -396,6 +439,7 @@ fun FujiSyncApp(
                         onAddGroupImage = onAddLibraryGroupImage,
                         onImportFromPhoto = { showImportFromPhotoGuide = true },
                         onImportFromScreenshot = { showImportFromScreenshotGuide = true },
+                        onImportFromQr = { showQrScanner = true },
                         onScanTileGuide = { showScanTileGuide = true },
                     )
                     AppTab.Discover -> DiscoverScreen()
@@ -417,9 +461,13 @@ fun FujiSyncApp(
                         onOpenWriteDelayBench = { showWriteDelayBench = true },
                         onOpenNameBench = { showNameBench = true },
                         onOpenReadSlotsBench = { showReadSlotsBench = true },
+                        onOpenDrPriorityBench = { showDrPriorityBench = true },
                         onAddMockCamera = onAddMockCamera,
                         onShowScanLog = onLoadCaptureLog,
                         onSetPropertyWriteDelay = onSetPropertyWriteDelay,
+                        update = state.update,
+                        onCheckForUpdates = onCheckForUpdates,
+                        onInstallUpdate = onInstallUpdate,
                     )
                 }
 
@@ -431,6 +479,7 @@ fun FujiSyncApp(
                     showWriteDelayBench = showWriteDelayBench,
                     showNameBench = showNameBench,
                     showReadSlotsBench = showReadSlotsBench,
+                    showDrPriorityBench = showDrPriorityBench,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -462,6 +511,7 @@ fun FujiSyncApp(
                     onWriteDelayBenchClose = { showWriteDelayBench = false },
                     onNameBenchClose = { showNameBench = false },
                     onReadSlotsBenchClose = { showReadSlotsBench = false },
+                    onDrPriorityBenchClose = { showDrPriorityBench = false },
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,
                     onImportFromScreenshotGuideClose = { showImportFromScreenshotGuide = false },
@@ -472,6 +522,18 @@ fun FujiSyncApp(
                     onExifImportRetry = onImportFromPhoto,
                     onOcrImportErrorDismiss = onOcrImportErrorDismiss,
                     onOcrImportRetry = onImportFromScreenshot,
+                    onImportQrRetry = { showQrScanner = true },
+                    onQrImportErrorDismiss = onQrImportErrorDismiss,
+                    showQrScanner = showQrScanner,
+                    onQrScannerClose = { showQrScanner = false },
+                    onQrRecipeDetected = {
+                        showQrScanner = false
+                        onQrRecipeDetected(it)
+                    },
+                    onQrScannerOpenImage = {
+                        showQrScanner = false
+                        onImportQrFromImage()
+                    },
                 )
             }
 
@@ -564,6 +626,7 @@ private fun BoxScope.AppOverlays(
     showWriteDelayBench: Boolean,
     showNameBench: Boolean,
     showReadSlotsBench: Boolean,
+    showDrPriorityBench: Boolean,
     showImportFromPhotoGuide: Boolean,
     showReadingOverlay: Boolean,
     showDiscardEditorDialog: Boolean,
@@ -595,6 +658,7 @@ private fun BoxScope.AppOverlays(
     onWriteDelayBenchClose: () -> Unit,
     onNameBenchClose: () -> Unit,
     onReadSlotsBenchClose: () -> Unit,
+    onDrPriorityBenchClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
     showImportFromScreenshotGuide: Boolean,
     onImportFromScreenshotGuideClose: () -> Unit,
@@ -605,11 +669,18 @@ private fun BoxScope.AppOverlays(
     onExifImportRetry: () -> Unit,
     onOcrImportErrorDismiss: () -> Unit,
     onOcrImportRetry: () -> Unit,
+    onImportQrRetry: () -> Unit,
+    onQrImportErrorDismiss: () -> Unit,
+    showQrScanner: Boolean,
+    onQrScannerClose: () -> Unit,
+    onQrRecipeDetected: (RecipeUiModel) -> Unit,
+    onQrScannerOpenImage: () -> Unit,
 ) {
     val context = LocalContext.current
     val writeDelayBenchVm: WriteDelayBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val nameBenchVm: NameBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val readSlotsBenchVm: ReadSlotsBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val drPriorityBenchVm: DrPriorityBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
     Box(modifier = Modifier.fillMaxSize()) {
         RecipeDetailScreen(
@@ -672,6 +743,12 @@ private fun BoxScope.AppOverlays(
         }
     }
 
+    if (showDrPriorityBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            DrPriorityBenchScreen(viewModel = drPriorityBenchVm, onClose = onDrPriorityBenchClose)
+        }
+    }
+
     AnimatedVisibility(
         visible = showImportFromPhotoGuide,
         enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
@@ -703,6 +780,18 @@ private fun BoxScope.AppOverlays(
     }
 
     AnimatedVisibility(
+        visible = showQrScanner,
+        enter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 8 },
+        exit = slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it / 8 },
+    ) {
+        QrScannerScreen(
+            onClose = onQrScannerClose,
+            onDetected = onQrRecipeDetected,
+            onOpenImage = onQrScannerOpenImage,
+        )
+    }
+
+    AnimatedVisibility(
         visible = showScanTileGuide,
         enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
                 slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
@@ -720,6 +809,14 @@ private fun BoxScope.AppOverlays(
 
     if (state.camera.restoringSlots) {
         RestoreSetLoadingScreen(currentSlotIndex = state.camera.restoringSlotIndex)
+    }
+
+    if (state.camera.rearrangingSlots) {
+        RearrangeSlotsLoadingScreen(
+            currentSlotIndex = state.camera.rearrangingSlotIndex,
+            writeIndex = state.camera.rearrangingWriteIndex,
+            writeTotal = state.camera.rearrangingWriteTotal,
+        )
     }
 
     state.exifImportError?.let { error ->
@@ -750,6 +847,18 @@ private fun BoxScope.AppOverlays(
                     context.startActivity(Intent.createChooser(intent, null))
                 }
             } else null,
+        )
+    }
+
+    if (state.qrImportLoading) {
+        ExifImportLoadingScreen(eyebrow = "READING QR", subtitle = "Importing shared recipe")
+    }
+
+    state.qrImportError?.let { error ->
+        ExifImportErrorScreen(
+            message = error,
+            onDismiss = onQrImportErrorDismiss,
+            onRetry = onImportQrRetry,
         )
     }
 
@@ -852,9 +961,18 @@ private fun BoxScope.CameraDetailModal(
     onRename: (String) -> Unit,
     onClose: () -> Unit,
 ) {
+    val motionEnabled = ValueAnimator.areAnimatorsEnabled()
+    val scope = rememberCoroutineScope()
+    var visible by remember { mutableStateOf(!motionEnabled) }
     var editing by remember { mutableStateOf(false) }
     var draft by remember(name) { mutableStateOf(name) }
     val modalInteraction = remember { MutableInteractionSource() }
+
+    fun dismissWithMotion() {
+        if (!motionEnabled) { onClose(); return }
+        scope.launch { visible = false; delay(220); onClose() }
+    }
+
     fun commitRename() {
         val trimmed = draft.trim().ifBlank { "My Camera" }
         onRename(trimmed)
@@ -862,13 +980,30 @@ private fun BoxScope.CameraDetailModal(
         editing = false
     }
 
+    LaunchedEffect(motionEnabled) { visible = true }
+    androidx.activity.compose.BackHandler(enabled = true) { dismissWithMotion() }
+
+    val overlayTransition = updateTransition(targetState = visible, label = "camera-detail-overlay")
+    val overlayAlpha by overlayTransition.animateFloat(
+        transitionSpec = { tween(if (targetState) 160 else 120, easing = FastOutSlowInEasing) },
+        label = "camera-detail-overlay-alpha",
+    ) { if (it) 1f else 0f }
+
     Box(
         modifier = Modifier
             .matchParentSize()
-            .background(Color.Black.copy(alpha = 0.62f))
-            .clickable(onClick = onClose),
+            .background(Color.Black.copy(alpha = 0.62f * overlayAlpha))
+            .clickable(onClick = ::dismissWithMotion),
         contentAlignment = Alignment.BottomCenter,
     ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) +
+                    slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 2 },
+            exit  = fadeOut(tween(110, easing = FastOutSlowInEasing)) +
+                    slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it / 3 },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -879,56 +1014,74 @@ private fun BoxScope.CameraDetailModal(
                 .navigationBarsPadding()
                 .imePadding(),
         ) {
-            // Drag handle
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 14.dp, bottom = 6.dp)
-                    .width(36.dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(99.dp))
-                    .background(TextDim.copy(alpha = 0.4f)),
-            )
-
-            // Header — model ID + custom name + DONE
-            Row(
+            // Drag zone — pill + header combined so dragging anywhere in this area dismisses
+            var swipeDy by remember { mutableStateOf(0f) }
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { swipeDy = 0f },
+                            onDrag = { change, amount -> change.consume(); swipeDy += amount.y },
+                            onDragEnd = { if (swipeDy > 60f) dismissWithMotion() else swipeDy = 0f },
+                            onDragCancel = { swipeDy = 0f },
+                        )
+                    },
             ) {
-                Column {
-                    Text(
-                        text = camera.model.uppercase(),
-                        fontFamily = MonoFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        letterSpacing = 1.6.sp,
-                        color = Gold,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = name,
-                        fontFamily = SansFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
-                        letterSpacing = (-0.2).sp,
-                        color = TextPrimary,
+                // Pill — visual only, gesture is on the parent Column
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(TextDim.copy(alpha = 0.55f)),
                     )
                 }
-                Text(
-                    text = "DONE",
-                    fontFamily = SansFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    letterSpacing = 1.3.sp,
-                    color = Gold,
+
+                // Header — model ID + custom name + DONE
+                Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .clickable(onClick = onClose)
-                        .padding(horizontal = 6.dp, vertical = 8.dp),
-                )
+                        .fillMaxWidth()
+                        .padding(start = 22.dp, end = 16.dp, bottom = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column {
+                        Text(
+                            text = camera.model.uppercase(),
+                            fontFamily = MonoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.6.sp,
+                            color = Gold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = name,
+                            fontFamily = SansFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            letterSpacing = (-0.2).sp,
+                            color = TextPrimary,
+                        )
+                    }
+                    Text(
+                        text = "DONE",
+                        fontFamily = SansFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.3.sp,
+                        color = Gold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .clickable(onClick = ::dismissWithMotion)
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                    )
+                }
             }
 
             // Rename row
@@ -1033,6 +1186,7 @@ private fun BoxScope.CameraDetailModal(
                 modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 24.dp),
             )
         }
+        } // AnimatedVisibility
     }
 }
 
@@ -1375,6 +1529,150 @@ private fun RestoreSetLoadingScreen(currentSlotIndex: Int) {
                 )
                 Text(
                     text = "${activeIndex + 1}/7",
+                    fontFamily = MonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Gold,
+                )
+            }
+        }
+    }
+}
+
+// ── Rearrange slots loading ───────────────────────────────────────
+
+@Composable
+private fun RearrangeSlotsLoadingScreen(
+    currentSlotIndex: Int,
+    writeIndex: Int,
+    writeTotal: Int,
+) {
+    val transition = rememberInfiniteTransition(label = "rearrange-slots")
+    val pulse by transition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "rearrange-pulse",
+    )
+    val activeIndex = currentSlotIndex.coerceIn(0, 6)
+    val total = writeTotal.coerceAtLeast(1)
+    val hasStarted = currentSlotIndex >= 0 && writeIndex >= 0
+    val activeWrite = writeIndex.coerceIn(0, total - 1)
+    val completedLabel = if (hasStarted) activeWrite + 1 else 0
+    val progress = if (hasStarted) ((activeWrite + 1) / total.toFloat()).coerceIn(0f, 1f) else 0f
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Bg.copy(alpha = 0.74f)),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(298.dp)
+                .padding(horizontal = 14.dp, vertical = 14.dp)
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 18.dp, bottomEnd = 18.dp))
+                .background(PanelLow)
+                .border(
+                    1.dp,
+                    Gold.copy(alpha = 0.24f + 0.14f * pulse),
+                    RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
+                )
+                .padding(horizontal = 18.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "REARRANGE RECIPES",
+                    fontFamily = MonoFamily,
+                    fontSize = 10.sp,
+                    letterSpacing = 2.4.sp,
+                    color = TextPrimary,
+                )
+                Text(
+                    text = if (hasStarted) "Writing C${activeIndex + 1} to camera" else "Preparing slot writes",
+                    fontFamily = SansFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 22.sp,
+                    color = TextPrimary,
+                )
+                Text(
+                    text = "Keep the USB cable connected until the slot swap finishes.",
+                    fontFamily = SansFamily,
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(PanelHigh),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Gold.copy(alpha = 0.82f)),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(7) { index ->
+                    val active = hasStarted && index == activeIndex
+                    Box(
+                        modifier = Modifier
+                            .size(if (active) 40.dp else 34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (active) Gold.copy(alpha = 0.14f + 0.16f * pulse) else PanelHigh)
+                            .border(
+                                1.dp,
+                                if (active) Gold.copy(alpha = 0.62f + 0.22f * pulse) else Border,
+                                RoundedCornerShape(10.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "C${index + 1}",
+                            fontFamily = MonoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            color = if (active) Gold else TextDim,
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(PanelHigh)
+                    .border(1.dp, Border, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "WRITE PROGRESS",
+                    fontFamily = MonoFamily,
+                    fontSize = 9.sp,
+                    letterSpacing = 1.2.sp,
+                    color = TextDim,
+                )
+                Text(
+                    text = "$completedLabel/$total",
                     fontFamily = MonoFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,

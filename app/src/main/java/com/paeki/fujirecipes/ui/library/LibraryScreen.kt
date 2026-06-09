@@ -72,6 +72,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -81,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -115,8 +117,10 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -128,6 +132,7 @@ fun LibraryScreen(
     onAddGroupImage: (String) -> Unit,
     onImportFromPhoto: () -> Unit = {},
     onImportFromScreenshot: () -> Unit = {},
+    onImportFromQr: () -> Unit = {},
     onScanTileGuide: () -> Unit = {},
 ) {
     val vm: LibraryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
@@ -554,13 +559,14 @@ fun LibraryScreen(
         }
 
         if (showAddDrawer) {
-            AddRecipeDrawer(
-                onCreateRecipe = { showAddDrawer = false; onCreateRecipe() },
-                onImportFromPhoto = { showAddDrawer = false; onImportFromPhoto() },
-                onImportFromScreenshot = { showAddDrawer = false; onImportFromScreenshot() },
-                onScanTileGuide = { showAddDrawer = false; onScanTileGuide() },
-                onDismiss = { showAddDrawer = false },
-            )
+                AddRecipeDrawer(
+                    onCreateRecipe = { showAddDrawer = false; onCreateRecipe() },
+                    onImportFromPhoto = { showAddDrawer = false; onImportFromPhoto() },
+                    onImportFromScreenshot = { showAddDrawer = false; onImportFromScreenshot() },
+                    onImportFromQr = { showAddDrawer = false; onImportFromQr() },
+                    onScanTileGuide = { showAddDrawer = false; onScanTileGuide() },
+                    onDismiss = { showAddDrawer = false },
+                )
         }
     }
 
@@ -1781,6 +1787,56 @@ private fun GroupHeader(label: String, count: Int, onBack: (() -> Unit)? = null)
     BottomDivider()
 }
 
+private sealed class ReferenceThumbnailState {
+    object Loading : ReferenceThumbnailState()
+    object Failed : ReferenceThumbnailState()
+    data class Ready(val bitmap: ImageBitmap) : ReferenceThumbnailState()
+}
+
+@Composable
+private fun LibraryReferenceImageSkeleton() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PanelGroupBg),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            PanelGroupBg,
+                            Color(0xFF211E19),
+                            PanelGroupBg,
+                        ),
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 18.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(132.dp)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(TextDim.copy(alpha = 0.18f)),
+            )
+            Box(
+                modifier = Modifier
+                    .width(84.dp)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(TextDim.copy(alpha = 0.12f)),
+            )
+        }
+    }
+}
+
 @Composable
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 private fun LibraryRecipeRow(
@@ -1806,19 +1862,29 @@ private fun LibraryRecipeRow(
     val context = LocalContext.current
     val thumbnailUri = recipe.referenceImageUris.firstOrNull()
     val useCardLayout = showImages && thumbnailUri != null && !organizing
-    val thumbnailBitmap = remember(thumbnailUri) {
-        if (thumbnailUri == null) return@remember null
-        runCatching {
-            val uri = Uri.parse(thumbnailUri)
-            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-            val targetPx = (context.resources.displayMetrics.density * 320).toInt().coerceAtLeast(1)
-            opts.inSampleSize = generateSequence(1) { it * 2 }
-                .first { it * targetPx >= opts.outWidth.coerceAtLeast(1) }
-            opts.inJustDecodeBounds = false
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-                ?.asImageBitmap()
-        }.getOrNull()
+    val thumbnailState by produceState<ReferenceThumbnailState>(
+        initialValue = ReferenceThumbnailState.Loading,
+        key1 = thumbnailUri,
+    ) {
+        value = if (thumbnailUri == null) {
+            ReferenceThumbnailState.Failed
+        } else {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val uri = Uri.parse(thumbnailUri)
+                    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+                    val targetPx = (context.resources.displayMetrics.density * 320).toInt().coerceAtLeast(1)
+                    opts.inSampleSize = generateSequence(1) { it * 2 }
+                        .first { it * targetPx >= opts.outWidth.coerceAtLeast(1) }
+                    opts.inJustDecodeBounds = false
+                    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+                        ?.asImageBitmap()
+                        ?.let { ReferenceThumbnailState.Ready(it) }
+                        ?: ReferenceThumbnailState.Failed
+                }.getOrElse { ReferenceThumbnailState.Failed }
+            }
+        }
     }
 
     Column(
@@ -1840,15 +1906,21 @@ private fun LibraryRecipeRow(
                     .fillMaxWidth()
                     .height(160.dp),
             ) {
-                if (thumbnailBitmap != null) {
-                    Image(
-                        bitmap = thumbnailBitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
+                when (val state = thumbnailState) {
+                    is ReferenceThumbnailState.Ready -> {
+                        Image(
+                            bitmap = state.bitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    ReferenceThumbnailState.Loading -> LibraryReferenceImageSkeleton()
+                    ReferenceThumbnailState.Failed -> Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(PanelGroupBg),
                     )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(PanelGroupBg))
                 }
                 // Sim label pinned top-left, selection/star top-right
                 Row(
@@ -2465,6 +2537,7 @@ private fun AddRecipeDrawer(
     onCreateRecipe: () -> Unit,
     onImportFromPhoto: () -> Unit,
     onImportFromScreenshot: () -> Unit,
+    onImportFromQr: () -> Unit,
     onScanTileGuide: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -2557,9 +2630,9 @@ private fun AddRecipeDrawer(
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
                 DrawerOptionRow("From screenshot", "Extract settings from recipe image", icon = com.paeki.fujirecipes.ui.components.IconImage, onClick = onImportFromScreenshot)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("Scan tile", "Capture from app recipe tile", icon = com.paeki.fujirecipes.ui.components.IconScan, onClick = onScanTileGuide)
+                DrawerOptionRow("QR code", "Import a shared FujiSync recipe", icon = com.paeki.fujirecipes.ui.components.IconQrCode, onClick = onImportFromQr)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("QR code", "Coming soon", icon = com.paeki.fujirecipes.ui.components.IconQrCode, enabled = false)
+                DrawerOptionRow("Scan tile", "Capture from app recipe tile", icon = com.paeki.fujirecipes.ui.components.IconScan, onClick = onScanTileGuide)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
             }
         }

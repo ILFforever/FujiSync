@@ -3,7 +3,10 @@ package com.paeki.fujirecipes.ui.camera
 import android.animation.ValueAnimator
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
@@ -35,9 +38,18 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetScaffold
@@ -76,7 +88,9 @@ import com.paeki.fujirecipes.ui.components.DragHandle
 import com.paeki.fujirecipes.ui.components.FilmSimBadgeImage
 import com.paeki.fujirecipes.ui.components.IconArrowDown
 import com.paeki.fujirecipes.ui.components.IconChevronRight
+import com.paeki.fujirecipes.ui.components.IconDragHandle
 import com.paeki.fujirecipes.ui.components.IconRefresh
+import com.paeki.fujirecipes.ui.components.IconReorder
 import com.paeki.fujirecipes.ui.components.IconSort
 import com.paeki.fujirecipes.ui.components.MetaRow
 import com.paeki.fujirecipes.ui.components.SectionLabel
@@ -569,13 +583,16 @@ private fun RearrangeRecipesButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val iconTint = if (enabled) Gold else TextMuted.copy(alpha = 0.4f)
+    val textColor = if (enabled) TextMuted else TextMuted.copy(alpha = 0.4f)
+    val dimColor = if (enabled) TextDim else TextDim.copy(alpha = 0.35f)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(PanelLow)
-            .border(1.dp, Border, RoundedCornerShape(12.dp))
+            .border(1.dp, if (enabled) Border else Border.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -583,44 +600,38 @@ private fun RearrangeRecipesButton(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            androidx.compose.material3.Icon(
-                imageVector = IconSort,
-                contentDescription = null,
-                tint = if (enabled) Gold else TextMuted.copy(alpha = 0.45f),
-                modifier = Modifier.size(14.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (enabled) Gold.copy(alpha = 0.1f) else Gold.copy(alpha = 0.04f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(
+                    imageVector = IconReorder,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
             Text(
                 text = "REARRANGE RECIPES",
                 fontFamily = SansFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.5.sp,
-                letterSpacing = 1.2.sp,
-                color = if (enabled) TextPrimary else TextMuted.copy(alpha = 0.45f),
+                letterSpacing = 1.1.sp,
+                color = textColor,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            Text(
-                text = "EDIT",
-                fontFamily = MonoFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 9.5.sp,
-                letterSpacing = 1.sp,
-                color = if (enabled) Gold.copy(alpha = 0.82f) else TextMuted.copy(alpha = 0.45f),
-            )
-            androidx.compose.material3.Icon(
-                imageVector = IconChevronRight,
-                contentDescription = null,
-                tint = if (enabled) Gold.copy(alpha = 0.82f) else TextMuted.copy(alpha = 0.45f),
-                modifier = Modifier.size(12.dp),
-            )
-        }
+        androidx.compose.material3.Icon(
+            imageVector = IconChevronRight,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(13.dp),
+        )
     }
 }
 
@@ -692,67 +703,46 @@ private fun RearrangeRecipesSheet(
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
-                        .width(38.dp)
+                        .width(48.dp)
                         .height(3.dp)
                         .clip(RoundedCornerShape(99.dp))
-                        .background(TextDim.copy(alpha = 0.55f)),
+                        .background(TextDim.copy(alpha = 0.7f)),
                 )
-                Spacer(Modifier.height(18.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column {
-                        Text(
-                            text = "REARRANGE RECIPES",
-                            fontFamily = SansFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            letterSpacing = 0.5.sp,
-                            color = TextPrimary,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "SET THE ORDER WRITTEN TO C1-C7",
-                            fontFamily = MonoFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp,
-                            letterSpacing = 1.2.sp,
-                            color = TextDim,
-                        )
-                    }
+                Spacer(Modifier.height(20.dp))
+                Column {
                     Text(
-                        text = if (changed) "CHANGED" else "CURRENT",
+                        text = "SLOT ORDER",
+                        fontFamily = SansFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        letterSpacing = 0.5.sp,
+                        color = TextPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "DRAG HANDLE TO REORDER",
                         fontFamily = MonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 9.sp,
-                        letterSpacing = 1.2.sp,
-                        color = if (changed) Gold else TextDim,
+                        fontSize = 8.5.sp,
+                        letterSpacing = 1.1.sp,
+                        color = TextDim,
                     )
                 }
                 Spacer(Modifier.height(18.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                Box(
+                    modifier = Modifier.weight(1f, fill = false),
                 ) {
-                    draftSlots.forEachIndexed { index, recipe ->
-                        RearrangeSlotRow(
-                            targetSlot = CameraSlot.entries[index].label,
-                            recipe = recipe,
-                            canMoveUp = index > 0 && !writeBusy,
-                            canMoveDown = index < draftSlots.lastIndex && !writeBusy,
-                            onMoveUp = { draftSlots = draftSlots.moveItem(index, index - 1) },
-                            onMoveDown = { draftSlots = draftSlots.moveItem(index, index + 1) },
-                        )
-                    }
+                    DraggableSlotList(
+                        slots = draftSlots,
+                        writeBusy = writeBusy,
+                        onSlotsChanged = { draftSlots = it },
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
@@ -778,17 +768,21 @@ private fun RearrangeRecipesSheet(
                             .height(46.dp)
                             .clip(RoundedCornerShape(13.dp))
                             .background(if (canApply) Gold else PanelHigh)
-                            .border(1.dp, if (canApply) Gold else Border, RoundedCornerShape(13.dp))
+                            .border(
+                                1.dp,
+                                if (canApply) Gold else Gold.copy(alpha = 0.18f),
+                                RoundedCornerShape(13.dp),
+                            )
                             .clickable(enabled = canApply) { onApply(draftSlots) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (writeBusy) "WRITING" else "APPLY",
+                            text = if (writeBusy) "WRITING…" else "APPLY ORDER",
                             fontFamily = SansFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
                             letterSpacing = 1.3.sp,
-                            color = if (canApply) Bg else TextDim,
+                            color = if (canApply) Bg else TextDim.copy(alpha = 0.6f),
                         )
                     }
                 }
@@ -798,50 +792,150 @@ private fun RearrangeRecipesSheet(
 }
 
 @Composable
-private fun RearrangeSlotRow(
+private fun DraggableSlotList(
+    slots: List<RecipeUiModel>,
+    writeBusy: Boolean,
+    onSlotsChanged: (List<RecipeUiModel>) -> Unit,
+) {
+    var draggingIdx by remember { mutableIntStateOf(-1) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var rowHeightPx by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val gapDp = 8.dp
+    val gapPx = with(density) { gapDp.toPx() }
+
+    fun slotStride() = (rowHeightPx + gapPx).coerceAtLeast(1f)
+    fun targetIdx() = if (draggingIdx < 0) -1 else
+        (draggingIdx + (dragOffsetY / slotStride()).roundToInt()).coerceIn(0, slots.lastIndex)
+
+    Column(verticalArrangement = Arrangement.spacedBy(gapDp)) {
+        slots.forEachIndexed { index, recipe ->
+            val isDragging = index == draggingIdx
+            val tgt = if (draggingIdx >= 0) targetIdx() else -1
+            val visualTranslateY = when {
+                isDragging -> dragOffsetY
+                draggingIdx < 0 -> 0f
+                draggingIdx < tgt && index in (draggingIdx + 1)..tgt -> -slotStride()
+                draggingIdx > tgt && index in tgt until draggingIdx -> slotStride()
+                else -> 0f
+            }
+            DraggableSlotRow(
+                targetSlot = CameraSlot.entries[index].label,
+                recipe = recipe,
+                isDragging = isDragging,
+                visualTranslateY = visualTranslateY,
+                writeBusy = writeBusy,
+                onHeightMeasured = { px -> if (rowHeightPx == 0f) rowHeightPx = px },
+                onDragStart = {
+                    if (!writeBusy) { draggingIdx = index; dragOffsetY = 0f }
+                },
+                onDrag = { dy -> dragOffsetY += dy },
+                onDragEnd = {
+                    val finalIdx = targetIdx()
+                    if (finalIdx >= 0 && finalIdx != draggingIdx) {
+                        onSlotsChanged(slots.moveItem(draggingIdx, finalIdx))
+                    }
+                    draggingIdx = -1
+                    dragOffsetY = 0f
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DraggableSlotRow(
     targetSlot: String,
     recipe: RecipeUiModel,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
+    isDragging: Boolean,
+    visualTranslateY: Float,
+    writeBusy: Boolean,
+    onHeightMeasured: (Float) -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
 ) {
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+
+    val borderColor = if (isDragging) Gold.copy(alpha = 0.7f) else Border
+    val bgColor = if (isDragging) PanelHigh else PanelHigh.copy(alpha = 0.56f)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { onHeightMeasured(it.size.height.toFloat()) }
+            .graphicsLayer {
+                translationY = visualTranslateY
+                if (isDragging) {
+                    scaleX = 1.015f
+                    scaleY = 1.015f
+                    shadowElevation = 12f
+                }
+            }
+            .zIndex(if (isDragging) 1f else 0f)
             .clip(RoundedCornerShape(13.dp))
-            .background(PanelHigh.copy(alpha = 0.56f))
-            .border(1.dp, Border, RoundedCornerShape(13.dp))
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(13.dp)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // Drag handle — full-height touch target
         Box(
             modifier = Modifier
-                .width(34.dp)
-                .height(44.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .width(44.dp)
+                .height(62.dp)
+                .pointerInput(writeBusy) {
+                    detectDragGestures(
+                        onDragStart = { currentOnDragStart() },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            currentOnDrag(dragAmount.y)
+                        },
+                        onDragEnd = { currentOnDragEnd() },
+                        onDragCancel = { currentOnDragEnd() },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = IconDragHandle,
+                contentDescription = "Drag to reorder",
+                tint = if (isDragging) Gold else TextDim.copy(alpha = 0.55f),
+                modifier = Modifier.size(16.dp),
+            )
+        }
+
+        // Slot badge
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(Bg)
-                .border(1.dp, Gold.copy(alpha = 0.38f), RoundedCornerShape(10.dp)),
+                .border(1.dp, Gold.copy(alpha = if (isDragging) 0.6f else 0.32f), RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = targetSlot,
                 fontFamily = MonoFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                letterSpacing = 0.5.sp,
+                fontSize = 10.sp,
+                letterSpacing = 0.3.sp,
                 color = Gold,
             )
         }
+
+        Spacer(Modifier.width(10.dp))
         FilmSimBadgeImage(sim = recipe.sim, size = 30.dp)
-        Column(modifier = Modifier.weight(1f)) {
+        Spacer(Modifier.width(10.dp))
+
+        Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
             Text(
                 text = recipe.name,
                 fontFamily = SansFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
-                color = TextPrimary,
+                color = if (isDragging) TextPrimary else TextPrimary.copy(alpha = 0.9f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -852,41 +946,13 @@ private fun RearrangeSlotRow(
                 fontWeight = FontWeight.Bold,
                 fontSize = 9.sp,
                 letterSpacing = 0.8.sp,
-                color = TextDim,
+                color = if (isDragging) Gold.copy(alpha = 0.7f) else TextDim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            ReorderArrowButton(up = true, enabled = canMoveUp, onClick = onMoveUp)
-            ReorderArrowButton(up = false, enabled = canMoveDown, onClick = onMoveDown)
-        }
-    }
-}
 
-@Composable
-private fun ReorderArrowButton(
-    up: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(if (enabled) PanelLow else PanelLow.copy(alpha = 0.45f))
-            .border(1.dp, if (enabled) Border else Border.copy(alpha = 0.45f), RoundedCornerShape(9.dp))
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.material3.Icon(
-            imageVector = IconArrowDown,
-            contentDescription = if (up) "Move up" else "Move down",
-            tint = if (enabled) TextMuted else TextDim.copy(alpha = 0.45f),
-            modifier = Modifier
-                .size(13.dp)
-                .graphicsLayer { rotationZ = if (up) 180f else 0f },
-        )
+        Spacer(Modifier.width(12.dp))
     }
 }
 

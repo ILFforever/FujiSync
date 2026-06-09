@@ -6,6 +6,7 @@ enum class FujiPropertyCode(
     val signed: Boolean = false,
 ) {
     DynamicRange(0xD190, "Dynamic Range"),
+    DRangePriority(0xD191, "D Range Priority"),
     FilmSimulation(0xD192, "Film Simulation"),
     MonoWc(0xD193, "Mono WC", signed = true),
     MonoMg(0xD194, "Mono MG", signed = true),

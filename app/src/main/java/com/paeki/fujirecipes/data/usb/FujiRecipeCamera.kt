@@ -96,6 +96,7 @@ class FujiRecipeCamera(
         val filmSimValue = preset.properties[FujiPropertyCode.FilmSimulation]
         val isMono      = filmSimValue != null && filmSimValue in MONO_SIM_CODES
         val isColorTemp = preset.properties[FujiPropertyCode.WhiteBalance] == 0x8007
+        val dRangePriority = preset.properties[FujiPropertyCode.DRangePriority] ?: 0
 
         // FilmSimulation must be written first so the camera accepts subsequent prop ranges
         val ordered = buildList {
@@ -109,6 +110,7 @@ class FujiRecipeCamera(
         for ((prop, value) in ordered) {
             if (isMono && prop in COLOR_ONLY_PROPS) { skipped++; continue }
             if (!isColorTemp && prop == FujiPropertyCode.ColorTemperature) { skipped++; continue }
+            if (dRangePriority != 0 && prop == FujiPropertyCode.DynamicRange) { skipped++; continue }
 
             val tx = connection.executeCommandWithData(
                 code    = PtpConstants.SET_DEVICE_PROP_VALUE,

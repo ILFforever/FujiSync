@@ -42,6 +42,19 @@ class FxwRecipeTest {
         assertEquals(listOf("DR100%"), recipe.pillLabels())
     }
 
+    @Test
+    fun `pillLabels shows DR Priority instead of Dynamic Range when active`() {
+        val recipe = recipe(
+            mapOf(
+                "Film Simulation" to "Classic Chrome",
+                "Dynamic Range" to "DR400",
+                "D Range Priority" to "Weak",
+            ),
+        )
+
+        assertEquals(listOf("DRP WEAK"), recipe.pillLabels())
+    }
+
     private fun recipe(params: Map<String, String>): FxwRecipe =
         FxwRecipe(
             id = 1,

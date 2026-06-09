@@ -25,6 +25,15 @@ object CameraPresetName {
     fun sanitizeOrFallback(name: String, fallback: String = FALLBACK): String =
         sanitize(name).ifEmpty { fallback }
 
+    fun validate(name: String): String? {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return "Name can't be empty"
+        if (trimmed.length > MAX_LENGTH) return "Too long — max $MAX_LENGTH characters"
+        val folded = foldAccents(trimmed)
+        if (folded.any { it !in ALLOWED }) return "Name contains characters the camera doesn't support — letters, numbers, and basic punctuation only"
+        return null
+    }
+
     private fun collapseAndStrip(name: String): String {
         val folded = foldAccents(name)
         val sb = StringBuilder(folded.length)

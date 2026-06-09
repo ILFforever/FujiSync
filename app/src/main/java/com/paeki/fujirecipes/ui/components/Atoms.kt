@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -203,8 +204,13 @@ fun PropRow(
     label: String,
     value: String,
     isLast: Boolean = false,
+    inactive: Boolean = false,
+    inactiveValue: String? = null,
 ) {
     val icon = PROP_ICONS[label]
+    val iconTint = if (inactive) TextDim else Gold
+    val labelColor = if (inactive) TextMuted else TextPrimary
+    val valueColor = if (inactive) Gold.copy(alpha = 0.72f) else TextPrimary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -217,7 +223,7 @@ fun PropRow(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Gold,
+                    tint = iconTint,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -227,17 +233,48 @@ fun PropRow(
             text = label,
             fontFamily = SansFamily,
             fontSize = 14.5.sp,
-            color = TextPrimary,
+            color = labelColor,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            text = value,
-            fontFamily = MonoFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 14.sp,
-            letterSpacing = 0.2.sp,
-            color = TextPrimary,
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = if (inactive) (inactiveValue ?: "DRP CONTROLLED") else value,
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = if (inactive) 12.5.sp else 14.sp,
+                letterSpacing = if (inactive) 0.8.sp else 0.2.sp,
+                color = valueColor,
+            )
+            if (inactive) {
+                Text(
+                    text = value,
+                    fontFamily = MonoFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 10.5.sp,
+                    letterSpacing = 0.3.sp,
+                    color = TextDim,
+                )
+            }
+        }
+    }
+}
+
+fun recipePropertyRows(data: Map<String, String>): List<Pair<String, String>> {
+    val dRangePriority = data["D Range Priority"]
+        ?.takeIf { it != "Off" && it != "—" }
+    val hasDynamicRange = data.containsKey("Dynamic Range")
+
+    return buildList {
+        data.forEach { (key, value) ->
+            when {
+                key == "Dynamic Range" && dRangePriority != null ->
+                    add("D Range Priority" to dRangePriority)
+                key == "D Range Priority" && (dRangePriority == null || hasDynamicRange) ->
+                    Unit
+                else ->
+                    add(key to value)
+            }
+        }
     }
 }
 

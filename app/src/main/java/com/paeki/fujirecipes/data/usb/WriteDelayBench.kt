@@ -66,6 +66,7 @@ suspend fun benchWriteDelay(
         val filmSimValue = preset.properties[FujiPropertyCode.FilmSimulation]
         val isMono = filmSimValue != null && filmSimValue in MONO_SIM_CODES
         val isColorTemp = preset.properties[FujiPropertyCode.WhiteBalance] == 0x8007
+        val dRangePriority = preset.properties[FujiPropertyCode.DRangePriority] ?: 0
 
         val ordered = buildList {
             preset.properties[FujiPropertyCode.FilmSimulation]
@@ -78,6 +79,7 @@ suspend fun benchWriteDelay(
         for ((prop, value) in ordered) {
             if (isMono && prop in COLOR_ONLY_PROPS) continue
             if (!isColorTemp && prop == FujiPropertyCode.ColorTemperature) continue
+            if (dRangePriority != 0 && prop == FujiPropertyCode.DynamicRange) continue
 
             val tx = connection.executeCommandWithData(
                 code = PtpConstants.SET_DEVICE_PROP_VALUE,
@@ -124,6 +126,7 @@ fun randomBenchPreset(slot: CameraSlot): RecipePreset = RecipeUiModel(
     pills       = emptyList(),
     effects     = mapOf(
         "Dynamic Range"        to "DR100%",
+        "D Range Priority"     to "Off",
         "Grain Effect"         to "Off",
         "Color Chrome"         to "Off",
         "Color Chrome FX Blue" to "Off",

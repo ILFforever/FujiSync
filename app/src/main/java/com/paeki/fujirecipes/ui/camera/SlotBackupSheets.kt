@@ -264,8 +264,10 @@ fun RestoreSheet(
     var slotsExpanded by remember { mutableStateOf(false) }
     var phase by remember { mutableStateOf(RestorePhase.Idle) }
     val chevronAngle by animateFloatAsState(if (slotsExpanded) 90f else 0f, label = "chevron")
+    val showValidation = isRestoringValidation || phase == RestorePhase.Validating
 
     fun dismissWithMotion() {
+        if (showValidation && readingSlots) return
         if (restoreInProgress) return  // block only while writes are actively in flight
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
@@ -278,9 +280,8 @@ fun RestoreSheet(
     }
     fun confirmDelete() { onDelete(); dismissWithMotion() }
 
-    val showValidation = isRestoringValidation || phase == RestorePhase.Validating
-
-    // Transition Working → Validating when the VM starts its post-restore read; auto-dismiss when done.
+    // Transition Working → Validating when the VM starts its post-restore read.
+    // The validation result stays open until the user closes it.
     LaunchedEffect(readingSlots, restoreInProgress, isRestoringValidation) {
         if (isRestoringValidation) {
             phase = RestorePhase.Validating
@@ -288,10 +289,6 @@ fun RestoreSheet(
         }
         when (phase) {
             RestorePhase.Working -> if (readingSlots) phase = RestorePhase.Validating
-            RestorePhase.Validating -> if (!readingSlots) {
-                delay(500)
-                dismissWithMotion()
-            }
             else -> {}
         }
     }
@@ -348,6 +345,8 @@ fun RestoreSheet(
                     RestoreReadingContent(
                         readingSlotIndex = readingSlotIndex,
                         loadedSlots = loadedSlots,
+                        readingSlots = readingSlots,
+                        onClose = ::dismissWithMotion,
                     )
                 } else Column(
                     modifier = Modifier
@@ -1079,6 +1078,8 @@ fun SaveAllSheet(
 private fun RestoreReadingContent(
     readingSlotIndex: Int,
     loadedSlots: List<RecipeUiModel>,
+    readingSlots: Boolean,
+    onClose: () -> Unit,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "restore-read")
     val pulse by infiniteTransition.animateFloat(
@@ -1101,7 +1102,7 @@ private fun RestoreReadingContent(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
-                text = "VALIDATING",
+                text = if (readingSlots) "VALIDATING" else "VALIDATED",
                 fontFamily = MonoFamily,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
@@ -1188,6 +1189,8 @@ private fun RestoreReadingContent(
                 }
             }
         }
+
+        PrimaryCTA(label = "Close", enabled = !readingSlots, onClick = onClose)
     }
 }
 

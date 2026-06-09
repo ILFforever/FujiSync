@@ -313,8 +313,24 @@ val IconTrash = icon("Trash") {
     stroke("M10 11v6M14 11v6")
 }
 
+val IconDragHandle = icon("DragHandle") {
+    stroke("M8 8h8")
+    stroke("M8 12h8")
+    stroke("M8 16h8")
+}
+
+val IconReorder = icon("Reorder") {
+    stroke("M3 7h12")
+    stroke("M3 12h12")
+    stroke("M3 17h12")
+    stroke("M18 5v14")
+    stroke("M15 8l3-3 3 3")
+    stroke("M15 16l3 3 3-3")
+}
+
 // ── Property icon map ─────────────────────────────────────────────
 val PROP_ICONS: Map<String, ImageVector> = mapOf(
+    "D Range Priority" to IconDR,
     "Dynamic Range" to IconDR,
     "Grain Effect" to IconGrain,
     "Color Chrome" to IconCC,

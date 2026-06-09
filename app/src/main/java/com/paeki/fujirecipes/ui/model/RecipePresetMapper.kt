@@ -5,6 +5,8 @@ import com.paeki.fujirecipes.data.ptp.MONO_SIM_CODES
 import com.paeki.fujirecipes.domain.model.CameraSlot
 import com.paeki.fujirecipes.domain.model.FujiFilmSimulation
 import com.paeki.fujirecipes.domain.model.FujiPropertyCode
+import com.paeki.fujirecipes.ui.library.normalizedDRangePriorityLabel
+import com.paeki.fujirecipes.ui.library.normalizedDynamicRangeLabel
 import com.paeki.fujirecipes.domain.model.RecipePreset
 
 fun RecipePreset.toUiModel(): RecipeUiModel {
@@ -22,6 +24,12 @@ fun RecipePreset.toUiModel(): RecipeUiModel {
         200  -> "DR200%"
         400  -> "DR400%"
         else -> "DR Auto"
+    }
+    val dRangePriority = when (props[FujiPropertyCode.DRangePriority]) {
+        1     -> "Weak"
+        2     -> "Strong"
+        32768 -> "Auto"
+        else  -> "Off"
     }
 
     // ── Grain Effect ──────────────────────────────────────────────
@@ -81,6 +89,7 @@ fun RecipePreset.toUiModel(): RecipeUiModel {
 
     // ── Structured maps ───────────────────────────────────────────
     val effects = buildMap {
+        put("D Range Priority",     dRangePriority)
         put("Dynamic Range",        dr)
         put("Grain Effect",         grain)
         put("Color Chrome",         if (mono) "—" else cc)
@@ -107,7 +116,11 @@ fun RecipePreset.toUiModel(): RecipeUiModel {
 
     // ── Pills ─────────────────────────────────────────────────────
     val pills = buildList {
-        add(dr)
+        if (dRangePriority == "Off") {
+            add(dr)
+        } else {
+            add("DRP ${dRangePriority.uppercase()}")
+        }
         if (grain != "Off") {
             val tag = grain
                 .replace("Weak Small",   "WK/S")
@@ -146,12 +159,22 @@ fun RecipeUiModel.toPreset(targetSlot: CameraSlot): RecipePreset {
     val simValue = FujiFilmSimulation.entries.firstOrNull { it.label == sim }?.protocolValue ?: 1
     props[FujiPropertyCode.FilmSimulation] = simValue
 
-    // Dynamic Range
-    props[FujiPropertyCode.DynamicRange] = when (effects["Dynamic Range"]) {
-        "DR100%" -> 100
-        "DR200%" -> 200
-        "DR400%" -> 400
+    val dRangePriority = (effects["D Range Priority"] ?: "Off").normalizedDRangePriorityLabel()
+    props[FujiPropertyCode.DRangePriority] = when (dRangePriority) {
+        "Weak"   -> 1
+        "Strong" -> 2
+        "Auto"   -> 32768
         else     -> 0
+    }
+
+    // Dynamic Range is camera-controlled when D Range Priority is active.
+    if (dRangePriority == "Off") {
+        props[FujiPropertyCode.DynamicRange] = when ((effects["Dynamic Range"] ?: "DR Auto").normalizedDynamicRangeLabel()) {
+            "DR100%" -> 100
+            "DR200%" -> 200
+            "DR400%" -> 400
+            else     -> 0
+        }
     }
 
     // Grain Effect (1/6=Off, 2=WkS, 3=StS, 4=WkL, 5=StL)

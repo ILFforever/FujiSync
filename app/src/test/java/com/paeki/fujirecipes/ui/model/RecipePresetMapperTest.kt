@@ -84,6 +84,83 @@ class RecipePresetMapperTest {
         assertEquals("DR Auto", ui.effects["Dynamic Range"])
     }
 
+    @Test
+    fun `toUiModel maps D Range Priority values and uses DRP pill`() {
+        val ui = preset(
+            props = mapOf(
+                FujiPropertyCode.DynamicRange to 400,
+                FujiPropertyCode.DRangePriority to 32768,
+            ),
+        ).toUiModel()
+
+        assertEquals("Auto", ui.effects["D Range Priority"])
+        assertEquals("DR400%", ui.effects["Dynamic Range"])
+        assertTrue(ui.pills.contains("DRP AUTO"))
+        assertFalse(ui.pills.contains("DR400%"))
+    }
+
+    @Test
+    fun `toPreset omits Dynamic Range when D Range Priority is active`() {
+        val preset = RecipeUiModel(
+            slot = "C1",
+            name = "Priority",
+            sim = "Provia / Standard",
+            pills = emptyList(),
+            effects = mapOf(
+                "D Range Priority" to "Strong",
+                "Dynamic Range" to "DR400%",
+                "Grain Effect" to "Off",
+                "Color Chrome" to "Off",
+                "Color Chrome FX Blue" to "Off",
+                "Smooth Skin" to "Off",
+            ),
+        ).toPreset(CameraSlot.C1)
+
+        assertEquals(2, preset.properties[FujiPropertyCode.DRangePriority])
+        assertFalse(preset.properties.containsKey(FujiPropertyCode.DynamicRange))
+    }
+
+    @Test
+    fun `toPreset writes Dynamic Range when D Range Priority is Off`() {
+        val preset = RecipeUiModel(
+            slot = "C1",
+            name = "Manual DR",
+            sim = "Provia / Standard",
+            pills = emptyList(),
+            effects = mapOf(
+                "D Range Priority" to "Off",
+                "Dynamic Range" to "DR200%",
+                "Grain Effect" to "Off",
+                "Color Chrome" to "Off",
+                "Color Chrome FX Blue" to "Off",
+                "Smooth Skin" to "Off",
+            ),
+        ).toPreset(CameraSlot.C1)
+
+        assertEquals(0, preset.properties[FujiPropertyCode.DRangePriority])
+        assertEquals(200, preset.properties[FujiPropertyCode.DynamicRange])
+    }
+
+    @Test
+    fun `toPreset accepts FXW Dynamic Range labels without percent`() {
+        val preset = RecipeUiModel(
+            slot = "C1",
+            name = "FXW DR",
+            sim = "Provia / Standard",
+            pills = emptyList(),
+            effects = mapOf(
+                "D Range Priority" to "Off",
+                "Dynamic Range" to "DR400",
+                "Grain Effect" to "Off",
+                "Color Chrome" to "Off",
+                "Color Chrome FX Blue" to "Off",
+                "Smooth Skin" to "Off",
+            ),
+        ).toPreset(CameraSlot.C1)
+
+        assertEquals(400, preset.properties[FujiPropertyCode.DynamicRange])
+    }
+
     // ── grain effect ──────────────────────────────────────────────────────────
 
     @Test

@@ -11,6 +11,7 @@ import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -59,6 +60,11 @@ class MainActivity : ComponentActivity() {
     private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.handleOcrImportResult(uri)
+    }
+
+    private val qrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.handleQrImportResult(uri)
     }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
@@ -141,12 +147,17 @@ class MainActivity : ComponentActivity() {
                     onExifImportErrorDismiss = viewModel::handleExifImportDismiss,
                     onImportFromScreenshot = viewModel::handleLaunchOcrImport,
                     onOcrImportErrorDismiss = viewModel::handleOcrImportDismiss,
+                    onQrRecipeDetected = viewModel::handleQrImportRecipe,
+                    onImportQrFromImage = viewModel::handleLaunchQrImageImport,
+                    onQrImportErrorDismiss = viewModel::handleQrImportDismiss,
                     onAddMockCamera = viewModel::handleAddMockCamera,
                     onSaveAllToLibrary = viewModel::handleSaveAllSlotsToLibrary,
                     onSaveAllReportDismiss = viewModel::handleSaveAllReportDismiss,
                     onLoadCaptureLog = viewModel::loadCaptureLog,
                     onClearCaptureLog = viewModel::clearCaptureLog,
                     onSetPropertyWriteDelay = viewModel::handleSetPropertyWriteDelay,
+                    onCheckForUpdates = viewModel::handleCheckForUpdates,
+                    onInstallUpdate = viewModel::handleInstallUpdate,
                     )
                 } // else
             }
@@ -162,9 +173,29 @@ class MainActivity : ComponentActivity() {
                     MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(arrayOf("image/*"))
                     MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(arrayOf("image/*"))
                     MainViewModelEvent.LaunchOcrImagePicker  -> ocrImagePicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchQrImagePicker -> qrImagePicker.launch(arrayOf("image/*"))
+                    is MainViewModelEvent.InstallApk -> openApkInstaller(event.uri)
+                    MainViewModelEvent.OpenInstallPermissionSettings -> openInstallPermissionSettings()
                 }
             }
         }
+    }
+
+    private fun openApkInstaller(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+    }
+
+    private fun openInstallPermissionSettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:$packageName"),
+        )
+        startActivity(intent)
     }
 
     private fun requestUsbPermission(device: UsbDevice) {

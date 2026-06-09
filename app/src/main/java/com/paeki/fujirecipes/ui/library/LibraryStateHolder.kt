@@ -526,7 +526,7 @@ class LibraryStateHolder @Inject constructor(
 
     private fun FxwRecipe.toLibraryRecipeUiModel(name: String, referenceUris: List<String> = emptyList()): LibraryRecipeUiModel {
         val normalized = params.normalizedFxwParams()
-        val effectKeys = setOf("Dynamic Range", "Grain Effect", "Color Chrome", "Color Chrome FX Blue", "Smooth Skin")
+        val effectKeys = setOf("Dynamic Range", "D Range Priority", "Grain Effect", "Color Chrome", "Color Chrome FX Blue", "Smooth Skin")
         val toneKeys = setOf("Highlight Tone", "Shadow Tone", "Color", "Sharpness", "High ISO NR", "Clarity")
         val wbKeys = setOf("White Balance", "WB Shift R", "WB Shift B")
         return LibraryRecipeUiModel(
@@ -545,8 +545,18 @@ class LibraryStateHolder @Inject constructor(
     fun LibraryRecipeUiModel.normalizedLibraryRecipe(): LibraryRecipeUiModel =
         copy(
             name = LibraryRecipeName.sanitize(name),
+            effects = effects.normalizedEffectsSection(),
             wb = wb.normalizedWhiteBalanceSection(),
         )
+
+internal fun Map<String, String>.normalizedEffectsSection(): Map<String, String> =
+    mapValues { (key, value) ->
+        when (key) {
+            "Dynamic Range" -> value.normalizedDynamicRangeLabel()
+            "D Range Priority" -> value.normalizedDRangePriorityLabel()
+            else -> value
+        }
+    }
 
     private fun List<String>.appendReferenceImages(uris: List<String>): List<String> =
         (this + uris).distinct().take(MAX_REFERENCE_IMAGES)
@@ -568,9 +578,12 @@ internal fun Map<String, String>.normalizedFxwParams(): Map<String, String> {
         val value = rawValue.trim()
         when (key) {
             "Color Chrome Effect" -> putClean("Color Chrome", value)
+            "Dynamic Range" -> putClean("Dynamic Range", value.normalizedDynamicRangeLabel())
             "Highlight" -> putClean("Highlight Tone", value)
             "Shadow" -> putClean("Shadow Tone", value)
             "Noise Reduction" -> putClean("High ISO NR", value)
+            "Dynamic Range Priority", "DR Priority", "DRP" -> putClean("D Range Priority", value.normalizedDRangePriorityLabel())
+            "D Range Priority" -> putClean("D Range Priority", value.normalizedDRangePriorityLabel())
             "White Balance" -> {
                 val parsed = parseWhiteBalanceValue(value)
                 putClean("White Balance", parsed.balance.normalizedWhiteBalanceLabel())
@@ -614,4 +627,26 @@ internal fun String.normalizedWhiteBalanceLabel(): String = when (trim()) {
     "Auto (Ambience)" -> "Ambience Priority"
     "Tungsten" -> "Incandescent"
     else -> trim()
+}
+
+internal fun String.normalizedDRangePriorityLabel(): String = when (trim().lowercase()) {
+    "off" -> "Off"
+    "strong" -> "Strong"
+    "weak" -> "Weak"
+    "auto" -> "Auto"
+    else -> trim()
+}
+
+internal fun String.normalizedDynamicRangeLabel(): String {
+    val compact = trim()
+        .replace(" ", "")
+        .uppercase()
+        .replace('O', '0')
+    return when (compact) {
+        "DR100", "100", "100%" -> "DR100%"
+        "DR200", "200", "200%" -> "DR200%"
+        "DR400", "400", "400%" -> "DR400%"
+        "DRAUTO", "AUTO", "DR0" -> "DR Auto"
+        else -> trim()
+    }
 }

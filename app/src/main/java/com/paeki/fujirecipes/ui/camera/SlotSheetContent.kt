@@ -40,6 +40,7 @@ import com.paeki.fujirecipes.ui.components.IconChevronRight
 import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.PrimaryCTA
 import com.paeki.fujirecipes.ui.components.PropRow
+import com.paeki.fujirecipes.ui.components.recipePropertyRows
 import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.theme.Border
@@ -230,7 +231,8 @@ private fun SheetSlotChip(
 @Composable
 internal fun PropSectionBlock(label: String, data: Map<String, String>) {
     if (data.isEmpty()) return
-    val entries = data.entries.toList()
+    val entries = recipePropertyRows(data)
+    if (entries.isEmpty()) return
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 0.dp)) {
         Spacer(Modifier.height(8.dp))
         SectionLabel(text = label, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
@@ -242,7 +244,11 @@ internal fun PropSectionBlock(label: String, data: Map<String, String>) {
                 .border(1.dp, Border, RoundedCornerShape(14.dp)),
         ) {
             entries.forEachIndexed { i, (k, v) ->
-                PropRow(label = k, value = v, isLast = i == entries.lastIndex)
+                PropRow(
+                    label = k,
+                    value = v,
+                    isLast = i == entries.lastIndex,
+                )
                 if (i < entries.lastIndex) {
                     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Border))
                 }

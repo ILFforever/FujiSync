@@ -75,6 +75,8 @@ import com.paeki.fujirecipes.ui.components.IconWB
 import com.paeki.fujirecipes.ui.components.IconWBShift
 import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.SectionLabel
+import com.paeki.fujirecipes.ui.library.normalizedDRangePriorityLabel
+import com.paeki.fujirecipes.ui.library.normalizedDynamicRangeLabel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
@@ -115,6 +117,8 @@ private val whiteBalanceOptions = listOf(
     "Shade",
     "Color Temperature",
 )
+
+private val dRangePriorityOptions = listOf("Off", "Strong", "Weak", "Auto")
 
 private data class FilmSimFamily(
     val label: String,
@@ -168,7 +172,8 @@ fun RecipeEditorScreen(
     var description by remember(seed) { mutableStateOf(seed.description) }
     var sim by remember(seed) { mutableStateOf(seed.sim.canonicalFilmSimLabel().ifBlank { FujiFilmSimulation.Provia.label }) }
     var simFamily by remember(seed) { mutableStateOf(filmSimFamilyFor(seed.sim.canonicalFilmSimLabel().ifBlank { FujiFilmSimulation.Provia.label }).label) }
-    var dynamicRange by remember(seed) { mutableStateOf(seed.effects["Dynamic Range"] ?: "DR Auto") }
+    var dRangePriority by remember(seed) { mutableStateOf((seed.effects["D Range Priority"] ?: "Off").normalizedDRangePriorityLabel()) }
+    var dynamicRange by remember(seed) { mutableStateOf((seed.effects["Dynamic Range"] ?: "DR Auto").normalizedDynamicRangeLabel()) }
     var grain by remember(seed) { mutableStateOf(seed.effects["Grain Effect"] ?: "Off") }
     var colorChrome by remember(seed) { mutableStateOf(seed.effects["Color Chrome"]?.takeUnless { it == "—" } ?: "Off") }
     var colorChromeBlue by remember(seed) { mutableStateOf(seed.effects["Color Chrome FX Blue"]?.takeUnless { it == "—" } ?: "Off") }
@@ -195,6 +200,7 @@ fun RecipeEditorScreen(
         name,
         description,
         sim,
+        dRangePriority,
         dynamicRange,
         grain,
         colorChrome,
@@ -221,6 +227,7 @@ fun RecipeEditorScreen(
             name = CameraPresetName.sanitizeOrFallback(name, RECIPE_NAME_FALLBACK),
             description = description.trim(),
             sim = sim,
+            dRangePriority = dRangePriority,
             dynamicRange = dynamicRange,
             grain = grain,
             colorChrome = colorChrome,
@@ -343,7 +350,14 @@ fun RecipeEditorScreen(
                     }
 
                     EditorSection("Effects") {
-                        ChipControl("Dynamic Range", IconDR, listOf("DR Auto", "DR100%", "DR200%", "DR400%"), dynamicRange) { dynamicRange = it }
+                        ChipControl("D Range Priority", IconDR, dRangePriorityOptions, dRangePriority) { dRangePriority = it }
+                        ChipControl(
+                            label = "Dynamic Range",
+                            icon = IconDR,
+                            options = listOf("DR Auto", "DR100%", "DR200%", "DR400%"),
+                            selected = dynamicRange,
+                            enabled = dRangePriority == "Off",
+                        ) { dynamicRange = it }
                         ChipControl("Grain Effect", IconGrain, listOf("Off", "Weak Small", "Strong Small", "Weak Large", "Strong Large"), grain) { grain = it }
                         if (!isMono) {
                             ChipControl("Color Chrome", IconCC, listOf("Off", "Weak", "Strong"), colorChrome) { colorChrome = it }
@@ -709,10 +723,11 @@ private fun ChipControl(
     icon: ImageVector,
     options: List<String>,
     selected: String,
+    enabled: Boolean = true,
     onSelect: (String) -> Unit,
 ) {
-    ControlLabel(label = label, icon = icon)
-    ChipGrid(options = options, selected = selected, onSelect = onSelect)
+    ControlLabel(label = label, icon = icon, enabled = enabled)
+    ChipGrid(options = options, selected = selected, enabled = enabled, onSelect = onSelect)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -720,6 +735,7 @@ private fun ChipControl(
 private fun ChipGrid(
     options: List<String>,
     selected: String,
+    enabled: Boolean = true,
     onSelect: (String) -> Unit,
 ) {
     FlowRow(
@@ -731,9 +747,24 @@ private fun ChipGrid(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (active) Gold else PanelHigh)
-                    .border(1.dp, if (active) Gold else Border, RoundedCornerShape(8.dp))
-                    .clickable { onSelect(option) }
+                    .background(
+                        when {
+                            !enabled && active -> GoldDim.copy(alpha = 0.28f)
+                            !enabled -> PanelLow
+                            active -> Gold
+                            else -> PanelHigh
+                        },
+                    )
+                    .border(
+                        1.dp,
+                        when {
+                            !enabled -> Color.Transparent
+                            active -> Gold
+                            else -> Border
+                        },
+                        RoundedCornerShape(8.dp),
+                    )
+                    .clickable(enabled = enabled) { onSelect(option) }
                     .padding(horizontal = 13.dp, vertical = 11.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -742,7 +773,12 @@ private fun ChipGrid(
                     fontFamily = SansFamily,
                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
                     fontSize = 13.5.sp,
-                    color = if (active) Bg else TextMuted,
+                    color = when {
+                        !enabled && active -> Gold.copy(alpha = 0.82f)
+                        !enabled -> TextDim
+                        active -> Bg
+                        else -> TextMuted
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -843,14 +879,15 @@ private fun ControlLabel(
     label: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
-        Text(label, fontFamily = SansFamily, fontSize = 14.5.sp, color = TextPrimary)
+        Icon(icon, contentDescription = null, tint = if (enabled) Gold else TextDim, modifier = Modifier.size(18.dp))
+        Text(label, fontFamily = SansFamily, fontSize = 14.5.sp, color = if (enabled) TextPrimary else TextDim)
     }
 }
 
@@ -861,6 +898,7 @@ private fun defaultRecipe() = RecipeUiModel(
     pills = listOf("DR AUTO"),
     effects = mapOf(
         "Dynamic Range" to "DR Auto",
+        "D Range Priority" to "Off",
         "Grain Effect" to "Off",
         "Color Chrome" to "Off",
         "Color Chrome FX Blue" to "Off",
@@ -882,6 +920,7 @@ private fun buildRecipe(
     name: String,
     description: String,
     sim: String,
+    dRangePriority: String,
     dynamicRange: String,
     grain: String,
     colorChrome: String,
@@ -902,7 +941,8 @@ private fun buildRecipe(
     isMono: Boolean,
 ): RecipeUiModel {
     val effects = linkedMapOf(
-        "Dynamic Range" to dynamicRange,
+        "D Range Priority" to dRangePriority.normalizedDRangePriorityLabel(),
+        "Dynamic Range" to dynamicRange.normalizedDynamicRangeLabel(),
         "Grain Effect" to grain,
         "Color Chrome" to if (isMono) "—" else colorChrome,
         "Color Chrome FX Blue" to if (isMono) "—" else colorChromeBlue,
@@ -936,11 +976,12 @@ private fun buildRecipe(
         tone = tone,
         wb = wb,
         referenceImageUris = referenceImageUris,
-        pills = buildPills(dynamicRange, grain, colorChrome, colorChromeBlue, highlight, shadow, color, clarity, isMono),
+        pills = buildPills(dRangePriority.normalizedDRangePriorityLabel(), dynamicRange.normalizedDynamicRangeLabel(), grain, colorChrome, colorChromeBlue, highlight, shadow, color, clarity, isMono),
     )
 }
 
 private fun buildPills(
+    dRangePriority: String,
     dynamicRange: String,
     grain: String,
     colorChrome: String,
@@ -951,7 +992,11 @@ private fun buildPills(
     clarity: Int,
     isMono: Boolean,
 ): List<String> = buildList {
-    add(dynamicRange.uppercase())
+    if (dRangePriority == "Off") {
+        add(dynamicRange.uppercase())
+    } else {
+        add("DRP ${dRangePriority.uppercase()}")
+    }
     if (grain != "Off") {
         add("GRAIN " + grain
             .replace("Weak Small", "WK/S")

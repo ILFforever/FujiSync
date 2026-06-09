@@ -415,6 +415,8 @@ class LibraryStateHolderTest {
             "Shadow" to "-1",
             "Noise Reduction" to "Normal",
             "Grain Effect" to "Strong Small",
+            "Dynamic Range" to "DR400",
+            "Dynamic Range Priority" to "weak",
         )
         val result = params.normalizedFxwParams()
 
@@ -423,10 +425,13 @@ class LibraryStateHolderTest {
         assertEquals("-1", result["Shadow Tone"])
         assertEquals("Normal", result["High ISO NR"])
         assertEquals("Strong Small", result["Grain Effect"])
+        assertEquals("DR400%", result["Dynamic Range"])
+        assertEquals("Weak", result["D Range Priority"])
         assertFalse("Color Chrome Effect" in result)
         assertFalse("Highlight" in result)
         assertFalse("Shadow" in result)
         assertFalse("Noise Reduction" in result)
+        assertFalse("Dynamic Range Priority" in result)
     }
 
     @Test

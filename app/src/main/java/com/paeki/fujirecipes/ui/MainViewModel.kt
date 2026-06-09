@@ -10,11 +10,15 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import com.paeki.fujirecipes.BuildConfig
 import com.paeki.fujirecipes.data.exif.FujiExifReader
 import com.paeki.fujirecipes.data.ocr.OcrRecipeParser
 import com.paeki.fujirecipes.data.exif.toPreset
 import com.paeki.fujirecipes.data.local.LocalStore
 import com.paeki.fujirecipes.data.remote.FxwRecipe
+import com.paeki.fujirecipes.data.update.AppUpdateRelease
+import com.paeki.fujirecipes.data.update.GitHubReleaseUpdater
+import com.paeki.fujirecipes.data.update.isRemoteVersionNewer
 import com.paeki.fujirecipes.data.usb.CameraHeartbeat
 import com.paeki.fujirecipes.data.usb.CameraUsbMode
 import com.paeki.fujirecipes.data.usb.FujiPtpProbe
@@ -58,6 +62,9 @@ sealed class MainViewModelEvent {
     object LaunchGroupImagePicker : MainViewModelEvent()
     object LaunchExifImagePicker : MainViewModelEvent()
     object LaunchOcrImagePicker : MainViewModelEvent()
+    object LaunchQrImagePicker : MainViewModelEvent()
+    data class InstallApk(val uri: Uri) : MainViewModelEvent()
+    object OpenInstallPermissionSettings : MainViewModelEvent()
 }
 
 private data class ReferenceImageTarget(
@@ -83,6 +90,7 @@ class MainViewModel @Inject constructor(
     private val localStore: LocalStore,
     private val heartbeat: CameraHeartbeat,
     private val libraryHolder: LibraryStateHolder,
+    private val releaseUpdater: GitHubReleaseUpdater,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FujiSyncUiState())
@@ -90,6 +98,8 @@ class MainViewModel @Inject constructor(
 
     private val _events = MutableSharedFlow<MainViewModelEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<MainViewModelEvent> = _events.asSharedFlow()
+    private var latestRelease: AppUpdateRelease? = null
+    private var downloadedUpdateUri: Uri? = null
 
     private var pendingReferenceTarget: ReferenceImageTarget? = null
     private var pendingGroupImageTarget: String? = null
@@ -488,7 +498,13 @@ class MainViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 writeBusy = true,
-                camera = it.camera.copy(scanError = null),
+                camera = it.camera.copy(
+                    scanError = null,
+                    rearrangingSlots = true,
+                    rearrangingSlotIndex = -1,
+                    rearrangingWriteIndex = -1,
+                    rearrangingWriteTotal = writes.size,
+                ),
             )
         }
 
@@ -502,7 +518,15 @@ class MainViewModel @Inject constructor(
                             check(connection.openSession()) { "OpenSession rejected." }
                             try {
                                 val camera = FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs)
-                                writes.mapNotNull { (slot, recipe) ->
+                                writes.mapIndexedNotNull { index, (slot, recipe) ->
+                                    _uiState.update {
+                                        it.copy(
+                                            camera = it.camera.copy(
+                                                rearrangingSlotIndex = CameraSlot.entries.indexOf(slot),
+                                                rearrangingWriteIndex = index,
+                                            ),
+                                        )
+                                    }
                                     val result = camera.writePreset(recipe.toPreset(slot))
                                     if (result.isOk) null else slot.label
                                 }
@@ -520,7 +544,13 @@ class MainViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 writeBusy = false,
-                                camera = it.camera.copy(scanError = failed.joinToString(prefix = "Rearrange reported write errors for ", postfix = ".")),
+                                camera = it.camera.copy(
+                                    scanError = failed.joinToString(prefix = "Rearrange reported write errors for ", postfix = "."),
+                                    rearrangingSlots = false,
+                                    rearrangingSlotIndex = -1,
+                                    rearrangingWriteIndex = -1,
+                                    rearrangingWriteTotal = 0,
+                                ),
                             )
                         }
                         return@launch
@@ -533,12 +563,20 @@ class MainViewModel @Inject constructor(
                         it.copy(
                             writeBusy = false,
                             camera = it.camera.copy(
-                                slots = ordered,
+                                slots = emptyList(),
                                 selectedSlotIdx = selectedIdx,
+                                rearrangingSlots = false,
+                                rearrangingSlotIndex = -1,
+                                rearrangingWriteIndex = -1,
+                                rearrangingWriteTotal = 0,
+                                readingSlots = true,
+                                readingSlotIndex = -1,
+                                isRestoringValidation = true,
                             ),
                             writeToast = WriteToastState(slot = "", name = "Camera recipes rearranged"),
                         )
                     }
+                    readAllSlots(selected.device)
                     delay(UiTimings.TOAST_DISMISS_MS)
                     _uiState.update { it.copy(writeToast = null) }
                 },
@@ -546,7 +584,13 @@ class MainViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             writeBusy = false,
-                            camera = it.camera.copy(scanError = error.message ?: "Rearrange failed."),
+                            camera = it.camera.copy(
+                                scanError = error.message ?: "Rearrange failed.",
+                                rearrangingSlots = false,
+                                rearrangingSlotIndex = -1,
+                                rearrangingWriteIndex = -1,
+                                rearrangingWriteTotal = 0,
+                            ),
                         )
                     }
                 },
@@ -742,6 +786,48 @@ class MainViewModel @Inject constructor(
 
     fun handleOcrImportDismiss() {
         _uiState.update { it.copy(ocrImportLoading = false, ocrImportError = null, ocrRawText = null, ocrParseResult = null) }
+    }
+
+    // ── QR import ─────────────────────────────────────────────────────
+
+    fun handleLaunchQrImageImport() {
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchQrImagePicker) }
+    }
+
+    fun handleQrImportResult(uri: Uri) {
+        _uiState.update { it.copy(qrImportLoading = true, qrImportError = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            val recipe = runCatching { com.paeki.fujirecipes.data.qr.RecipeQr.decodeBitmap(appContext, uri) }.getOrNull()
+            delay(minLoadMs(started, minMs = 700))
+            if (recipe == null) {
+                _uiState.update {
+                    it.copy(
+                        qrImportLoading = false,
+                        qrImportError = "No FujiSync recipe QR found. Make sure the QR code is sharp and fully visible.",
+                    )
+                }
+            } else {
+                handleQrImportRecipe(recipe)
+            }
+        }
+    }
+
+    fun handleQrImportRecipe(recipe: RecipeUiModel) {
+        _uiState.update {
+            it.copy(
+                tab = AppTab.Library,
+                qrImportLoading = false,
+                qrImportError = null,
+                creatingRecipe = false,
+                editorRecipe = recipe.copy(libraryId = null, slot = "", referenceImageUris = emptyList()),
+                editorReferenceImageUris = emptyList(),
+            )
+        }
+    }
+
+    fun handleQrImportDismiss() {
+        _uiState.update { it.copy(qrImportLoading = false, qrImportError = null) }
     }
 
     fun loadCaptureLog() {
@@ -954,6 +1040,120 @@ class MainViewModel @Inject constructor(
     fun handleSetPropertyWriteDelay(ms: Long) {
         _uiState.update { it.copy(settings = it.settings.copy(propertyWriteDelayMs = ms.coerceIn(0L, 300L))) }
         persistSettings()
+    }
+
+    fun handleCheckForUpdates() {
+        if (_uiState.value.update.checking || _uiState.value.update.downloading) return
+        _uiState.update {
+            it.copy(
+                update = it.update.copy(
+                    checking = true,
+                    installPermissionRequired = false,
+                    message = null,
+                    error = null,
+                )
+            )
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { releaseUpdater.fetchLatestRelease() }
+            result
+                .onSuccess { release ->
+                    latestRelease = release
+                    downloadedUpdateUri = null
+                    val newer = isRemoteVersionNewer(BuildConfig.VERSION_NAME, release.versionName)
+                    _uiState.update {
+                        it.copy(
+                            update = it.update.copy(
+                                checking = false,
+                                latestVersion = release.versionName,
+                                releaseName = release.releaseName,
+                                assetName = release.assetName,
+                                updateAvailable = newer,
+                                downloaded = false,
+                                message = if (newer) "Update ${release.versionName} is available." else "FujiSync is up to date.",
+                                error = null,
+                            )
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            update = it.update.copy(
+                                checking = false,
+                                message = null,
+                                error = error.message ?: "Could not check GitHub releases.",
+                            )
+                        )
+                    }
+                }
+        }
+    }
+
+    fun handleInstallUpdate() {
+        if (_uiState.value.update.checking || _uiState.value.update.downloading) return
+        val cachedUri = downloadedUpdateUri
+        if (cachedUri != null) {
+            launchPackageInstaller(cachedUri)
+            return
+        }
+
+        val release = latestRelease
+        if (release == null) {
+            handleCheckForUpdates()
+            return
+        }
+
+        _uiState.update {
+            it.copy(update = it.update.copy(downloading = true, message = "Downloading ${release.versionName}...", error = null))
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { releaseUpdater.download(release) }
+            result
+                .onSuccess { downloaded ->
+                    downloadedUpdateUri = downloaded.uri
+                    _uiState.update {
+                        it.copy(
+                            update = it.update.copy(
+                                downloading = false,
+                                downloaded = true,
+                                installPermissionRequired = false,
+                                message = "Download ready.",
+                                error = null,
+                            )
+                        )
+                    }
+                    launchPackageInstaller(downloaded.uri)
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            update = it.update.copy(
+                                downloading = false,
+                                message = null,
+                                error = error.message ?: "Could not download the update APK.",
+                            )
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun launchPackageInstaller(uri: Uri) {
+        if (!appContext.packageManager.canRequestPackageInstalls()) {
+            _uiState.update {
+                it.copy(
+                    update = it.update.copy(
+                        installPermissionRequired = true,
+                        message = "Allow FujiSync to install unknown apps, then tap Install update again.",
+                        error = null,
+                    )
+                )
+            }
+            _events.tryEmit(MainViewModelEvent.OpenInstallPermissionSettings)
+            return
+        }
+        _events.tryEmit(MainViewModelEvent.InstallApk(uri))
     }
 
     fun setShowCameraImageTuner(show: Boolean) = _uiState.update { it.copy(camera = it.camera.copy(showImageTuner = show)) }

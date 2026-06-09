@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.paeki.fujirecipes.data.ptp.CameraPresetName
 import com.paeki.fujirecipes.data.remote.FxwRecipe
 import com.paeki.fujirecipes.data.remote.FxwRepository
 import com.paeki.fujirecipes.ui.MainViewModel
@@ -74,6 +75,7 @@ import com.paeki.fujirecipes.ui.components.IconGlobe
 import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.PrimaryCTA
 import com.paeki.fujirecipes.ui.components.PropRow
+import com.paeki.fujirecipes.ui.components.recipePropertyRows
 import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.components.Wordmark
 import com.paeki.fujirecipes.ui.theme.Bg
@@ -639,6 +641,7 @@ private fun FxwRecipeDetailScreen(
         var isSaving by remember { mutableStateOf(false) }
         val hasImages = (displayRecipe?.imageUrls?.size ?: 0) > 0
         var includePhotos by remember { mutableStateOf(true) }
+        val nameError = CameraPresetName.validate(saveName)
         val scope = rememberCoroutineScope()
         ModalBottomSheet(
             onDismissRequest = { if (!isSaving) showSaveSheet = false },
@@ -676,7 +679,7 @@ private fun FxwRecipeDetailScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
                         .background(Bg)
-                        .border(1.dp, Border, RoundedCornerShape(10.dp))
+                        .border(1.dp, if (nameError != null && saveName.isNotBlank()) Color(0xFFA0522D).copy(alpha = 0.6f) else Border, RoundedCornerShape(10.dp))
                         .padding(horizontal = 14.dp, vertical = 13.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -716,6 +719,17 @@ private fun FxwRecipeDetailScreen(
                         }
                     }
                 }
+                if (nameError != null && saveName.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = nameError,
+                        fontFamily = SansFamily,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        color = Color(0xFFA0522D),
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                    )
+                }
                 if (hasImages) {
                     Spacer(Modifier.height(12.dp))
                     Row(
@@ -738,7 +752,7 @@ private fun FxwRecipeDetailScreen(
                                 color = if (includePhotos) TextPrimary else TextDim,
                             )
                             Text(
-                                text = "${displayRecipe!!.imageUrls.size} photo${if (displayRecipe!!.imageUrls.size != 1) "s" else ""} from this post",
+                                text = "${minOf(displayRecipe!!.imageUrls.size, 20)} photo${if (minOf(displayRecipe!!.imageUrls.size, 20) != 1) "s" else ""} from this post",
                                 fontFamily = SansFamily,
                                 fontSize = 11.sp,
                                 color = TextMuted,
@@ -767,7 +781,7 @@ private fun FxwRecipeDetailScreen(
                 PrimaryCTA(
                     label = if (isSaving) "Saving…" else "Save to Library",
                     busy = isSaving,
-                    enabled = saveName.isNotBlank() && !isSaving,
+                    enabled = saveName.isNotBlank() && nameError == null && !isSaving,
                     onClick = {
                         scope.launch {
                             isSaving = true
@@ -823,7 +837,7 @@ private fun FxwRecipe.discoverParamSections(): List<DiscoverParamSectionData> {
     return buildList {
         section(
             label = "Effects",
-            keys = listOf("Dynamic Range", "Grain Effect", "Color Chrome", "Color Chrome FX Blue", "Smooth Skin"),
+            keys = listOf("Dynamic Range", "D Range Priority", "Grain Effect", "Color Chrome", "Color Chrome FX Blue", "Smooth Skin"),
         )?.let(::add)
         section(
             label = "White Balance",
@@ -845,7 +859,8 @@ private fun FxwRecipe.discoverParamSections(): List<DiscoverParamSectionData> {
 @Composable
 private fun DiscoverParamSection(label: String, data: Map<String, String>) {
     if (data.isEmpty()) return
-    val entries = data.entries.toList()
+    val entries = recipePropertyRows(data)
+    if (entries.isEmpty()) return
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 0.dp)) {
         Spacer(Modifier.height(8.dp))
         SectionLabel(text = label, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
@@ -857,7 +872,11 @@ private fun DiscoverParamSection(label: String, data: Map<String, String>) {
                 .border(1.dp, Border, RoundedCornerShape(14.dp)),
         ) {
             entries.forEachIndexed { idx, (key, value) ->
-                PropRow(label = key, value = value, isLast = idx == entries.lastIndex)
+                PropRow(
+                    label = key,
+                    value = value,
+                    isLast = idx == entries.lastIndex,
+                )
                 if (idx < entries.lastIndex) Divider()
             }
         }
