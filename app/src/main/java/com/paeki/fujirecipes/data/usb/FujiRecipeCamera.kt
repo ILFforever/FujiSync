@@ -34,10 +34,20 @@ class FujiRecipeCamera(
         val properties = mutableMapOf<FujiPropertyCode, Int>()
 
         for (code in PtpConstants.PRESET_BLOCK_START..PtpConstants.PRESET_BLOCK_END) {
-            val transaction = connection.executeCommand(
+            var transaction = connection.executeCommand(
                 code = PtpConstants.GET_DEVICE_PROP_VALUE,
                 params = listOf(code),
             )
+            if (!transaction.isOk) {
+                for (retry in 1..2) {
+                    delay(SLOT_SWITCH_DELAY_MS)
+                    transaction = connection.executeCommand(
+                        code = PtpConstants.GET_DEVICE_PROP_VALUE,
+                        params = listOf(code),
+                    )
+                    if (transaction.isOk) break
+                }
+            }
 
             val property = FujiPropertyCode.fromCode(code)
             if (transaction.isOk && property != null) {
@@ -112,11 +122,22 @@ class FujiRecipeCamera(
             if (!isColorTemp && prop == FujiPropertyCode.ColorTemperature) { skipped++; continue }
             if (dRangePriority != 0 && prop == FujiPropertyCode.DynamicRange) { skipped++; continue }
 
-            val tx = connection.executeCommandWithData(
+            var tx = connection.executeCommandWithData(
                 code    = PtpConstants.SET_DEVICE_PROP_VALUE,
                 params  = listOf(prop.code),
                 payload = uint16Le(value),
             )
+            if (!tx.isOk) {
+                for (retry in 1..2) {
+                    if (propertyWriteDelayMs > 0) delay(propertyWriteDelayMs)
+                    tx = connection.executeCommandWithData(
+                        code    = PtpConstants.SET_DEVICE_PROP_VALUE,
+                        params  = listOf(prop.code),
+                        payload = uint16Le(value),
+                    )
+                    if (tx.isOk) break
+                }
+            }
             if (tx.isOk) success++ else failed++
             if (propertyWriteDelayMs > 0) delay(propertyWriteDelayMs)
         }

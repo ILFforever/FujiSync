@@ -63,6 +63,8 @@ fun DevToolsScreen(
     onOpenNameBench: () -> Unit,
     onOpenReadSlotsBench: () -> Unit,
     onOpenDrPriorityBench: () -> Unit,
+    onOpenHapticBench: () -> Unit,
+    onOpenPtpLog: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
     propertyWriteDelayMs: Long = 0L,
@@ -156,7 +158,11 @@ fun DevToolsScreen(
                 ProfileDivider()
                 ProfileNavRow(label = "Write delay bench", onClick = onOpenWriteDelayBench, inCard = true)
                 ProfileDivider()
+                ProfileNavRow(label = "Haptic bench", onClick = onOpenHapticBench, inCard = true)
+                ProfileDivider()
                 ProfileNavRow(label = "EXIF bench", onClick = onOpenExifBench, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "PTP log", onClick = onOpenPtpLog, inCard = true)
             }
 
             Spacer(Modifier.height(24.dp))

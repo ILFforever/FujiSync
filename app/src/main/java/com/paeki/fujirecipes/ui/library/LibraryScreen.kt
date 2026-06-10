@@ -86,6 +86,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,10 +101,16 @@ import androidx.emoji2.emojipicker.EmojiPickerView
 import com.paeki.fujirecipes.ui.components.IconMoreVertical
 import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.Wordmark
+import com.paeki.fujirecipes.ui.components.BlurredImagePlaceholder
+import com.paeki.fujirecipes.ui.components.ImageLoadState
+import com.paeki.fujirecipes.ui.components.decodeSampledBitmap
+import com.paeki.fujirecipes.ui.components.shimmerBrush
 import com.paeki.fujirecipes.ui.model.LibraryGroupUiModel
 import com.paeki.fujirecipes.ui.model.LibraryGroupStyle
 import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
 import com.paeki.fujirecipes.ui.model.sourceCameraDisplayName
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -137,6 +144,11 @@ fun LibraryScreen(
 ) {
     val vm: LibraryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val state by vm.screenState.collectAsState()
+    val context = LocalContext.current
+    val view = LocalView.current
+    fun haptic(effect: FujiHapticEffect) {
+        FujiHaptics.perform(context, view, effect)
+    }
 
     val enteredGroupIds = remember { mutableSetOf<String>() }
     var groupEntranceRun by remember { mutableStateOf(0) }
@@ -213,6 +225,7 @@ fun LibraryScreen(
     val headerSizeSpec = tween<IntSize>(durationMillis = if (headerMotionEnabled) 240 else 0, easing = FastOutSlowInEasing)
 
     overlayStackOf(
+        OverlayLayer(state.openGroup != null) { vm.setOpenGroup(null) },
         OverlayLayer(state.editingGroup != null) { vm.setEditingGroup(null) },
         OverlayLayer(state.selectedRecipeIds.isNotEmpty()) { vm.clearSelection() },
         OverlayLayer(showAddDrawer) { showAddDrawer = false },
@@ -280,7 +293,12 @@ fun LibraryScreen(
                             enter = fadeIn(headerEnterSpec),
                             exit = fadeOut(headerExitSpec),
                         ) {
-                            IconButton(onClick = { vm.setSearchOpen(true) }, modifier = Modifier.size(28.dp)) {
+                            IconButton(
+                                onClick = {
+                                    vm.setSearchOpen(true)
+                                },
+                                modifier = Modifier.size(28.dp),
+                            ) {
                                 Icon(IconSearch, contentDescription = "Search", tint = TextPrimary, modifier = Modifier.size(20.dp))
                             }
                         }
@@ -290,7 +308,9 @@ fun LibraryScreen(
                             exit = fadeOut(headerExitSpec),
                         ) {
                             IconButton(
-                                onClick = { if (state.searchQuery.isBlank()) vm.setSearchOpen(false) else vm.setSearchQuery("") },
+                                onClick = {
+                                    if (state.searchQuery.isBlank()) vm.setSearchOpen(false) else vm.setSearchQuery("")
+                                },
                                 modifier = Modifier.size(28.dp),
                             ) {
                                 Icon(IconClose, contentDescription = "Close search", tint = TextPrimary, modifier = Modifier.size(20.dp))
@@ -298,7 +318,13 @@ fun LibraryScreen(
                         }
                     }
                     // Filter — never moves
-                    IconButton(onClick = { vm.setFilterOpen(true) }, modifier = Modifier.size(28.dp)) {
+                    IconButton(
+                        onClick = {
+                            haptic(FujiHapticEffect.SheetOpen)
+                            vm.setFilterOpen(true)
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
                         Icon(IconFilter, contentDescription = "Filter and sort", tint = TextPrimary, modifier = Modifier.size(20.dp))
                     }
                     // + — fades out when search is active
@@ -308,7 +334,9 @@ fun LibraryScreen(
                         exit = fadeOut(headerExitSpec),
                     ) {
                         Box(
-                            modifier = Modifier.size(28.dp).clip(CircleShape).background(Gold).clickable(onClick = { showAddDrawer = true }),
+                            modifier = Modifier.size(28.dp).clip(CircleShape).background(Gold).clickable(onClick = {
+                                showAddDrawer = true
+                            }),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(IconPlus, contentDescription = "Add", tint = Bg, modifier = Modifier.size(18.dp))
@@ -344,7 +372,10 @@ fun LibraryScreen(
                     ) {
                         LibraryGroupToggleButton(
                             groupedView = state.groupedView,
-                            onClick = { vm.setGroupedView(!state.groupedView) },
+                            onClick = {
+                                haptic(FujiHapticEffect.Confirm)
+                                vm.setGroupedView(!state.groupedView)
+                            },
                         )
                         LibraryModeButton(
                             groupedView = state.groupedView,
@@ -413,8 +444,16 @@ fun LibraryScreen(
                                             alreadyEntered = group.id in enteredGroupIds,
                                             onEntered = { enteredGroupIds.add(group.id) },
                                             modifier = Modifier.weight(1f),
-                                            onOpen = { vm.setOpenGroup(group.id) },
-                                            onOpenEditor = { if (state.editingGroup == null) vm.setEditingGroup(group.id) },
+                                            onOpen = {
+                                                haptic(FujiHapticEffect.SoftSelection)
+                                                vm.setOpenGroup(group.id)
+                                            },
+                                            onOpenEditor = {
+                                                if (state.editingGroup == null) {
+                                                    haptic(FujiHapticEffect.SheetOpen)
+                                                    vm.setEditingGroup(group.id)
+                                                }
+                                            },
                                         )
                                     }
                                 }
@@ -452,10 +491,20 @@ fun LibraryScreen(
                                 onChangeGroup = { vm.changeRecipeGroup(recipe.id, it) },
                                 selected = recipe.id in state.selectedRecipeIds,
                                 selectionMode = state.selectedRecipeIds.isNotEmpty(),
-                                onToggleSelection = { vm.toggleSelection(recipe.id) },
-                                onStartSelection = { vm.startSelection(recipe.id) },
-                                onOpenItem = { onOpenItem(recipe) },
-                                onToggleFavorite = { vm.toggleFavorite(recipe.id) },
+                                onToggleSelection = {
+                                    vm.toggleSelection(recipe.id)
+                                },
+                                onStartSelection = {
+                                    haptic(FujiHapticEffect.DragStart)
+                                    vm.startSelection(recipe.id)
+                                },
+                                onOpenItem = {
+                                    onOpenItem(recipe)
+                                },
+                                onToggleFavorite = {
+                                    haptic(FujiHapticEffect.SoftSelection)
+                                    vm.toggleFavorite(recipe.id)
+                                },
                             )
                         }
                     }
@@ -480,10 +529,20 @@ fun LibraryScreen(
                             onChangeGroup = { vm.changeRecipeGroup(recipe.id, it) },
                             selected = recipe.id in state.selectedRecipeIds,
                             selectionMode = state.selectedRecipeIds.isNotEmpty(),
-                            onToggleSelection = { vm.toggleSelection(recipe.id) },
-                            onStartSelection = { vm.startSelection(recipe.id) },
-                            onOpenItem = { onOpenItem(recipe) },
-                            onToggleFavorite = { vm.toggleFavorite(recipe.id) },
+                            onToggleSelection = {
+                                vm.toggleSelection(recipe.id)
+                            },
+                            onStartSelection = {
+                                haptic(FujiHapticEffect.DragStart)
+                                vm.startSelection(recipe.id)
+                            },
+                            onOpenItem = {
+                                onOpenItem(recipe)
+                            },
+                            onToggleFavorite = {
+                                haptic(FujiHapticEffect.SoftSelection)
+                                vm.toggleFavorite(recipe.id)
+                            },
                         )
                     }
                 }
@@ -536,9 +595,18 @@ fun LibraryScreen(
         ) {
             LibrarySelectionBar(
                 selectedCount = state.selectedRecipeIds.size,
-                onClear = vm::clearSelection,
-                onAddToGroup = { vm.setBulkGroupOpen(true) },
-                onDelete = { vm.setPendingBatchDelete(true) },
+                onClear = {
+                    haptic(FujiHapticEffect.SheetDismiss)
+                    vm.clearSelection()
+                },
+                onAddToGroup = {
+                    haptic(FujiHapticEffect.SheetOpen)
+                    vm.setBulkGroupOpen(true)
+                },
+                onDelete = {
+                    haptic(FujiHapticEffect.Reject)
+                    vm.setPendingBatchDelete(true)
+                },
             )
         }
 
@@ -548,10 +616,12 @@ fun LibraryScreen(
                 groups = state.visibleGroups,
                 onDismiss = { vm.setBulkGroupOpen(false) },
                 onSelectGroup = { groupId ->
+                    haptic(FujiHapticEffect.Confirm)
                     vm.changeRecipesGroup(state.selectedRecipeIds, groupId)
                     vm.setBulkGroupOpen(false)
                 },
                 onCreateGroup = { name ->
+                    haptic(FujiHapticEffect.Confirm)
                     vm.createGroupForRecipes(state.selectedRecipeIds, name)
                     vm.setBulkGroupOpen(false)
                 },
@@ -560,11 +630,11 @@ fun LibraryScreen(
 
         if (showAddDrawer) {
                 AddRecipeDrawer(
-                    onCreateRecipe = { showAddDrawer = false; onCreateRecipe() },
-                    onImportFromPhoto = { showAddDrawer = false; onImportFromPhoto() },
-                    onImportFromScreenshot = { showAddDrawer = false; onImportFromScreenshot() },
-                    onImportFromQr = { showAddDrawer = false; onImportFromQr() },
-                    onScanTileGuide = { showAddDrawer = false; onScanTileGuide() },
+                    onCreateRecipe = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onCreateRecipe() },
+                    onImportFromPhoto = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onImportFromPhoto() },
+                    onImportFromScreenshot = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onImportFromScreenshot() },
+                    onImportFromQr = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onImportFromQr() },
+                    onScanTileGuide = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onScanTileGuide() },
                     onDismiss = { showAddDrawer = false },
                 )
         }
@@ -573,24 +643,30 @@ fun LibraryScreen(
     if (state.filterOpen) {
         LibraryFilterDialog(
             sortBy = state.data.sort,
-            onChangeSort = vm::setSort,
+            onChangeSort = { vm.setSort(it) },
             filterFavorites = state.filterFavorites,
             onToggleFilterFavorites = { vm.setFilterFavorites(!state.filterFavorites) },
             photoFilter = state.filterPhotoState,
-            onChangePhotoFilter = vm::setFilterPhotoState,
+            onChangePhotoFilter = { vm.setFilterPhotoState(it) },
             groups = state.visibleGroups,
             groupCounts = groupCounts,
             selectedGroupId = state.filterGroupId,
-            onSelectGroup = vm::setFilterGroupId,
+            onSelectGroup = { vm.setFilterGroupId(it) },
             sourceOptions = state.sourceOptions,
             selectedSourceKey = state.filterSourceKey,
-            onSelectSource = vm::setFilterSourceKey,
+            onSelectSource = { vm.setFilterSourceKey(it) },
             filmSimOptions = state.filmSimOptions,
             selectedFilmSim = state.filterFilmSim,
-            onSelectFilmSim = vm::setFilterFilmSim,
+            onSelectFilmSim = { vm.setFilterFilmSim(it) },
             activeFilterCount = state.activeFilterCount,
-            onClearFilters = vm::clearFilters,
-            onDismiss = { vm.setFilterOpen(false) },
+            onClearFilters = {
+                haptic(FujiHapticEffect.SheetDismiss)
+                vm.clearFilters()
+            },
+            onDismiss = {
+                haptic(FujiHapticEffect.SheetDismiss)
+                vm.setFilterOpen(false)
+            },
         )
     }
 
@@ -1011,10 +1087,12 @@ private fun LibraryGroupCard(
     onOpenEditor: () -> Unit,
 ) {
     val context = LocalContext.current
-    val bitmap = remember(style.imageUri) {
-        style.imageUri?.let { uriString ->
+    val imageState by produceState(ImageLoadState(null, null), style.imageUri) {
+        val uri = style.imageUri?.let { Uri.parse(it) } ?: return@produceState
+        val preview = withContext(Dispatchers.IO) { decodeSampledBitmap(context, uri, maxPx = 16) }
+        value = ImageLoadState(preview = preview, full = null)
+        val full = withContext(Dispatchers.IO) {
             runCatching {
-                val uri = Uri.parse(uriString)
                 val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
                 val targetPx = (context.resources.displayMetrics.density * 320).toInt().coerceAtLeast(1)
@@ -1025,6 +1103,7 @@ private fun LibraryGroupCard(
                     ?.asImageBitmap()
             }.getOrNull()
         }
+        value = ImageLoadState(preview = preview, full = full)
     }
     val accent = groupAccent(style.color)
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
@@ -1062,17 +1141,22 @@ private fun LibraryGroupCard(
                 .height(82.dp)
                 .background(accent.copy(alpha = 0.18f)),
         ) {
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = "$label group image",
-                    contentScale = ContentScale.Crop,
+            if (style.imageUri != null) {
+                BlurredImagePlaceholder(
+                    state = imageState,
                     modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                // dim overlay so text below stays readable
+                val overlayAlpha by animateFloatAsState(
+                    targetValue = if (imageState.full != null) 0.28f else 0f,
+                    animationSpec = tween(380, easing = FastOutSlowInEasing),
+                    label = "group-overlay-alpha",
                 )
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.28f)),
+                        .background(Color.Black.copy(alpha = overlayAlpha)),
                 )
             } else {
                 Box(
@@ -1133,6 +1217,8 @@ private fun CreateLibraryGroupDialog(
     onCreate: (String) -> Unit,
 ) {
     var draft by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val view = LocalView.current
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -1231,7 +1317,10 @@ private fun CreateLibraryGroupDialog(
                     color = TextDim,
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .clickable(onClick = onDismiss)
+                        .clickable {
+                            FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
+                            onDismiss()
+                        }
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                 )
                 Spacer(Modifier.width(8.dp))
@@ -1243,6 +1332,7 @@ private fun CreateLibraryGroupDialog(
                     letterSpacing = 1.3.sp,
                     color = if (draft.isBlank()) TextDim else Gold,
                     modifier = Modifier.clickable(enabled = draft.isNotBlank()) {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
                         onCreate(draft)
                     },
                 )
@@ -1271,8 +1361,11 @@ private fun LibraryGroupEditorSheet(
     var visible by remember { mutableStateOf(!motionEnabled) }
     var nameDraft by remember(group) { mutableStateOf(group) }
     var pendingDeleteGroup by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) {
             onDismiss()
             return
@@ -1286,6 +1379,7 @@ private fun LibraryGroupEditorSheet(
 
     LaunchedEffect(motionEnabled) {
         visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
     }
 
     val overlayTransition = updateTransition(targetState = visible, label = "library-editor-overlay")
@@ -1387,7 +1481,10 @@ private fun LibraryGroupEditorSheet(
                         originalValue = group,
                         color = accent,
                         onValueChange = { nameDraft = it },
-                        onSave = { onRename(nameDraft) },
+                        onSave = {
+                            FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+                            onRename(nameDraft)
+                        },
                     )
                     Spacer(Modifier.height(18.dp))
                 } else {
@@ -1414,7 +1511,10 @@ private fun LibraryGroupEditorSheet(
                         SheetColorChoice(
                             color = color.value,
                             active = style.color == color.name,
-                            onClick = { onChangeStyle(style.copy(color = color.name)) },
+                            onClick = {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                                onChangeStyle(style.copy(color = color.name))
+                            },
                         )
                     }
                 }
@@ -1433,7 +1533,10 @@ private fun LibraryGroupEditorSheet(
                             .clip(RoundedCornerShape(12.dp))
                             .background(LibrarySheetControlBg)
                             .border(1.dp, Color(0xFFD45B4A).copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                            .clickable { pendingDeleteGroup = true }
+                            .clickable {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Reject)
+                                pendingDeleteGroup = true
+                            }
                             .padding(vertical = 13.dp),
                     )
                 }
@@ -1538,6 +1641,8 @@ private fun SheetIdentityRow(
     onRemoveImage: () -> Unit,
 ) {
     var pickerOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     Column(
         modifier = Modifier
@@ -1561,7 +1666,10 @@ private fun SheetIdentityRow(
                         if (pickerOpen) color else if (hasCover) LibrarySheetBorder else color.copy(alpha = 0.62f),
                         RoundedCornerShape(14.dp),
                     )
-                    .clickable { pickerOpen = !pickerOpen },
+                    .clickable {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                        pickerOpen = !pickerOpen
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(text = icon, fontSize = 27.sp, textAlign = TextAlign.Center)
@@ -1611,6 +1719,7 @@ private fun SheetIdentityRow(
                         factory = { ctx ->
                             EmojiPickerView(ctx).apply {
                                 setOnEmojiPickedListener { item ->
+                                    FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
                                     onIconChange(item.emoji)
                                     pickerOpen = false
                                 }
@@ -1633,14 +1742,20 @@ private fun SheetIdentityRow(
                 label = if (hasCover) "Change Cover" else "Add Cover",
                 color = color,
                 modifier = Modifier.weight(1f),
-                onClick = onChooseImage,
+                onClick = {
+                    FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                    onChooseImage()
+                },
             )
             if (hasCover) {
                 SheetMiniAction(
                     label = "Remove",
                     color = TextDim,
                     modifier = Modifier.weight(1f),
-                    onClick = onRemoveImage,
+                    onClick = {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.Reject)
+                        onRemoveImage()
+                    },
                 )
             }
         }
@@ -1765,6 +1880,7 @@ private fun GroupHeader(label: String, count: Int, onBack: (() -> Unit)? = null)
                     fontWeight = FontWeight.Bold,
                     fontSize = 22.sp,
                     color = Gold,
+                    modifier = Modifier.offset(y = (-1).dp),
                 )
             }
             Text(
@@ -2199,6 +2315,8 @@ private fun BulkGroupDialog(
     onCreateGroup: (String) -> Unit,
 ) {
     var customGroupDraft by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val view = LocalView.current
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -2225,14 +2343,20 @@ private fun BulkGroupDialog(
                     label = "No groups",
                     count = 0,
                     active = false,
-                    onClick = { onSelectGroup("") },
+                    onClick = {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+                        onSelectGroup("")
+                    },
                 )
                 groups.forEach { group ->
                     LibraryGroupChip(
                         label = group.name,
                         count = 0,
                         active = false,
-                        onClick = { onSelectGroup(group.id) },
+                        onClick = {
+                            FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+                            onSelectGroup(group.id)
+                        },
                     )
                 }
             }
@@ -2278,6 +2402,7 @@ private fun BulkGroupDialog(
                     letterSpacing = 1.3.sp,
                     color = if (customGroupDraft.isBlank()) TextDim else Gold,
                     modifier = Modifier.clickable(enabled = customGroupDraft.isNotBlank()) {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
                         onCreateGroup(customGroupDraft)
                     },
                 )
@@ -2304,6 +2429,8 @@ private fun GroupAssignmentRow(
     val groupSummary = assignedGroups
         .joinToString(" / ") { it.name.uppercase() }
         .ifBlank { "NO GROUPS" }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -2312,7 +2439,10 @@ private fun GroupAssignmentRow(
                 .clip(RoundedCornerShape(12.dp))
                 .background(PanelGroupBg)
                 .border(1.dp, Border, RoundedCornerShape(12.dp))
-                .clickable(onClick = onStartCustomGroup)
+                .clickable {
+                    FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+                    onStartCustomGroup()
+                }
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -2377,14 +2507,20 @@ private fun GroupAssignmentRow(
                             label = "No groups",
                             count = 0,
                             active = recipe.groupIds.isEmpty(),
-                            onClick = { onChangeGroup("") },
+                            onClick = {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                                onChangeGroup("")
+                            },
                         )
                         groups.forEach { group ->
                             LibraryGroupChip(
                                 label = group.name,
                                 count = groupCounts[group.id] ?: 0,
                                 active = group.id in recipe.groupIds,
-                                onClick = { onChangeGroup(group.id) },
+                                onClick = {
+                                    FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                                    onChangeGroup(group.id)
+                                },
                             )
                         }
                     }
@@ -2429,7 +2565,10 @@ private fun GroupAssignmentRow(
                             fontSize = 10.5.sp,
                             letterSpacing = 1.3.sp,
                             color = if (customGroupDraft.isBlank()) TextDim else Gold,
-                            modifier = Modifier.clickable(enabled = customGroupDraft.isNotBlank(), onClick = onSaveCustomGroup),
+                            modifier = Modifier.clickable(enabled = customGroupDraft.isNotBlank()) {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+                                onSaveCustomGroup()
+                            },
                         )
                     }
                     Spacer(Modifier.height(14.dp))
@@ -2442,7 +2581,10 @@ private fun GroupAssignmentRow(
                         color = Gold,
                         modifier = Modifier
                             .align(Alignment.End)
-                            .clickable(onClick = onCloseGroupPicker)
+                            .clickable {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
+                                onCloseGroupPicker()
+                            }
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                     )
                 }
@@ -2545,13 +2687,19 @@ private fun AddRecipeDrawer(
     val scope = rememberCoroutineScope()
     var visible by remember { mutableStateOf(!motionEnabled) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.DrawerSwooshDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.DrawerSwooshOpen)
+    }
 
     val overlayTransition = androidx.compose.animation.core.updateTransition(targetState = visible, label = "add-drawer-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -2633,7 +2781,6 @@ private fun AddRecipeDrawer(
                 DrawerOptionRow("QR code", "Import a shared FujiSync recipe", icon = com.paeki.fujirecipes.ui.components.IconQrCode, onClick = onImportFromQr)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
                 DrawerOptionRow("Scan tile", "Capture from app recipe tile", icon = com.paeki.fujirecipes.ui.components.IconScan, onClick = onScanTileGuide)
-                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
             }
         }
     }

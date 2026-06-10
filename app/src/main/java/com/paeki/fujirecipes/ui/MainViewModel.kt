@@ -102,6 +102,14 @@ class MainViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(FujiSyncUiState())
     val uiState: StateFlow<FujiSyncUiState> = _uiState.asStateFlow()
 
+    // DEBUG: rearrange flow log
+    private val _rearrangeDebugLog = MutableStateFlow("")
+    val rearrangeDebugLog: StateFlow<String> = _rearrangeDebugLog.asStateFlow()
+    private fun rdbg(msg: String) {
+        val ts = System.currentTimeMillis() % 100000
+        _rearrangeDebugLog.value += "[$ts] $msg\n"
+    }
+
     private val _events = MutableSharedFlow<MainViewModelEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<MainViewModelEvent> = _events.asSharedFlow()
     private var latestRelease: AppUpdateRelease? = null
@@ -164,7 +172,7 @@ class MainViewModel @Inject constructor(
                 return
             }
             _uiState.update {
-                it.copy(camera = it.camera.copy(readingSlots = true, readingSlotIndex = -1, slots = emptyList(), scanError = null))
+                it.copy(camera = it.camera.copy(readingSlots = true, readingSlotIndex = -1, slots = emptyList(), scanError = null, isRearrangeValidation = false))
             }
             readAllSlots(ptpDevice.device)
             return
@@ -242,6 +250,7 @@ class MainViewModel @Inject constructor(
                                 cameraLabels = updatedLabels,
                                 cameraModels = updatedModels,
                                 cameraFirmwares = updatedFirmwares,
+                                isRearrangeValidation = false,
                             ),
                         )
                     }
@@ -476,20 +485,29 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** Clears the rearrange validation panel once the user dismisses it. */
+    fun dismissRearrangeValidation() {
+        _uiState.update { it.copy(camera = it.camera.copy(isRearrangeValidation = false)) }
+    }
+
     fun handleRearrangeCameraSlots(nextSlots: List<RecipeUiModel>) {
+        _rearrangeDebugLog.value = "" // reset on new rearrange
+        rdbg("START writes=${nextSlots.size} slots")
         val state = _uiState.value
         val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
         val ordered = CameraSlot.entries.mapIndexedNotNull { index, slot ->
             nextSlots.getOrNull(index)?.copy(slot = slot.label, libraryId = null)
         }
-        if (ordered.size != CameraSlot.entries.size) return
+        if (ordered.size != CameraSlot.entries.size) { rdbg("ABORT ordered.size=${ordered.size}"); return }
         val writes = ordered.mapIndexedNotNull { index, recipe ->
             val current = state.camera.slots.getOrNull(index)
             if (current != null && current.sameRecipeIgnoringSlot(recipe)) null else CameraSlot.entries[index] to recipe
         }
-        if (writes.isEmpty()) return
+        if (writes.isEmpty()) { rdbg("ABORT no changes"); return }
+        rdbg("writes needed: ${writes.size} slots: ${writes.map { it.first.label }}")
 
         if (selected == null || !state.camera.connected) {
+            rdbg("ABORT no camera")
             _uiState.update {
                 it.copy(camera = it.camera.copy(scanError = "Connect camera before rearranging recipes."))
             }
@@ -497,11 +515,13 @@ class MainViewModel @Inject constructor(
         }
 
         if (!usbManager.hasPermission(selected.device)) {
+            rdbg("ABORT no permission")
             _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
             return
         }
 
         val previouslySelected = state.camera.slots.getOrNull(state.camera.selectedSlotIdx)
+        rdbg("SET writeBusy=true rearrangingSlots=true")
         _uiState.update {
             it.copy(
                 writeBusy = true,
@@ -516,7 +536,9 @@ class MainViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            rdbg("LAUNCH acquiring usbMutex")
             val writeResult = heartbeat.usbMutex.withLock {
+                rdbg("LOCKED usbMutex")
                 withContext(Dispatchers.IO) {
                     runCatching {
                         val connection = connectionFactory.open(selected.device)
@@ -526,6 +548,7 @@ class MainViewModel @Inject constructor(
                             try {
                                 val camera = FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs)
                                 writes.mapIndexedNotNull { index, (slot, recipe) ->
+                                    rdbg("WRITE ${slot.label} ($index/${writes.size})")
                                     _uiState.update {
                                         it.copy(
                                             camera = it.camera.copy(
@@ -544,50 +567,44 @@ class MainViewModel @Inject constructor(
                     }
                 }
             }
+            rdbg("RELEASED usbMutex")
 
             writeResult.fold(
                 onSuccess = { failed ->
-                    if (failed.isNotEmpty()) {
-                        _uiState.update {
-                            it.copy(
-                                writeBusy = false,
-                                camera = it.camera.copy(
-                                    scanError = failed.joinToString(prefix = "Rearrange reported write errors for ", postfix = "."),
-                                    rearrangingSlots = false,
-                                    rearrangingSlotIndex = -1,
-                                    rearrangingWriteIndex = -1,
-                                    rearrangingWriteTotal = 0,
-                                ),
-                            )
-                        }
-                        return@launch
-                    }
                     val selectedIdx = previouslySelected
                         ?.let { selectedRecipe -> ordered.indexOfFirst { it.sameRecipeIgnoringSlot(selectedRecipe) } }
                         ?.takeIf { it >= 0 }
                         ?: _uiState.value.camera.selectedSlotIdx.coerceIn(0, ordered.lastIndex)
+                    val errorMsg = if (failed.isNotEmpty()) {
+                        rdbg("PARTIAL FAIL slots: $failed — proceeding to validation")
+                        failed.joinToString(prefix = "Write errors on ", postfix = ". Validating what landed.")
+                    } else {
+                        rdbg("SUCCESS → SET writeBusy=false isRearrangeValidation=true readingSlots=true")
+                        null
+                    }
                     _uiState.update {
                         it.copy(
                             writeBusy = false,
                             camera = it.camera.copy(
                                 slots = emptyList(),
                                 selectedSlotIdx = selectedIdx,
+                                scanError = errorMsg,
                                 rearrangingSlots = false,
                                 rearrangingSlotIndex = -1,
                                 rearrangingWriteIndex = -1,
                                 rearrangingWriteTotal = 0,
                                 readingSlots = true,
                                 readingSlotIndex = -1,
-                                isRestoringValidation = true,
+                                isRearrangeValidation = true,
                             ),
-                            writeToast = WriteToastState(slot = "", name = "Camera recipes rearranged"),
                         )
                     }
+                    rdbg("calling readAllSlots")
                     readAllSlots(selected.device)
-                    delay(UiTimings.TOAST_DISMISS_MS)
-                    _uiState.update { it.copy(writeToast = null) }
+                    rdbg("readAllSlots returned")
                 },
                 onFailure = { error ->
+                    rdbg("EXCEPTION: ${error.message}")
                     _uiState.update {
                         it.copy(
                             writeBusy = false,
@@ -949,7 +966,10 @@ class MainViewModel @Inject constructor(
 
     // ── Navigation / UI state ─────────────────────────────────────────
 
-    fun setTab(tab: AppTab) = _uiState.update { if (tab != AppTab.Library) it.copy(tab = tab, detailRecipe = null) else it.copy(tab = tab) }
+    fun setTab(tab: AppTab) = _uiState.update {
+        val base = if (tab != AppTab.Library) it.copy(tab = tab, detailRecipe = null) else it.copy(tab = tab)
+        if (tab != AppTab.Camera) base.copy(camera = base.camera.copy(scanError = null)) else base
+    }
 
     fun setSelectedSlotIdx(idx: Int) = _uiState.update { it.copy(camera = it.camera.copy(selectedSlotIdx = idx)) }
 
@@ -1041,6 +1061,16 @@ class MainViewModel @Inject constructor(
 
     fun handleToggleLibraryShowImages() {
         _uiState.update { it.copy(settings = it.settings.copy(showLibraryImages = !it.settings.showLibraryImages)) }
+        persistSettings()
+    }
+
+    fun handleToggleReferenceImageBlur() {
+        _uiState.update { it.copy(settings = it.settings.copy(showReferenceImageBlur = !it.settings.showReferenceImageBlur)) }
+        persistSettings()
+    }
+
+    fun handleToggleHaptics() {
+        _uiState.update { it.copy(settings = it.settings.copy(hapticsEnabled = !it.settings.hapticsEnabled)) }
         persistSettings()
     }
 
@@ -1291,7 +1321,10 @@ class MainViewModel @Inject constructor(
 
     fun handleDeleteLibraryRecipes(ids: Set<String>) = libraryHolder.deleteRecipes(ids)
 
-    fun handleCloneLibraryRecipe(recipe: RecipeUiModel) = libraryHolder.cloneRecipe(recipe)
+    fun handleCloneLibraryRecipe(recipe: RecipeUiModel) {
+        val clone = libraryHolder.cloneRecipe(recipe) ?: return
+        openLibraryItem(clone)
+    }
 
     fun handleLoadSampleLibrary() = libraryHolder.loadSampleLibrary()
 

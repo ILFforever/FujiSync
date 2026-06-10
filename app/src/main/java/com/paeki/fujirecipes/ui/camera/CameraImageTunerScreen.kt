@@ -30,7 +30,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,18 +69,28 @@ private data class TunerEntry(
     val firmware: String,
     val drawableRes: Int,
     val default: CameraImageTuning,
+    val gen: Int,
 )
 
 private val TUNER_ENTRIES = listOf(
-    TunerEntry("X-H2",   "7.10", R.drawable.camera_xh2,    CameraImageTuning(317.dp, 229.dp, 47.dp,  3.dp)),
-    TunerEntry("X-T5",   "2.20", R.drawable.camera_xt5,    CameraImageTuning(414.dp, 394.dp, 91.dp,  (-77).dp)),
-    TunerEntry("X-S20",  "3.10", R.drawable.camera_xs20,   CameraImageTuning(423.dp, 410.dp, 159.dp, (-87).dp)),
-    TunerEntry("X100VI", "2.01", R.drawable.camera_x100vi, CameraImageTuning(420.dp, 325.dp, 115.dp, (-61).dp)),
-    TunerEntry("X-T50",  "1.20", R.drawable.camera_xt50,   CameraImageTuning(460.dp, 387.dp, 145.dp, (-120).dp)),
-    TunerEntry("X-M5",   "1.10", R.drawable.camera_xm5,    CameraImageTuning(360.dp, 360.dp, 111.dp, (-56).dp)),
-    TunerEntry("X-E5",   "1.00", R.drawable.camera_xe5,    CameraImageTuning(430.dp, 273.dp, 157.dp, (-1).dp)),
-    TunerEntry("X-T30 III", "1.00", R.drawable.camera_xt30iii, CameraImageTuning(460.dp, 430.dp, 160.dp, (-150).dp)),
-    TunerEntry("X-Pro3", "4.10", R.drawable.camera_xpro3,  CameraImageTuning(430.dp, 229.dp, 140.dp, 14.dp)),
+    // X-Trans 5
+    TunerEntry("X-H2",      "7.10", R.drawable.camera_xh2,      CameraImageTuning(317.dp, 229.dp, 47.dp,  3.dp),     5),
+    TunerEntry("X-T5",      "2.20", R.drawable.camera_xt5,      CameraImageTuning(414.dp, 394.dp, 91.dp,  (-77).dp), 5),
+    TunerEntry("X-S20",     "3.10", R.drawable.camera_xs20,     CameraImageTuning(423.dp, 410.dp, 159.dp, (-87).dp), 5),
+    TunerEntry("X100VI",    "2.01", R.drawable.camera_x100vi,   CameraImageTuning(420.dp, 325.dp, 115.dp, (-61).dp), 5),
+    TunerEntry("X-T50",     "1.20", R.drawable.camera_xt50,     CameraImageTuning(460.dp, 387.dp, 145.dp, (-120).dp),5),
+    TunerEntry("X-M5",      "1.10", R.drawable.camera_xm5,      CameraImageTuning(360.dp, 360.dp, 111.dp, (-56).dp), 5),
+    TunerEntry("X-E5",      "1.00", R.drawable.camera_xe5,      CameraImageTuning(430.dp, 273.dp, 157.dp, (-1).dp),  5),
+    TunerEntry("X-T30 III", "1.00", R.drawable.camera_xt30iii,  CameraImageTuning(460.dp, 430.dp, 160.dp, (-150).dp),5),
+    // X-Trans 4
+    TunerEntry("X-Pro3",    "4.10", R.drawable.camera_xpro3,    CameraImageTuning(430.dp, 229.dp, 140.dp, 14.dp),    4),
+    TunerEntry("X-T4",      "1.10", R.drawable.camera_xt4,      CameraImageTuning(360.dp, 347.dp, 61.dp,  (-46).dp), 4),
+    TunerEntry("X-T3",      "4.00", R.drawable.camera_xt3,      CameraImageTuning(419.dp, 405.dp, 88.dp,  (-82).dp), 4),
+    TunerEntry("X-T30 II",  "1.10", R.drawable.camera_xt30ii,   CameraImageTuning(404.dp, 375.dp, 110.dp, (-71).dp), 4),
+    TunerEntry("X-T30",     "2.10", R.drawable.camera_xt30,     CameraImageTuning(404.dp, 375.dp, 110.dp, (-71).dp), 4),
+    TunerEntry("X100V",     "2.01", R.drawable.camera_x100v,    CameraImageTuning(337.dp, 343.dp, 74.dp,  (-62).dp), 4),
+    TunerEntry("X-S10",     "3.10", R.drawable.camera_xs10,     CameraImageTuning(334.dp, 317.dp, 60.dp,  (-37).dp), 4),
+    TunerEntry("X-E4",      "1.10", R.drawable.camera_xe4,      CameraImageTuning(408.dp, 375.dp, 118.dp, (-62).dp), 4),
 )
 
 @Composable
@@ -88,7 +100,11 @@ fun CameraImageTunerScreen(onClose: () -> Unit) {
             TUNER_ENTRIES.forEach { map[it.model] = it.default }
         }
     }
-    val pagerState = rememberPagerState(pageCount = { TUNER_ENTRIES.size })
+    var genFilter by remember { mutableIntStateOf(5) }
+    val filteredEntries = remember(genFilter) { TUNER_ENTRIES.filter { it.gen == genFilter } }
+    val pagerState = rememberPagerState(pageCount = { filteredEntries.size })
+
+    LaunchedEffect(genFilter) { pagerState.scrollToPage(0) }
 
     Column(
         modifier = Modifier
@@ -115,14 +131,14 @@ fun CameraImageTunerScreen(onClose: () -> Unit) {
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = TUNER_ENTRIES[pagerState.currentPage].model,
+                        text = filteredEntries[pagerState.currentPage].model,
                         fontFamily = SansFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp,
                         color = TextPrimary,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        TUNER_ENTRIES.forEachIndexed { idx, _ ->
+                        filteredEntries.forEachIndexed { idx, _ ->
                             Box(
                                 modifier = Modifier
                                     .size(if (idx == pagerState.currentPage) 6.dp else 4.dp)
@@ -146,12 +162,41 @@ fun CameraImageTunerScreen(onClose: () -> Unit) {
             }
         }
 
+        // ── X-Trans gen switcher ──────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(5, 4).forEach { gen ->
+                val active = genFilter == gen
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(if (active) Gold else PanelLow)
+                        .border(1.dp, if (active) Gold else Border, RoundedCornerShape(999.dp))
+                        .clickable { genFilter = gen }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = "X-TRANS $gen",
+                        fontFamily = MonoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.2.sp,
+                        color = if (active) Bg else TextMuted,
+                    )
+                }
+            }
+        }
+
         // ── Pager (card preview + sliders + code) ────────────────────
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
-            val entry = TUNER_ENTRIES[page]
+            val entry = filteredEntries[page]
             val tuning = tunings[entry.model] ?: entry.default
             TunerPage(
                 entry = entry,

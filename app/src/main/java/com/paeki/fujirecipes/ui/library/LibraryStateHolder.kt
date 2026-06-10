@@ -170,15 +170,16 @@ class LibraryStateHolder @Inject constructor(
         confirmSave()
     }
 
-    fun cloneRecipe(recipe: RecipeUiModel) {
-        val libraryId = recipe.libraryId ?: return
-        val existing = _state.value.recipes.firstOrNull { it.id == libraryId } ?: return
+    fun cloneRecipe(recipe: RecipeUiModel): LibraryRecipeUiModel? {
+        val libraryId = recipe.libraryId ?: return null
+        val existing = _state.value.recipes.firstOrNull { it.id == libraryId } ?: return null
         val clone = existing.copy(
             id = "lib-${UUID.randomUUID()}",
-            name = LibraryRecipeName.sanitize("Copy of ${existing.name}"),
+            name = existing.name,
         )
         _state.update { it.copy(recipes = listOf(clone) + it.recipes) }
         persist()
+        return clone
     }
 
     fun deleteRecipes(recipeIds: Set<String>) {

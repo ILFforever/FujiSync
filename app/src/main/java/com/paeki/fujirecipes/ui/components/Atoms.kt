@@ -1,5 +1,14 @@
 package com.paeki.fujirecipes.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.content.Context
@@ -27,9 +38,14 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -414,15 +430,103 @@ fun MetaRow(label: String, value: String) {
     }
 }
 
+@Composable
+fun shimmerBrush(): Brush {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val x by transition.animateFloat(
+        initialValue = -600f,
+        targetValue = 1200f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "shimmer-x",
+    )
+    return Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF1A1612),
+            Color(0xFF262119),
+            Color(0xFF1A1612),
+        ),
+        start = Offset(x, 0f),
+        end = Offset(x + 600f, 0f),
+    )
+}
+
+data class ImageLoadState(val preview: ImageBitmap?, val full: ImageBitmap?)
+
+@Composable
+fun BlurredImagePlaceholder(
+    state: ImageLoadState,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    blurEnabled: Boolean = true,
+) {
+    val fullAlpha by animateFloatAsState(
+        targetValue = if (state.full != null) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "img-full-alpha",
+    )
+    Box(modifier = modifier) {
+        if (blurEnabled && state.preview != null) {
+            Image(
+                bitmap = state.preview,
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize().blur(28.dp),
+            )
+        }
+        state.full?.let { full ->
+            Image(
+                bitmap = full,
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fullAlpha },
+            )
+        }
+    }
+}
+
+private val memCache = HashMap<String, ImageBitmap>()
+
+private fun diskCacheFile(context: Context, key: String): java.io.File {
+    val dir = java.io.File(context.cacheDir, "bmp").also { it.mkdirs() }
+    return java.io.File(dir, "${key.hashCode().and(0x7FFFFFFF)}.webp")
+}
+
 internal fun decodeSampledBitmap(
     context: Context,
     uri: Uri,
     maxPx: Int = 512,
-): ImageBitmap? = runCatching {
-    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-    val scale = maxOf(opts.outWidth, opts.outHeight).coerceAtLeast(1)
-    opts.inSampleSize = Integer.highestOneBit(scale / maxPx).coerceAtLeast(1)
-    opts.inJustDecodeBounds = false
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
-}.getOrNull()
+): ImageBitmap? {
+    val key = "$uri@$maxPx"
+
+    // L1: memory
+    memCache[key]?.let { return it }
+
+    // L2: disk
+    val cacheFile = diskCacheFile(context, key)
+    if (cacheFile.exists()) {
+        BitmapFactory.decodeFile(cacheFile.absolutePath)?.asImageBitmap()?.let { cached ->
+            memCache[key] = cached
+            return cached
+        }
+    }
+
+    // decode from source, persist to disk and memory
+    return runCatching {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        val scale = maxOf(opts.outWidth, opts.outHeight).coerceAtLeast(1)
+        opts.inSampleSize = Integer.highestOneBit(scale / maxPx).coerceAtLeast(1)
+        opts.inJustDecodeBounds = false
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }?.asImageBitmap()
+    }.getOrNull()?.also { bmp ->
+        memCache[key] = bmp
+        runCatching {
+            cacheFile.outputStream().use { out ->
+                bmp.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 85, out)
+            }
+        }
+    }
+}

@@ -76,6 +76,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,6 +101,8 @@ import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.SaveAllReport
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
 import com.paeki.fujirecipes.ui.model.SlotBackupSet
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -160,8 +164,10 @@ fun CameraConnected(
     onRenameSlotBackup: (String) -> Unit = {},
     onSelectSlotBackup: (String) -> Unit = {},
     onRearrangeSlots: (List<RecipeUiModel>) -> Unit = {},
+    onRearrangeValidationDismiss: () -> Unit = {},
     readingSlotIndex: Int = -1,
     isRestoringValidation: Boolean = false,
+    isRearrangeValidation: Boolean = false,
     cameraSerial: String = "",
     cameraNames: List<String> = listOf("My Camera"),
     onOpenCameraDetail: (Int, CameraCardUiModel) -> Unit = { _, _ -> },
@@ -188,7 +194,11 @@ fun CameraConnected(
         if (isRestoringValidation) showRestoreSheet = true
     }
 
-    val recipe = slots.getOrNull(selectedSlotIdx) ?: if (!isRestoringValidation) return else null
+    LaunchedEffect(isRearrangeValidation) {
+        if (isRearrangeValidation) showRearrangeSheet = true
+    }
+
+    val recipe = slots.getOrNull(selectedSlotIdx) ?: if (!isRestoringValidation && !isRearrangeValidation) return else null
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -336,48 +346,75 @@ fun CameraConnected(
             RearrangeRecipesSheet(
                 slots = slots,
                 writeBusy = writeBusy,
-                onDismiss = { showRearrangeSheet = false },
+                isRearrangeValidation = isRearrangeValidation,
+                readingSlots = readingSlots,
+                readingSlotIndex = readingSlotIndex,
+                onDismiss = {
+                    showRearrangeSheet = false
+                    onRearrangeValidationDismiss()
+                },
                 onApply = { nextSlots ->
                     onRearrangeSlots(nextSlots)
-                    showRearrangeSheet = false
                 },
             )
         }
+
     }
 }
 
 // ── Camera image resource per model ──────────────────────────────
 private fun cameraDrawable(model: String): Int? = when {
     model.contains("X-T30 III", ignoreCase = true) || model.contains("XT30III", ignoreCase = true) -> R.drawable.camera_xt30iii
-    model.contains("X-T50", ignoreCase = true) || model.contains("XT50", ignoreCase = true) -> R.drawable.camera_xt50
-    model.contains("X-H2", ignoreCase = true) || model.contains("XH2", ignoreCase = true) -> R.drawable.camera_xh2
-    model.contains("X-T5", ignoreCase = true) || model.contains("XT5", ignoreCase = true) -> R.drawable.camera_xt5
-    model.contains("X-S20", ignoreCase = true) || model.contains("XS20", ignoreCase = true) -> R.drawable.camera_xs20
-    model.contains("X-M5", ignoreCase = true) || model.contains("XM5", ignoreCase = true) -> R.drawable.camera_xm5
-    model.contains("X-E5", ignoreCase = true) || model.contains("XE5", ignoreCase = true) -> R.drawable.camera_xe5
-    model.contains("X100VI", ignoreCase = true) -> R.drawable.camera_x100vi
-    model.contains("X-Pro3", ignoreCase = true) || model.contains("XPro3", ignoreCase = true) -> R.drawable.camera_xpro3
+    model.contains("X-T30 II", ignoreCase = true)  || model.contains("XT30II", ignoreCase = true)  -> R.drawable.camera_xt30ii
+    model.contains("X-T30", ignoreCase = true)     || model.contains("XT30", ignoreCase = true)    -> R.drawable.camera_xt30
+    model.contains("X-T50", ignoreCase = true)     || model.contains("XT50", ignoreCase = true)    -> R.drawable.camera_xt50
+    model.contains("X-T5", ignoreCase = true)      || model.contains("XT5", ignoreCase = true)     -> R.drawable.camera_xt5
+    model.contains("X-T4", ignoreCase = true)      || model.contains("XT4", ignoreCase = true)     -> R.drawable.camera_xt4
+    model.contains("X-T3", ignoreCase = true)      || model.contains("XT3", ignoreCase = true)     -> R.drawable.camera_xt3
+    model.contains("X-H2", ignoreCase = true)      || model.contains("XH2", ignoreCase = true)     -> R.drawable.camera_xh2
+    model.contains("X-S20", ignoreCase = true)     || model.contains("XS20", ignoreCase = true)    -> R.drawable.camera_xs20
+    model.contains("X-S10", ignoreCase = true)     || model.contains("XS10", ignoreCase = true)    -> R.drawable.camera_xs10
+    model.contains("X-M5", ignoreCase = true)      || model.contains("XM5", ignoreCase = true)     -> R.drawable.camera_xm5
+    model.contains("X-E5", ignoreCase = true)      || model.contains("XE5", ignoreCase = true)     -> R.drawable.camera_xe5
+    model.contains("X-E4", ignoreCase = true)      || model.contains("XE4", ignoreCase = true)     -> R.drawable.camera_xe4
+    model.contains("X100VI", ignoreCase = true)                                                     -> R.drawable.camera_x100vi
+    model.contains("X100V", ignoreCase = true)                                                      -> R.drawable.camera_x100v
+    model.contains("X-Pro3", ignoreCase = true)    || model.contains("XPro3", ignoreCase = true)   -> R.drawable.camera_xpro3
     else -> null
 }
 
 internal fun cameraImageTuning(model: String) = when {
     model.contains("X-T30 III", ignoreCase = true) || model.contains("XT30III", ignoreCase = true) ->
         CameraImageTuning(width = 460.dp, height = 430.dp, offsetX = 160.dp, offsetY = (-150).dp)
-    model.contains("X-T50", ignoreCase = true) || model.contains("XT50", ignoreCase = true) ->
+    model.contains("X-T30 II", ignoreCase = true)  || model.contains("XT30II", ignoreCase = true)  ->
+        CameraImageTuning(width = 404.dp, height = 375.dp, offsetX = 110.dp, offsetY = (-71).dp)
+    model.contains("X-T30", ignoreCase = true)     || model.contains("XT30", ignoreCase = true)    ->
+        CameraImageTuning(width = 404.dp, height = 375.dp, offsetX = 110.dp, offsetY = (-71).dp)
+    model.contains("X-T50", ignoreCase = true)     || model.contains("XT50", ignoreCase = true)    ->
         CameraImageTuning(width = 460.dp, height = 387.dp, offsetX = 145.dp, offsetY = (-120).dp)
-    model.contains("X-H2", ignoreCase = true) || model.contains("XH2", ignoreCase = true) ->
-        CameraImageTuning(width = 317.dp, height = 229.dp, offsetX = 47.dp, offsetY = 3.dp)
-    model.contains("X-T5", ignoreCase = true) || model.contains("XT5", ignoreCase = true) ->
+    model.contains("X-T5", ignoreCase = true)      || model.contains("XT5", ignoreCase = true)     ->
         CameraImageTuning(width = 414.dp, height = 394.dp, offsetX = 91.dp, offsetY = (-77).dp)
-    model.contains("X-S20", ignoreCase = true) || model.contains("XS20", ignoreCase = true) ->
+    model.contains("X-T4", ignoreCase = true)      || model.contains("XT4", ignoreCase = true)     ->
+        CameraImageTuning(width = 360.dp, height = 347.dp, offsetX = 61.dp, offsetY = (-46).dp)
+    model.contains("X-T3", ignoreCase = true)      || model.contains("XT3", ignoreCase = true)     ->
+        CameraImageTuning(width = 419.dp, height = 405.dp, offsetX = 88.dp, offsetY = (-82).dp)
+    model.contains("X-H2", ignoreCase = true)      || model.contains("XH2", ignoreCase = true)     ->
+        CameraImageTuning(width = 317.dp, height = 229.dp, offsetX = 47.dp, offsetY = 3.dp)
+    model.contains("X-S20", ignoreCase = true)     || model.contains("XS20", ignoreCase = true)    ->
         CameraImageTuning(width = 423.dp, height = 410.dp, offsetX = 159.dp, offsetY = (-87).dp)
-    model.contains("X-M5", ignoreCase = true) || model.contains("XM5", ignoreCase = true) ->
+    model.contains("X-S10", ignoreCase = true)     || model.contains("XS10", ignoreCase = true)    ->
+        CameraImageTuning(width = 334.dp, height = 317.dp, offsetX = 60.dp,  offsetY = (-37).dp)
+    model.contains("X-M5", ignoreCase = true)      || model.contains("XM5", ignoreCase = true)     ->
         CameraImageTuning(width = 360.dp, height = 360.dp, offsetX = 111.dp, offsetY = (-56).dp)
-    model.contains("X-E5", ignoreCase = true) || model.contains("XE5", ignoreCase = true) ->
+    model.contains("X-E5", ignoreCase = true)      || model.contains("XE5", ignoreCase = true)     ->
         CameraImageTuning(width = 430.dp, height = 273.dp, offsetX = 157.dp, offsetY = (-1).dp)
-    model.contains("X100VI", ignoreCase = true) ->
+    model.contains("X-E4", ignoreCase = true)      || model.contains("XE4", ignoreCase = true)     ->
+        CameraImageTuning(width = 408.dp, height = 375.dp, offsetX = 118.dp, offsetY = (-62).dp)
+    model.contains("X100VI", ignoreCase = true)                                                     ->
         CameraImageTuning(width = 420.dp, height = 325.dp, offsetX = 115.dp, offsetY = (-61).dp)
-    model.contains("X-Pro3", ignoreCase = true) || model.contains("XPro3", ignoreCase = true) ->
+    model.contains("X100V", ignoreCase = true)                                                      ->
+        CameraImageTuning(width = 337.dp, height = 343.dp, offsetX = 74.dp,  offsetY = (-62).dp)
+    model.contains("X-Pro3", ignoreCase = true)    || model.contains("XPro3", ignoreCase = true)   ->
         CameraImageTuning(width = 430.dp, height = 229.dp, offsetX = 140.dp, offsetY = 14.dp)
     else ->
         CameraImageTuning(width = 317.dp, height = 229.dp, offsetX = 47.dp, offsetY = 3.dp)
@@ -651,6 +688,9 @@ private fun RearrangeRecipesButton(
 private fun RearrangeRecipesSheet(
     slots: List<RecipeUiModel>,
     writeBusy: Boolean,
+    isRearrangeValidation: Boolean = false,
+    readingSlots: Boolean = false,
+    readingSlotIndex: Int = -1,
     onDismiss: () -> Unit,
     onApply: (List<RecipeUiModel>) -> Unit,
 ) {
@@ -661,8 +701,22 @@ private fun RearrangeRecipesSheet(
     var draftSlots by remember(initialSlots) { mutableStateOf(initialSlots) }
     val changed = draftSlots != initialSlots
     val canApply = changed && !writeBusy && draftSlots.size == CameraSlot.entries.size
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    // Phase is derived purely from durable signals — no local latching, so a fast
+    // readback can never race the UI back to the editor:
+    //  • writing  (writeBusy)            → writes in flight; hide the sheet, the
+    //                                       full-screen loader is the only thing shown
+    //  • validation (isRearrangeValidation, held until dismissed) → readback panel
+    //  • otherwise                       → the reorder editor
+    val showValidation = isRearrangeValidation
+    val writing = writeBusy && !isRearrangeValidation
 
     fun dismissWithMotion() {
+        if (showValidation && readingSlots) return
+        if (writeBusy) return
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) {
             onDismiss()
             return
@@ -674,9 +728,15 @@ private fun RearrangeRecipesSheet(
         }
     }
 
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
-    val overlayTransition = updateTransition(targetState = visible, label = "rearrange-overlay")
+    // While writes run the sheet slides away so it never shows behind the loader.
+    val sheetVisible = visible && !writing
+
+    val overlayTransition = updateTransition(targetState = sheetVisible, label = "rearrange-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
         transitionSpec = { tween(if (targetState) 170 else 120, easing = FastOutSlowInEasing) },
         label = "rearrange-overlay-alpha",
@@ -690,7 +750,7 @@ private fun RearrangeRecipesSheet(
         contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(
-            visible = visible,
+            visible = sheetVisible,
             enter = fadeIn(tween(150, easing = FastOutSlowInEasing)) + slideInVertically(
                 animationSpec = tween(280, easing = FastOutSlowInEasing),
                 initialOffsetY = { it / 3 },
@@ -710,7 +770,7 @@ private fun RearrangeRecipesSheet(
                     .border(1.dp, Border, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .clickable(onClick = {})
                     .navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(vertical = 14.dp),
             ) {
                 Box(
                     modifier = Modifier
@@ -720,6 +780,20 @@ private fun RearrangeRecipesSheet(
                         .clip(RoundedCornerShape(99.dp))
                         .background(TextDim.copy(alpha = 0.7f)),
                 )
+                if (showValidation) {
+                    RestoreReadingContent(
+                        readingSlotIndex = readingSlotIndex,
+                        loadedSlots = slots,
+                        expectedSlots = draftSlots,
+                        readingSlots = readingSlots,
+                        onClose = ::dismissWithMotion,
+                    )
+                } else Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .padding(horizontal = 18.dp),
+                ) {
                 Spacer(Modifier.height(20.dp))
                 Column {
                     Text(
@@ -785,7 +859,10 @@ private fun RearrangeRecipesSheet(
                                 if (canApply) Gold else Gold.copy(alpha = 0.18f),
                                 RoundedCornerShape(13.dp),
                             )
-                            .clickable(enabled = canApply) { onApply(draftSlots) },
+                            .clickable(enabled = canApply) {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+                                onApply(draftSlots)
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -797,6 +874,7 @@ private fun RearrangeRecipesSheet(
                             color = if (canApply) Bg else TextDim.copy(alpha = 0.6f),
                         )
                     }
+                }
                 }
             }
         }
@@ -812,7 +890,10 @@ private fun DraggableSlotList(
     var draggingIdx by remember { mutableIntStateOf(-1) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var rowHeightPx by remember { mutableFloatStateOf(0f) }
+    var prevTargetIdx by remember { mutableIntStateOf(-1) }
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val view = LocalView.current
     val gapDp = 8.dp
     val gapPx = with(density) { gapDp.toPx() }
 
@@ -839,12 +920,20 @@ private fun DraggableSlotList(
                 writeBusy = writeBusy,
                 onHeightMeasured = { px -> if (rowHeightPx == 0f) rowHeightPx = px },
                 onDragStart = {
-                    if (!writeBusy) { draggingIdx = index; dragOffsetY = 0f }
+                    if (!writeBusy) { FujiHaptics.perform(context, view, FujiHapticEffect.SoftConfirm); draggingIdx = index; dragOffsetY = 0f; prevTargetIdx = index }
                 },
-                onDrag = { dy -> dragOffsetY += dy },
+                onDrag = { dy ->
+                    dragOffsetY += dy
+                    val newTarget = targetIdx()
+                    if (newTarget != prevTargetIdx) {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.SoftConfirm)
+                        prevTargetIdx = newTarget
+                    }
+                },
                 onDragEnd = {
                     val finalIdx = targetIdx()
                     if (finalIdx >= 0 && finalIdx != draggingIdx) {
+                        FujiHaptics.perform(context, view, FujiHapticEffect.SoftConfirm)
                         onSlotsChanged(slots.moveItem(draggingIdx, finalIdx))
                     }
                     draggingIdx = -1

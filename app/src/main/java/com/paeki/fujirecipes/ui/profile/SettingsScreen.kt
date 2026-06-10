@@ -1,8 +1,11 @@
 package com.paeki.fujirecipes.ui.profile
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,16 +14,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,18 +38,20 @@ import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.model.AppSettings
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
+import com.paeki.fujirecipes.ui.theme.BorderStrong
 import com.paeki.fujirecipes.ui.theme.Gold
-import com.paeki.fujirecipes.ui.theme.MonoFamily
+import com.paeki.fujirecipes.ui.theme.GoldDim
 import com.paeki.fujirecipes.ui.theme.PanelLow
 import com.paeki.fujirecipes.ui.theme.SansFamily
 import com.paeki.fujirecipes.ui.theme.TextDim
-import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
 
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
     onToggleLibraryShowImages: () -> Unit,
+    onToggleReferenceImageBlur: () -> Unit = {},
+    onToggleHaptics: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     Column(
@@ -84,6 +96,20 @@ fun SettingsScreen(
         ) {
             Spacer(Modifier.height(8.dp))
 
+            // ── Feedback ──────────────────────────────────────────────
+            SectionLabel(text = "Feedback")
+            Spacer(Modifier.height(8.dp))
+            SettingsGroup {
+                SettingsToggleRow(
+                    label = "Haptic feedback",
+                    description = "Vibrate on taps, drags, and camera events",
+                    enabled = settings.hapticsEnabled,
+                    onClick = onToggleHaptics,
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
+
             // ── Library ───────────────────────────────────────────────
             SectionLabel(text = "Library")
             Spacer(Modifier.height(8.dp))
@@ -93,6 +119,13 @@ fun SettingsScreen(
                     description = "Display the first reference photo on each library card",
                     enabled = settings.showLibraryImages,
                     onClick = onToggleLibraryShowImages,
+                )
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Border))
+                SettingsToggleRow(
+                    label = "Blur on image expand",
+                    description = "Show a blurred preview while the full image loads in the lightbox",
+                    enabled = settings.showReferenceImageBlur,
+                    onClick = onToggleReferenceImageBlur,
                 )
             }
 
@@ -124,7 +157,11 @@ private fun SettingsToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -144,22 +181,57 @@ private fun SettingsToggleRow(
                 lineHeight = 16.sp,
             )
         }
-        // Pill toggle
+        Spacer(Modifier.width(12.dp))
+        FujiToggle(enabled = enabled, onClick = onClick)
+    }
+}
+
+// Track: 48×26dp  |  Thumb: 20dp circle  |  travel: 22dp
+private val TrackW = 48.dp
+private val TrackH = 26.dp
+private val ThumbD = 20.dp
+private val ThumbTravel = TrackW - ThumbD - 6.dp // 3dp pad each side → 22dp
+
+@Composable
+private fun FujiToggle(enabled: Boolean, onClick: () -> Unit) {
+    val thumbProgress by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "toggle",
+    )
+
+    Box(
+        modifier = Modifier
+            .size(width = TrackW, height = TrackH)
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (enabled) GoldDim else Bg)
+            .border(
+                width = 1.dp,
+                color = if (enabled) Gold.copy(alpha = 0.55f) else BorderStrong,
+                shape = RoundedCornerShape(999.dp),
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(if (enabled) Gold.copy(alpha = 0.18f) else Bg)
-                .border(1.dp, if (enabled) Gold.copy(alpha = 0.6f) else Border, RoundedCornerShape(999.dp))
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = if (enabled) "ON" else "OFF",
-                fontFamily = MonoFamily,
-                fontSize = 10.sp,
-                letterSpacing = 1.2.sp,
-                color = if (enabled) Gold else TextMuted,
-            )
-        }
+                .padding(start = 3.dp)
+                .offset(x = ThumbTravel * thumbProgress)
+                .size(ThumbD)
+                .clip(CircleShape)
+                .background(
+                    if (enabled) Gold
+                    else Gold.copy(alpha = 0.25f),
+                )
+                .graphicsLayer {
+                    // subtle scale-in on enable for snap feel
+                    scaleX = 0.88f + 0.12f * thumbProgress
+                    scaleY = 0.88f + 0.12f * thumbProgress
+                },
+        )
     }
 }

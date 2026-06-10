@@ -45,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +55,8 @@ import com.paeki.fujirecipes.ui.components.IconPhone
 import com.paeki.fujirecipes.ui.components.IconTool
 import com.paeki.fujirecipes.ui.components.IconUSB
 import com.paeki.fujirecipes.ui.components.PrimaryCTA
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -76,6 +80,11 @@ fun ConnectGuide(
     onSimulateConnect: () -> Unit,
 ) {
     var troubleshootOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val view = LocalView.current
+    LaunchedEffect(scanError) {
+        if (scanError != null) FujiHaptics.perform(context, view, FujiHapticEffect.WarningPause)
+    }
     val steps = listOf(
         ConnectStepUi("01", "Set USB mode", "Connection Setting → USB Mode → USB RAW CONV."),
         ConnectStepUi("02", "Connect directly", "Use a USB-C data cable from phone to camera."),
@@ -262,14 +271,20 @@ private fun TroubleshootSheet(onDismiss: () -> Unit) {
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
     var visible by remember { mutableStateOf(!motionEnabled) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(220); onDismiss() }
     }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "troubleshoot-overlay")
     val overlayAlpha by overlayTransition.animateFloat(

@@ -55,10 +55,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.components.IconChevronRight
 import com.paeki.fujirecipes.ui.components.IconEdit
 import com.paeki.fujirecipes.ui.components.IconTrash
@@ -103,9 +107,12 @@ fun BackupSheet(
     var label by remember { mutableStateOf(defaultLabel) }
     var submitted by remember { mutableStateOf(false) }
     var observedSaving by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
-    fun dismissWithMotion() {
+    fun dismissWithMotion(playHaptic: Boolean = true) {
         if (saving) return
+        if (playHaptic) FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
@@ -119,11 +126,17 @@ fun BackupSheet(
     }
 
     LaunchedEffect(saving, submitted) {
-        if (saving) observedSaving = true
-        if (submitted && observedSaving && !saving) dismissWithMotion()
+        if (saving) {
+            observedSaving = true
+            FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+        }
+        if (submitted && observedSaving && !saving) dismissWithMotion(playHaptic = false)
     }
 
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "backup-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -269,6 +282,11 @@ fun BackupSheet(
 
 @Composable
 private fun BackupReadProgress(currentSlotIndex: Int) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    LaunchedEffect(currentSlotIndex) {
+        if (currentSlotIndex >= 0) FujiHaptics.performStepClick(context, view, step = currentSlotIndex, total = 7)
+    }
     val transition = rememberInfiniteTransition(label = "backup-read-pulse")
     val pulse by transition.animateFloat(
         initialValue = 0.35f,
@@ -401,10 +419,13 @@ fun RestoreSheet(
     val visibleBackupSets = backupSets.ifEmpty {
         if (meta != null && backupSlots != null) listOf(SlotBackupSet(meta, backupSlots)) else emptyList()
     }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
         if (showValidation && readingSlots) return
         if (restoreInProgress) return  // block only while writes are actively in flight
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
@@ -415,6 +436,10 @@ fun RestoreSheet(
         // sheet stays open — loading overlay takes over, then reading animation
     }
     fun confirmDelete() { onDelete(); dismissWithMotion() }
+
+    LaunchedEffect(readingSlotIndex) {
+        if (readingSlotIndex >= 0) FujiHaptics.performStepClick(context, view, step = readingSlotIndex, total = 7)
+    }
 
     // Transition Working → Validating when the VM starts its post-restore read.
     // The validation result stays open until the user closes it.
@@ -430,7 +455,10 @@ fun RestoreSheet(
     }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "restore-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -796,15 +824,26 @@ private fun RenameSheet(
     var visible by remember { mutableStateOf(!motionEnabled) }
     var label by remember { mutableStateOf(currentLabel) }
 
-    fun dismissWithMotion() {
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    fun dismissWithMotion(playHaptic: Boolean = true) {
+        if (playHaptic) FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
-    fun save() { onConfirm(label.trim()); dismissWithMotion() }
+    fun save() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+        onConfirm(label.trim())
+        dismissWithMotion(playHaptic = false)
+    }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "rename-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -939,14 +978,20 @@ fun SaveAllReportSheet(
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
     var visible by remember { mutableStateOf(!motionEnabled) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "savereport-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -1106,16 +1151,26 @@ fun SaveAllSheet(
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
     var visible by remember { mutableStateOf(!motionEnabled) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
-    fun dismissWithMotion() {
+    fun dismissWithMotion(playHaptic: Boolean = true) {
+        if (playHaptic) FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
-    fun save() { onConfirm(); dismissWithMotion() }
+    fun save() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+        onConfirm()
+        dismissWithMotion(playHaptic = false)
+    }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "saveall-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -1276,12 +1331,22 @@ fun SaveAllSheet(
 }
 
 @Composable
-private fun RestoreReadingContent(
+internal fun RestoreReadingContent(
     readingSlotIndex: Int,
     loadedSlots: List<RecipeUiModel>,
+    expectedSlots: List<RecipeUiModel>? = null,
     readingSlots: Boolean,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    var wasReading by remember { mutableStateOf(readingSlots) }
+    LaunchedEffect(readingSlots) {
+        if (wasReading && !readingSlots) {
+            FujiHaptics.perform(context, view, FujiHapticEffect.SuccessPause)
+        }
+        wasReading = readingSlots
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "restore-read")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 0.35f,
@@ -1292,6 +1357,8 @@ private fun RestoreReadingContent(
         ),
         label = "restore-read-pulse",
     )
+
+    val mismatchColor = Color(0xFFE57373)
 
     Column(
         modifier = Modifier
@@ -1329,7 +1396,10 @@ private fun RestoreReadingContent(
             repeat(7) { idx ->
                 val slotLabel = "C${idx + 1}"
                 val loaded = loadedSlots.getOrNull(idx)
+                val expected = expectedSlots?.getOrNull(idx)
                 val isActive = idx == readingSlotIndex
+                val hasMismatch = loaded != null && expected != null &&
+                    loaded.copy(slot = "", libraryId = null) != expected.copy(slot = "", libraryId = null)
 
                 if (idx > 0) Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SheetBorder))
 
@@ -1347,6 +1417,7 @@ private fun RestoreReadingContent(
                         fontSize = 10.5.sp,
                         letterSpacing = 1.sp,
                         color = when {
+                            hasMismatch -> mismatchColor
                             loaded != null -> Gold
                             isActive -> Gold.copy(alpha = pulse)
                             else -> TextDim.copy(alpha = 0.4f)
@@ -1360,15 +1431,15 @@ private fun RestoreReadingContent(
                                 fontFamily = SansFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
-                                color = TextPrimary,
+                                color = if (hasMismatch) mismatchColor else TextPrimary,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                text = loaded.sim.trimEnd('.').uppercase(),
+                                text = if (hasMismatch) "MISMATCH" else loaded.sim.trimEnd('.').uppercase(),
                                 fontFamily = MonoFamily,
                                 fontSize = 10.sp,
                                 letterSpacing = 1.sp,
-                                color = TextMuted,
+                                color = if (hasMismatch) mismatchColor else TextMuted,
                             )
                         }
                         isActive -> Text(

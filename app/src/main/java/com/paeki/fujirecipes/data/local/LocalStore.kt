@@ -171,6 +171,8 @@ class LocalStore(context: Context) {
     suspend fun saveSettings(settings: AppSettings) = mutex.withLock {
         write("settings.json", JSONObject().apply {
             put("showLibraryImages", settings.showLibraryImages)
+            put("showReferenceImageBlur", settings.showReferenceImageBlur)
+            put("hapticsEnabled", settings.hapticsEnabled)
             put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
         }.toString())
     }
@@ -182,6 +184,8 @@ class LocalStore(context: Context) {
             val o = JSONObject(file.readText())
             AppSettings(
                 showLibraryImages = o.optBoolean("showLibraryImages", true),
+                showReferenceImageBlur = o.optBoolean("showReferenceImageBlur", true),
+                hapticsEnabled = o.optBoolean("hapticsEnabled", true),
                 propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
             )
         }.getOrElse { AppSettings() }
@@ -321,12 +325,16 @@ class LocalStore(context: Context) {
 
     private fun settingsToJson(settings: AppSettings): JSONObject = JSONObject().apply {
         put("showLibraryImages", settings.showLibraryImages)
+        put("showReferenceImageBlur", settings.showReferenceImageBlur)
+        put("hapticsEnabled", settings.hapticsEnabled)
         put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
     }
 
     private fun settingsFromJson(o: JSONObject): AppSettings =
         AppSettings(
             showLibraryImages = o.optBoolean("showLibraryImages", true),
+            showReferenceImageBlur = o.optBoolean("showReferenceImageBlur", true),
+            hapticsEnabled = o.optBoolean("hapticsEnabled", true),
             propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
         )
 

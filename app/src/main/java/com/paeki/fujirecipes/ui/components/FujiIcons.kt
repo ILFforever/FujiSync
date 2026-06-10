@@ -320,12 +320,9 @@ val IconDragHandle = icon("DragHandle") {
 }
 
 val IconReorder = icon("Reorder") {
-    stroke("M3 7h12")
-    stroke("M3 12h12")
-    stroke("M3 17h12")
-    stroke("M18 5v14")
-    stroke("M15 8l3-3 3 3")
-    stroke("M15 16l3 3 3-3")
+    stroke("M3 7h18")
+    stroke("M3 12h18")
+    stroke("M3 17h18")
 }
 
 // ── Property icon map ─────────────────────────────────────────────

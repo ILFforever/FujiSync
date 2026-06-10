@@ -72,15 +72,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.style.TextAlign
 import com.paeki.fujirecipes.ui.components.DeleteConfirmDialog
@@ -92,7 +98,10 @@ import com.paeki.fujirecipes.ui.components.Pill
 import com.paeki.fujirecipes.ui.components.PrimaryCTA
 import com.paeki.fujirecipes.ui.components.PropRow
 import com.paeki.fujirecipes.ui.components.recipePropertyRows
+import com.paeki.fujirecipes.ui.components.BlurredImagePlaceholder
+import com.paeki.fujirecipes.ui.components.ImageLoadState
 import com.paeki.fujirecipes.ui.components.SectionLabel
+import com.paeki.fujirecipes.ui.components.shimmerBrush
 import com.paeki.fujirecipes.data.qr.RecipeQr
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.model.sourceCameraDisplayName
@@ -132,6 +141,7 @@ fun RecipeDetailScreen(
     cameraSlots: List<RecipeUiModel> = emptyList(),
     onWriteToSlot: ((String) -> Unit)? = null,
     interactionsEnabled: Boolean = true,
+    showReferenceImageBlur: Boolean = true,
 ) {
     var expandedImageIndex by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf(false) }
@@ -194,6 +204,9 @@ fun RecipeDetailScreen(
         exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)) + fadeOut(tween(150)),
     ) {
         val visibleRecipe = displayedRecipe ?: return@AnimatedVisibility
+        val context = LocalContext.current
+        val view = LocalView.current
+        fun haptic() = FujiHaptics.perform(context, view, FujiHapticEffect.SoftConfirm)
 
         BackHandler(enabled = interactionsEnabled, onBack = onClose)
 
@@ -250,7 +263,7 @@ fun RecipeDetailScreen(
                             if (!interactionsEnabled) moreExpanded = false
                         }
                         IconButton(
-                            onClick = { onToggleFavorite(visibleRecipe) },
+                            onClick = { haptic(); onToggleFavorite(visibleRecipe) },
                             enabled = interactionsEnabled,
                             modifier = Modifier.size(32.dp),
                         ) {
@@ -262,7 +275,7 @@ fun RecipeDetailScreen(
                             )
                         }
                         IconButton(
-                            onClick = { onEdit(visibleRecipe) },
+                            onClick = { haptic(); onEdit(visibleRecipe) },
                             enabled = interactionsEnabled,
                             modifier = Modifier.size(32.dp),
                         ) {
@@ -270,7 +283,7 @@ fun RecipeDetailScreen(
                         }
                         Box {
                             IconButton(
-                                onClick = { moreExpanded = true },
+                                onClick = { haptic(); moreExpanded = true },
                                 enabled = interactionsEnabled,
                                 modifier = Modifier.size(32.dp),
                             ) {
@@ -306,8 +319,8 @@ fun RecipeDetailScreen(
                                     }
                                 }
 
-                                MenuItem("Clone", IconCopy, onClick = { moreExpanded = false; onClone(visibleRecipe) })
-                                MenuItem("QR code", IconQrCode, onClick = { moreExpanded = false; qrRecipe = visibleRecipe })
+                                MenuItem("Clone", IconCopy, onClick = { haptic(); moreExpanded = false; onClone(visibleRecipe) })
+                                MenuItem("QR code", IconQrCode, onClick = { haptic(); moreExpanded = false; qrRecipe = visibleRecipe })
                                 Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
                                 MenuItem(
                                     label = "Delete",
@@ -494,6 +507,7 @@ fun RecipeDetailScreen(
                 ReferenceImageLightbox(
                     imageUris = visibleRecipe.referenceImageUris,
                     startIndex = startIndex,
+                    blurEnabled = showReferenceImageBlur,
                     onDismiss = { expandedImageIndex = null },
                 )
             }
@@ -527,12 +541,36 @@ private fun RecipeReferenceImage(
     interactionsEnabled: Boolean = true,
 ) {
     val context = LocalContext.current
-    val bitmaps = remember(referenceImageUris) {
-        referenceImageUris.map { uriString ->
-            uriString to decodeSampledBitmap(context, Uri.parse(uriString))
+    val bitmaps by produceState(
+        initialValue = referenceImageUris.map { it to ImageLoadState(null, null) },
+        referenceImageUris,
+    ) {
+        val current = referenceImageUris.map { it to ImageLoadState(null, null) }.toMutableList()
+        value = current.toList() // reset immediately so stale images from previous recipe don't persist
+        if (referenceImageUris.isEmpty()) return@produceState
+        // previews in batches of 3 — first batch visible immediately
+        referenceImageUris.chunked(3).forEachIndexed { batchIdx, batch ->
+            val batchPreviews = withContext(Dispatchers.IO) {
+                batch.map { uri -> uri to decodeSampledBitmap(context, Uri.parse(uri), maxPx = 16) }
+            }
+            batchPreviews.forEachIndexed { i, (uri, preview) ->
+                current[batchIdx * 3 + i] = uri to ImageLoadState(preview = preview, full = null)
+            }
+            value = current.toList()
+        }
+        // full-res in batches of 3
+        referenceImageUris.chunked(3).forEachIndexed { batchIdx, batch ->
+            val batchFulls = withContext(Dispatchers.IO) {
+                batch.map { uri -> uri to decodeSampledBitmap(context, Uri.parse(uri)) }
+            }
+            batchFulls.forEachIndexed { i, (uri, full) ->
+                val idx = batchIdx * 3 + i
+                current[idx] = uri to ImageLoadState(preview = current[idx].second.preview, full = full)
+            }
+            value = current.toList()
         }
     }
-    val hasImages = bitmaps.any { it.second != null }
+    val hasImages = bitmaps.isNotEmpty()
     var isEditing by remember { mutableStateOf(false) }
     LaunchedEffect(interactionsEnabled) {
         if (!interactionsEnabled) isEditing = false
@@ -625,36 +663,37 @@ private fun RecipeReferenceImage(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                bitmaps.forEachIndexed { index, (uriString, bitmap) ->
-                    bitmap ?: return@forEachIndexed
-                    Box(modifier = Modifier.size(width = 118.dp, height = 86.dp)) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
+                bitmaps.forEachIndexed { index, (uriString, loadState) ->
+                    key(uriString) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .size(width = 118.dp, height = 86.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Bg)
                                 .clickable(enabled = interactionsEnabled) { onExpandImage(index) },
-                        )
-                        if (isEditing) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(5.dp)
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.65f))
-                                    .clickable(enabled = interactionsEnabled) { onRemoveReferenceImage(uriString) },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    IconClose,
-                                    contentDescription = "Remove image",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(10.dp),
-                                )
+                        ) {
+                            BlurredImagePlaceholder(
+                                state = loadState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            if (isEditing) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(5.dp)
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.65f))
+                                        .clickable(enabled = interactionsEnabled) { onRemoveReferenceImage(uriString) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        IconClose,
+                                        contentDescription = "Remove image",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -924,6 +963,7 @@ private fun decodeShareReferenceBitmap(context: Context, uriString: String?): Bi
 private fun ReferenceImageLightbox(
     imageUris: List<String>,
     startIndex: Int,
+    blurEnabled: Boolean = true,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -953,23 +993,23 @@ private fun ReferenceImageLightbox(
                 .clickable(onClick = {}),
         ) { page ->
             val uriString = displayUris[page]
-            val bitmap = remember(uriString) {
-                decodeSampledBitmap(context, Uri.parse(uriString), maxPx = 1920)
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+            val loadState by produceState(ImageLoadState(null, null), uriString) {
+                val uri = Uri.parse(uriString)
+                val preview = withContext(Dispatchers.IO) {
+                    decodeSampledBitmap(context, uri, maxPx = 20)
                 }
+                value = ImageLoadState(preview = preview, full = null)
+                val full = withContext(Dispatchers.IO) {
+                    decodeSampledBitmap(context, uri, maxPx = 1920)
+                }
+                value = ImageLoadState(preview = preview, full = full)
             }
+            BlurredImagePlaceholder(
+                state = loadState,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+                blurEnabled = blurEnabled,
+            )
         }
         IconButton(
             onClick = onDismiss,

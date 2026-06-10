@@ -66,6 +66,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +88,8 @@ import com.paeki.fujirecipes.ui.components.IconTrash
 import com.paeki.fujirecipes.ui.components.MetaRow
 import com.paeki.fujirecipes.ui.components.SectionLabel
 import com.paeki.fujirecipes.ui.components.Wordmark
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.model.AppSettings
 import com.paeki.fujirecipes.ui.theme.Bg
 import com.paeki.fujirecipes.ui.theme.Border
@@ -111,6 +115,8 @@ fun ProfileScreen(
     onResetCameraLabel: (serial: String) -> Unit = {},
     settings: AppSettings = AppSettings(),
     onToggleLibraryShowImages: () -> Unit = {},
+    onToggleReferenceImageBlur: () -> Unit = {},
+    onToggleHaptics: () -> Unit = {},
     onOpenCameraImageTuner: () -> Unit = {},
     onLoadSampleLibrary: () -> Unit = {},
     onExploreDemo: () -> Unit = {},
@@ -119,6 +125,8 @@ fun ProfileScreen(
     onOpenNameBench: () -> Unit = {},
     onOpenReadSlotsBench: () -> Unit = {},
     onOpenDrPriorityBench: () -> Unit = {},
+    onOpenHapticBench: () -> Unit = {},
+    onOpenPtpLog: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
     onShowScanLog: () -> Unit = {},
     onSetPropertyWriteDelay: (Long) -> Unit = {},
@@ -131,6 +139,10 @@ fun ProfileScreen(
     onImportBackupReplace: () -> Unit = {},
     onDismissBackupMessage: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    fun haptic() = FujiHaptics.perform(context, view, FujiHapticEffect.SoftConfirm)
+
     var settingsOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var myCamerasOpen by remember { mutableStateOf(false) }
@@ -185,13 +197,13 @@ fun ProfileScreen(
                         .background(PanelLow)
                         .border(1.dp, Border, RoundedCornerShape(14.dp)),
                 ) {
-                    ProfileNavRow(label = "My Cameras", badge = cameraLabels.size.takeIf { it > 0 }?.toString(), onClick = { myCamerasOpen = true }, inCard = true)
+                    ProfileNavRow(label = "My Cameras", badge = cameraLabels.size.takeIf { it > 0 }?.toString(), onClick = { haptic(); myCamerasOpen = true }, inCard = true)
                     ProfileDivider()
-                    ProfileNavRow(label = "Settings", onClick = { settingsOpen = true }, inCard = true)
+                    ProfileNavRow(label = "Settings", onClick = { haptic(); settingsOpen = true }, inCard = true)
                     ProfileDivider()
-                    ProfileNavRow(label = "Backup & restore", onClick = { backupOpen = true }, inCard = true)
+                    ProfileNavRow(label = "Backup & restore", onClick = { haptic(); backupOpen = true }, inCard = true)
                     ProfileDivider()
-                    ProfileNavRow(label = "About", onClick = { aboutOpen = true }, inCard = true)
+                    ProfileNavRow(label = "About", onClick = { haptic(); aboutOpen = true }, inCard = true)
                 }
 
                 Spacer(Modifier.height(24.dp))
@@ -208,7 +220,7 @@ fun ProfileScreen(
                 ) {
                     ProfileNavRow(
                         label = "Developer tools",
-                        onClick = { devToolsOpen = true },
+                        onClick = { haptic(); devToolsOpen = true },
                         inCard = true,
                     )
                 }
@@ -247,6 +259,8 @@ fun ProfileScreen(
             SettingsScreen(
                 settings = settings,
                 onToggleLibraryShowImages = onToggleLibraryShowImages,
+                onToggleReferenceImageBlur = onToggleReferenceImageBlur,
+                onToggleHaptics = onToggleHaptics,
                 onBack = { settingsOpen = false },
             )
         }
@@ -300,6 +314,8 @@ fun ProfileScreen(
                 onOpenNameBench = onOpenNameBench,
                 onOpenReadSlotsBench = onOpenReadSlotsBench,
                 onOpenDrPriorityBench = onOpenDrPriorityBench,
+                onOpenHapticBench = onOpenHapticBench,
+                onOpenPtpLog = onOpenPtpLog,
                 onAddMockCamera = onAddMockCamera,
                 onShowScanLog = onShowScanLog,
                 propertyWriteDelayMs = settings.propertyWriteDelayMs,
@@ -785,14 +801,20 @@ private fun CameraActionSheet(
     val motionEnabled = android.animation.ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
     var visible by remember { mutableStateOf(!motionEnabled) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "action-overlay")
     val overlayAlpha by overlayTransition.animateFloat(

@@ -61,6 +61,7 @@ import com.paeki.fujirecipes.ui.discover.DiscoverScreen
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -68,6 +69,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,6 +94,8 @@ import com.paeki.fujirecipes.ui.camera.CameraImageTunerScreen
 import com.paeki.fujirecipes.ui.dev.DrPriorityBenchScreen
 import com.paeki.fujirecipes.ui.dev.DrPriorityBenchViewModel
 import com.paeki.fujirecipes.ui.dev.ExifBenchScreen
+import com.paeki.fujirecipes.ui.dev.HapticBenchScreen
+import com.paeki.fujirecipes.ui.dev.PtpLogScreen
 import com.paeki.fujirecipes.ui.dev.NameBenchScreen
 import com.paeki.fujirecipes.ui.dev.NameBenchViewModel
 import com.paeki.fujirecipes.ui.dev.ReadSlotsBenchScreen
@@ -127,6 +131,8 @@ import com.paeki.fujirecipes.ui.theme.SansFamily
 import com.paeki.fujirecipes.ui.theme.TextDim
 import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 
 enum class AppTab { Camera, Library, Discover, Profile }
 
@@ -173,6 +179,7 @@ data class CameraUiState(
     val rearrangingWriteIndex: Int = -1,
     val rearrangingWriteTotal: Int = 0,
     val isRestoringValidation: Boolean = false,
+    val isRearrangeValidation: Boolean = false,
     val cameraLabels: Map<String, String> = emptyMap(),
     val cameraModels: Map<String, String> = emptyMap(),
     val cameraFirmwares: Map<String, String> = emptyMap(),
@@ -271,11 +278,15 @@ fun FujiSyncApp(
     onRenameSlotBackup: (String) -> Unit,
     onSelectSlotBackup: (String) -> Unit = {},
     onRearrangeCameraSlots: (List<RecipeUiModel>) -> Unit = {},
+    onRearrangeValidationDismiss: () -> Unit = {},
+    rearrangeDebugLog: String = "",
     onRenameCameraLabel: (String, String) -> Unit,
     onDeleteCamera: (String) -> Unit = {},
     onResetCameraLabel: (String) -> Unit = {},
     onToggleFavorite: (String) -> Unit,
     onToggleLibraryShowImages: () -> Unit,
+    onToggleReferenceImageBlur: () -> Unit = {},
+    onToggleHaptics: () -> Unit = {},
     onWriteLibraryRecipeToSlot: (String) -> Unit = {},
     onImportFromPhoto: () -> Unit = {},
     onExifImportErrorDismiss: () -> Unit = {},
@@ -302,9 +313,13 @@ fun FujiSyncApp(
     var showNameBench by remember { mutableStateOf(false) }
     var showReadSlotsBench by remember { mutableStateOf(false) }
     var showDrPriorityBench by remember { mutableStateOf(false) }
+    var showHapticBench by remember { mutableStateOf(false) }
+    var showPtpLog by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
     var cameraSheetRevealProgress by rememberSaveable { mutableStateOf(0f) }
+    SideEffect { FujiHaptics.enabled = state.settings.hapticsEnabled }
+
     val cameraLabel = state.camera.cameraLabels[state.camera.cameraSerial] ?: "My Camera"
     var cameraDetail by remember { mutableStateOf<Pair<Int, CameraCardUiModel>?>(null) }
     var showReadingOverlay by remember { mutableStateOf(false) }
@@ -346,10 +361,10 @@ fun FujiSyncApp(
         }
     }
 
-    LaunchedEffect(state.camera.readingSlots, state.camera.isRestoringValidation) {
-        if (state.camera.readingSlots && !state.camera.isRestoringValidation) {
+    LaunchedEffect(state.camera.readingSlots, state.camera.isRestoringValidation, state.camera.isRearrangeValidation, state.camera.restoringSlots) {
+        if (state.camera.readingSlots && !state.camera.restoringSlots && !state.camera.isRestoringValidation && !state.camera.isRearrangeValidation) {
             showReadingOverlay = true
-        } else if (state.camera.isRestoringValidation) {
+        } else if (state.camera.restoringSlots) {
             showReadingOverlay = false
         }
     }
@@ -380,6 +395,8 @@ fun FujiSyncApp(
         OverlayLayer(showNameBench) { showNameBench = false },
         OverlayLayer(showReadSlotsBench) { showReadSlotsBench = false },
         OverlayLayer(showDrPriorityBench) { showDrPriorityBench = false },
+        OverlayLayer(showHapticBench) { showHapticBench = false },
+        OverlayLayer(showPtpLog) { showPtpLog = false },
         OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
@@ -433,8 +450,10 @@ fun FujiSyncApp(
                                 onRenameSlotBackup = onRenameSlotBackup,
                                 onSelectSlotBackup = onSelectSlotBackup,
                                 onRearrangeSlots = onRearrangeCameraSlots,
+                                onRearrangeValidationDismiss = onRearrangeValidationDismiss,
                                 readingSlotIndex = state.camera.readingSlotIndex,
                                 isRestoringValidation = state.camera.isRestoringValidation,
+                                isRearrangeValidation = state.camera.isRearrangeValidation,
                                 cameraSerial = state.camera.cameraSerial,
                                 cameraNames = listOf(cameraLabel),
                                 onOpenCameraDetail = { idx, cam -> cameraDetail = idx to cam },
@@ -475,6 +494,8 @@ fun FujiSyncApp(
                         onResetCameraLabel = onResetCameraLabel,
                         settings = state.settings,
                         onToggleLibraryShowImages = onToggleLibraryShowImages,
+                        onToggleReferenceImageBlur = onToggleReferenceImageBlur,
+                        onToggleHaptics = onToggleHaptics,
                         onOpenCameraImageTuner = onOpenCameraImageTuner,
                         onLoadSampleLibrary = onLoadSampleLibrary,
                         onExploreDemo = onExploreDemo,
@@ -483,6 +504,8 @@ fun FujiSyncApp(
                         onOpenNameBench = { showNameBench = true },
                         onOpenReadSlotsBench = { showReadSlotsBench = true },
                         onOpenDrPriorityBench = { showDrPriorityBench = true },
+                        onOpenHapticBench = { showHapticBench = true },
+                        onOpenPtpLog = { showPtpLog = true },
                         onAddMockCamera = onAddMockCamera,
                         onShowScanLog = onLoadCaptureLog,
                         onSetPropertyWriteDelay = onSetPropertyWriteDelay,
@@ -506,6 +529,8 @@ fun FujiSyncApp(
                     showNameBench = showNameBench,
                     showReadSlotsBench = showReadSlotsBench,
                     showDrPriorityBench = showDrPriorityBench,
+                    showHapticBench = showHapticBench,
+                    showPtpLog = showPtpLog,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -538,6 +563,9 @@ fun FujiSyncApp(
                     onNameBenchClose = { showNameBench = false },
                     onReadSlotsBenchClose = { showReadSlotsBench = false },
                     onDrPriorityBenchClose = { showDrPriorityBench = false },
+                    onHapticBenchClose = { showHapticBench = false },
+                    onPtpLogClose = { showPtpLog = false },
+                    ptpLogText = rearrangeDebugLog,
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,
                     onImportFromScreenshotGuideClose = { showImportFromScreenshotGuide = false },
@@ -653,6 +681,9 @@ private fun BoxScope.AppOverlays(
     showNameBench: Boolean,
     showReadSlotsBench: Boolean,
     showDrPriorityBench: Boolean,
+    showHapticBench: Boolean,
+    showPtpLog: Boolean,
+    ptpLogText: String,
     showImportFromPhotoGuide: Boolean,
     showReadingOverlay: Boolean,
     showDiscardEditorDialog: Boolean,
@@ -685,6 +716,8 @@ private fun BoxScope.AppOverlays(
     onNameBenchClose: () -> Unit,
     onReadSlotsBenchClose: () -> Unit,
     onDrPriorityBenchClose: () -> Unit,
+    onHapticBenchClose: () -> Unit,
+    onPtpLogClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
     showImportFromScreenshotGuide: Boolean,
     onImportFromScreenshotGuideClose: () -> Unit,
@@ -726,6 +759,7 @@ private fun BoxScope.AppOverlays(
             cameraSlots = state.camera.slots,
             onWriteToSlot = onWriteLibraryRecipeToSlot,
             interactionsEnabled = !(state.creatingRecipe || state.editorRecipe != null),
+            showReferenceImageBlur = state.settings.showReferenceImageBlur,
         )
     }
 
@@ -773,6 +807,18 @@ private fun BoxScope.AppOverlays(
     if (showDrPriorityBench) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
             DrPriorityBenchScreen(viewModel = drPriorityBenchVm, onClose = onDrPriorityBenchClose)
+        }
+    }
+
+    if (showHapticBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            HapticBenchScreen(onClose = onHapticBenchClose)
+        }
+    }
+
+    if (showPtpLog) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            PtpLogScreen(log = ptpLogText, onClose = onPtpLogClose)
         }
     }
 
@@ -1265,6 +1311,8 @@ private data class TabItem(val id: AppTab, val label: String, val icon: ImageVec
 
 @Composable
 private fun AppTabBar(tab: AppTab, onTabChange: (AppTab) -> Unit) {
+    val context = LocalContext.current
+    val view = LocalView.current
     val tabs = listOf(
         TabItem(AppTab.Camera, "CAMERA", IconCamera),
         TabItem(AppTab.Library, "LIBRARY", IconFolder),
@@ -1294,7 +1342,12 @@ private fun AppTabBar(tab: AppTab, onTabChange: (AppTab) -> Unit) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onTabChange(t.id) }
+                        .clickable {
+                            if (tab != t.id) {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                            }
+                            onTabChange(t.id)
+                        }
                         .padding(top = 5.dp, bottom = 3.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -1405,6 +1458,11 @@ private fun ChargingWarningBanner(onDismiss: () -> Unit) {
 
 @Composable
 private fun RestoreSetLoadingScreen(currentSlotIndex: Int) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    LaunchedEffect(currentSlotIndex) {
+        if (currentSlotIndex >= 0) FujiHaptics.performStepClick(context, view, step = currentSlotIndex, total = 7)
+    }
     val transition = rememberInfiniteTransition(label = "restore-set")
     val pulse by transition.animateFloat(
         initialValue = 0.55f,
@@ -1574,6 +1632,11 @@ private fun RearrangeSlotsLoadingScreen(
     writeIndex: Int,
     writeTotal: Int,
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    LaunchedEffect(writeIndex) {
+        if (writeIndex >= 0) FujiHaptics.performStepClick(context, view, writeIndex, writeTotal)
+    }
     val transition = rememberInfiniteTransition(label = "rearrange-slots")
     val pulse by transition.animateFloat(
         initialValue = 0.55f,

@@ -58,6 +58,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,6 +99,8 @@ fun DiscoverScreen(
     mainViewModel: MainViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
+    val context = LocalContext.current
+    val view = LocalView.current
     var selectedRecipe by remember { mutableStateOf<FxwRecipe?>(null) }
     BackHandler(enabled = selectedRecipe != null) {
         selectedRecipe = null
@@ -353,6 +358,9 @@ private fun FxwRecipeDetailScreen(
     var showSaveSheet by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
     LaunchedEffect(displayRecipe) { saveName = displayRecipe?.title.orEmpty() }
+    val context = LocalContext.current
+    val view = LocalView.current
+    fun haptic(effect: FujiHapticEffect) = FujiHaptics.perform(context, view, effect)
 
     AnimatedVisibility(
         visible = recipe != null,
@@ -360,7 +368,6 @@ private fun FxwRecipeDetailScreen(
         exit = slideOutVertically(targetOffsetY = { it / 3 }, animationSpec = tween(250)) + fadeOut(tween(150)),
     ) {
         val r = displayRecipe ?: return@AnimatedVisibility
-        val context = LocalContext.current
 
         Box(
             modifier = Modifier
@@ -534,7 +541,7 @@ private fun FxwRecipeDetailScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { openOriginalRecipe(context, r) }
+                                    .clickable { haptic(FujiHapticEffect.SoftConfirm); openOriginalRecipe(context, r) }
                                     .padding(horizontal = 22.dp, vertical = 13.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
@@ -574,7 +581,7 @@ private fun FxwRecipeDetailScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { articleExpanded = !articleExpanded }
+                                        .clickable { haptic(FujiHapticEffect.DrawerSwooshDismiss); articleExpanded = !articleExpanded }
                                         .padding(horizontal = 22.dp, vertical = 13.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
@@ -627,6 +634,7 @@ private fun FxwRecipeDetailScreen(
                     PrimaryCTA(
                         label = "Add to Library",
                         onClick = {
+                            haptic(FujiHapticEffect.Selection)
                             saveName = r.title
                             showSaveSheet = true
                         },
@@ -738,7 +746,7 @@ private fun FxwRecipeDetailScreen(
                             .clip(RoundedCornerShape(10.dp))
                             .background(Bg)
                             .border(1.dp, if (includePhotos) Gold.copy(alpha = 0.4f) else Border, RoundedCornerShape(10.dp))
-                            .clickable(enabled = !isSaving) { includePhotos = !includePhotos }
+                            .clickable(enabled = !isSaving) { haptic(FujiHapticEffect.SoftSelection); includePhotos = !includePhotos }
                             .padding(horizontal = 14.dp, vertical = 13.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
@@ -783,6 +791,7 @@ private fun FxwRecipeDetailScreen(
                     busy = isSaving,
                     enabled = saveName.isNotBlank() && nameError == null && !isSaving,
                     onClick = {
+                        haptic(FujiHapticEffect.SuccessPause)
                         scope.launch {
                             isSaving = true
                             onSaveToLibrary(displayRecipe!!, saveName, includePhotos)

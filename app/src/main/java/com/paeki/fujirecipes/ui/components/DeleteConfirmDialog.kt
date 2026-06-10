@@ -37,9 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.theme.Gold
 import com.paeki.fujirecipes.ui.theme.SheetBg
 import com.paeki.fujirecipes.ui.theme.SheetBorder
@@ -66,14 +70,20 @@ fun DeleteConfirmDialog(
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
     var visible by remember { mutableStateOf(!motionEnabled) }
+    val context = LocalContext.current
+    val view = LocalView.current
 
     fun dismissWithMotion() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
 
     BackHandler(onBack = ::dismissWithMotion)
-    LaunchedEffect(motionEnabled) { visible = true }
+    LaunchedEffect(motionEnabled) {
+        visible = true
+        FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
+    }
 
     val overlayTransition = updateTransition(targetState = visible, label = "delete-overlay")
     val overlayAlpha by overlayTransition.animateFloat(
@@ -177,6 +187,7 @@ fun DeleteConfirmDialog(
                             .background(confirmColor.copy(alpha = 0.08f))
                             .border(1.dp, confirmColor.copy(alpha = 0.38f), RoundedCornerShape(14.dp))
                             .clickable(onClick = {
+                                FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
                                 scope.launch {
                                     if (motionEnabled) { visible = false; delay(130) }
                                     onConfirm()

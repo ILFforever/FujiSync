@@ -86,6 +86,8 @@ import com.paeki.fujirecipes.ui.theme.MonoFamily
 import com.paeki.fujirecipes.ui.theme.PanelHigh
 import com.paeki.fujirecipes.ui.theme.PanelLow
 import com.paeki.fujirecipes.ui.theme.SansFamily
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.theme.TextDim
 import com.paeki.fujirecipes.ui.theme.TextMuted
 import com.paeki.fujirecipes.ui.theme.TextPrimary
@@ -426,6 +428,7 @@ private fun EditorHeader(
     canSave: Boolean,
     onSave: () -> Unit,
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -447,7 +450,10 @@ private fun EditorHeader(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(enabled = canSave, onClick = onSave)
+                .clickable(enabled = canSave) {
+                    FujiHaptics.perform(context, effect = FujiHapticEffect.Confirm)
+                    onSave()
+                }
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

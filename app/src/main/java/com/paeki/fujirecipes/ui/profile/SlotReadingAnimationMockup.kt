@@ -33,12 +33,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.paeki.fujirecipes.ui.components.FilmSimBadgeImage
 import com.paeki.fujirecipes.ui.components.FilmSimLabel
+import com.paeki.fujirecipes.ui.haptics.FujiHapticEffect
+import com.paeki.fujirecipes.ui.haptics.FujiHaptics
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
 import com.paeki.fujirecipes.ui.theme.Border
 import com.paeki.fujirecipes.ui.theme.Gold
@@ -57,9 +61,17 @@ fun SlotReadingAnimationMockup(
     isDone: Boolean,
     onDismissed: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { visible = true }
+
+    LaunchedEffect(currentSlotIndex, isDone) {
+        if (!isDone && currentSlotIndex in 0 until TOTAL_SLOTS) {
+            FujiHaptics.performStepClick(context, view, step = currentSlotIndex, total = TOTAL_SLOTS)
+        }
+    }
 
     LaunchedEffect(isDone) {
         if (isDone) {

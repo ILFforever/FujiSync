@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.paeki.fujirecipes"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.paeki.fujirecipes"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 2
         versionName = "1.1.0"
         buildConfigField("String", "GITHUB_REPO", "\"ILFforever/FujiSync\"")
