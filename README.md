@@ -34,13 +34,17 @@ If you own a Fujifilm X-series camera and you:
 
 ## Screenshots
 
-| Camera Slots | Recipe Editor | Library |
-|:---:|:---:|:---:|
-| <!-- SCREENSHOT: slot board (MY CAMERA screen) --> ![Slot Board](docs/screenshots/slot_board.png) | <!-- SCREENSHOT: recipe editor open on a slot --> ![Editor](docs/screenshots/editor.png) | <!-- SCREENSHOT: library list view --> ![Library](docs/screenshots/library.png) |
+**Camera & editing** — read your C1–C7 slots, rearrange recipes, and dig into the details.
 
-| Import from JPEG | Import from Screenshot | Discover (FXW) |
-|:---:|:---:|:---:|
-| <!-- SCREENSHOT: EXIF import flow --> ![JPEG Import](docs/screenshots/import_jpeg.png) | <!-- SCREENSHOT: OCR screenshot import --> ![OCR Import](docs/screenshots/import_ocr.png) | <!-- SCREENSHOT: discover / browse screen --> ![Discover](docs/screenshots/discover.png) |
+| Camera Slots | Syncing to Camera | Rearrange | Recipe (expanded) |
+|:---:|:---:|:---:|:---:|
+| <!-- SCREENSHOT: slot board (MY CAMERA screen) --> ![Camera Slots](docs/screenshots/slot_board.jpg) | <!-- SCREENSHOT: restoring/syncing to camera --> ![Syncing](docs/screenshots/syncing.jpg) | <!-- SCREENSHOT: rearrange modal --> ![Rearrange](docs/screenshots/modal_rearrange.jpg) | <!-- SCREENSHOT: recipe detail expanded --> ![Recipe Expanded](docs/screenshots/recipe_expanded.jpg) |
+
+**Import** — get recipes into the app from photos, screenshots, or QR codes.
+
+| Add Recipe | Manual Entry | From JPEG | QR Import |
+|:---:|:---:|:---:|:---:|
+| <!-- SCREENSHOT: add recipe entry point --> ![Add Recipe](docs/screenshots/library_add_recipe.jpg) | <!-- SCREENSHOT: manual recipe entry --> ![From Screenshot](docs/screenshots/library_manual.jpg) | <!-- SCREENSHOT: JPEG import --> ![JPEG](docs/screenshots/library_import_jpeg.jpg) | <!-- SCREENSHOT: QR import --> ![QR](docs/screenshots/library_import_qr.jpg) |
 
 ---
 
