@@ -296,6 +296,7 @@ class MainViewModel @Inject constructor(
                 }
 
                 conn.use {
+                    val readSlots = mutableListOf<RecipeUiModel>()
                     for ((idx, slot) in CameraSlot.entries.withIndex()) {
                         _uiState.update { it.copy(camera = it.camera.copy(readingSlotIndex = idx)) }
                         val preset = withContext(Dispatchers.IO) {
@@ -307,7 +308,8 @@ class MainViewModel @Inject constructor(
                             failCount++
                             RecipeUiModel(slot = slot.label, name = "READ FAILED", sim = "—", pills = emptyList())
                         }
-                        _uiState.update { it.copy(camera = it.camera.copy(slots = it.camera.slots + recipe)) }
+                        readSlots.add(recipe)
+                        _uiState.update { it.copy(camera = it.camera.copy(slots = readSlots.toList())) }
                     }
                     withContext(Dispatchers.IO) { runCatching { conn.closeSession() } }
                 }
