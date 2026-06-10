@@ -18,6 +18,11 @@ data class RecipeUiModel(
     val groupIds: List<String> = emptyList(),
     val group: String? = null,
     val favorite: Boolean = false,
+    val isoMin: Int? = null,
+    val isoMax: Int? = null,
+    val exposureCompMin: Float? = null,
+    val exposureCompMax: Float? = null,
+    val sensorGens: List<Int> = emptyList(),
 ) {
     val groupId: String? get() = groupIds.firstOrNull()
 }
@@ -43,6 +48,11 @@ data class LibraryRecipeUiModel(
     val referenceImageUris: List<String> = emptyList(),
     val groupIds: List<String> = emptyList(),
     val favorite: Boolean = false,
+    val isoMin: Int? = null,
+    val isoMax: Int? = null,
+    val exposureCompMin: Float? = null,
+    val exposureCompMax: Float? = null,
+    val sensorGens: List<Int> = emptyList(),
 ) {
     val groupId: String? get() = groupIds.firstOrNull()
 }

@@ -363,6 +363,11 @@ class LocalStore(context: Context) {
         put("groupIds", JSONArray(r.groupIds))
         r.groupId?.let { put("groupId", it) }
         put("favorite", r.favorite)
+        r.isoMin?.let { put("isoMin", it) }
+        r.isoMax?.let { put("isoMax", it) }
+        r.exposureCompMin?.let { put("exposureCompMin", it.toDouble()) }
+        r.exposureCompMax?.let { put("exposureCompMax", it.toDouble()) }
+        if (r.sensorGens.isNotEmpty()) put("sensorGens", JSONArray(r.sensorGens))
     }
 
     private fun recipesFromJson(arr: JSONArray): List<LibraryRecipeUiModel> =
@@ -386,6 +391,11 @@ class LocalStore(context: Context) {
             ?: o.optString("groupId").takeIf { it.isNotBlank() }?.let(::listOf)
             ?: emptyList(),
         favorite = o.optBoolean("favorite", false),
+        isoMin = o.optInt("isoMin", -1).takeIf { it >= 0 },
+        isoMax = o.optInt("isoMax", -1).takeIf { it >= 0 },
+        exposureCompMin = o.optDouble("exposureCompMin", Double.NaN).takeIf { !it.isNaN() }?.toFloat(),
+        exposureCompMax = o.optDouble("exposureCompMax", Double.NaN).takeIf { !it.isNaN() }?.toFloat(),
+        sensorGens = o.optJSONArray("sensorGens")?.toIntList() ?: emptyList(),
     )
 
     // Groups
@@ -453,6 +463,11 @@ class LocalStore(context: Context) {
         putOpt("groupId", r.groupId)
         putOpt("group", r.group)
         put("favorite", r.favorite)
+        r.isoMin?.let { put("isoMin", it) }
+        r.isoMax?.let { put("isoMax", it) }
+        r.exposureCompMin?.let { put("exposureCompMin", it.toDouble()) }
+        r.exposureCompMax?.let { put("exposureCompMax", it.toDouble()) }
+        if (r.sensorGens.isNotEmpty()) put("sensorGens", JSONArray(r.sensorGens))
     }
 
     private fun slotsFromJson(arr: JSONArray): List<RecipeUiModel> =
@@ -505,11 +520,18 @@ class LocalStore(context: Context) {
             ?: emptyList(),
         group = o.optString("group").ifEmpty { null },
         favorite = o.optBoolean("favorite", false),
+        isoMin = o.optInt("isoMin", -1).takeIf { it >= 0 },
+        isoMax = o.optInt("isoMax", -1).takeIf { it >= 0 },
+        exposureCompMin = o.optDouble("exposureCompMin", Double.NaN).takeIf { !it.isNaN() }?.toFloat(),
+        exposureCompMax = o.optDouble("exposureCompMax", Double.NaN).takeIf { !it.isNaN() }?.toFloat(),
+        sensorGens = o.optJSONArray("sensorGens")?.toIntList() ?: emptyList(),
     )
 
     // Helpers
 
     private fun JSONArray.toStringList(): List<String> = (0 until length()).map { getString(it) }
+
+    private fun JSONArray.toIntList(): List<Int> = (0 until length()).map { getInt(it) }
 
     private fun JSONObject.referenceImageUris(): List<String> =
         optJSONArray("referenceImageUris")?.toStringList()

@@ -392,6 +392,7 @@ fun RecipeDetailScreen(
                         PropSectionDetail("Effects", visibleRecipe.effects)
                         PropSectionDetail("Tone", visibleRecipe.tone)
                         PropSectionDetail("White Balance", visibleRecipe.wb)
+                        ShootingSettingsSection(visibleRecipe)
                         SavedFromSection(visibleRecipe)
                     }
 
@@ -900,8 +901,8 @@ private fun RecipeQrSheet(
                 )
                 Spacer(Modifier.height(16.dp))
                 PrimaryCTA(
-                    label = if (bitmap == null) "Preparing QR" else "Share Recipe",
-                    busy = bitmap == null,
+                    label = "Share Recipe Card",
+                    busy = false,
                     enabled = bitmap != null,
                     onClick = {
                         bitmap?.let { qr ->
@@ -1024,6 +1025,73 @@ private fun ReferenceImageLightbox(
             Icon(IconClose, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShootingSettingsSection(recipe: RecipeUiModel) {
+    val hasIso = recipe.isoMin != null || recipe.isoMax != null
+    val hasExposure = recipe.exposureCompMin != null || recipe.exposureCompMax != null
+    val hasSensor = recipe.sensorGens.isNotEmpty()
+    if (!hasIso && !hasExposure && !hasSensor) return
+
+    fun fmtEv(v: Float): String {
+        val n = if (v % 1f == 0f) v.toInt().toString() else v.toString()
+        return if (v > 0) "+$n" else n
+    }
+
+    val rows = buildList {
+        if (hasIso) {
+            val min = recipe.isoMin
+            val max = recipe.isoMax
+            val value = when {
+                min != null && max != null && min == max -> "$min"
+                min != null && max != null -> "$min – $max"
+                min != null -> "≥ $min"
+                max != null -> "≤ $max"
+                else -> "—"
+            }
+            add("Recommended ISO" to value)
+        }
+        if (hasExposure) {
+            val min = recipe.exposureCompMin
+            val max = recipe.exposureCompMax
+            val value = when {
+                min != null && max != null && min == max -> fmtEv(min)
+                min != null && max != null -> "${fmtEv(min)} – ${fmtEv(max)}"
+                min != null -> "≥ ${fmtEv(min)}"
+                max != null -> "≤ ${fmtEv(max)}"
+                else -> "—"
+            }
+            add("Exposure Comp" to value)
+        }
+        if (hasSensor) {
+            add("Sensors" to recipe.sensorGens.joinToString(", ") { "X-Trans $it" })
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    SectionLabel(text = "Shooting Settings", modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(PanelLow)
+            .border(1.dp, Border, RoundedCornerShape(14.dp)),
+    ) {
+        rows.forEachIndexed { i, (label, value) ->
+            PropRow(label = label, value = value, isLast = i == rows.lastIndex)
+            if (i < rows.lastIndex) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Border),
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(16.dp))
 }
 
 @Composable

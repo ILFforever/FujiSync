@@ -345,4 +345,6 @@ val PROP_ICONS: Map<String, ImageVector> = mapOf(
     "White Balance" to IconWB,
     "WB Shift R" to IconWBShift,
     "WB Shift B" to IconWBShift,
+    "Recommended ISO" to IconISO,
+    "Sensors" to IconCamera,
 )

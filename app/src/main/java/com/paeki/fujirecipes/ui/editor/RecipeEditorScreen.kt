@@ -58,6 +58,7 @@ import com.paeki.fujirecipes.domain.model.FujiFilmSimulation
 import com.paeki.fujirecipes.domain.model.canonicalFilmSimLabel
 import com.paeki.fujirecipes.ui.components.decodeSampledBitmap
 import com.paeki.fujirecipes.ui.components.FilmSimLabel
+import com.paeki.fujirecipes.ui.components.IconCamera
 import com.paeki.fujirecipes.ui.components.IconCC
 import com.paeki.fujirecipes.ui.components.IconCCFXBlue
 import com.paeki.fujirecipes.ui.components.IconCheck
@@ -65,8 +66,10 @@ import com.paeki.fujirecipes.ui.components.IconClarity
 import com.paeki.fujirecipes.ui.components.IconClose
 import com.paeki.fujirecipes.ui.components.IconColor
 import com.paeki.fujirecipes.ui.components.IconDR
+import com.paeki.fujirecipes.ui.components.IconExposureComp
 import com.paeki.fujirecipes.ui.components.IconGrain
 import com.paeki.fujirecipes.ui.components.IconHighlight
+import com.paeki.fujirecipes.ui.components.IconISO
 import com.paeki.fujirecipes.ui.components.IconNR
 import com.paeki.fujirecipes.ui.components.IconShadow
 import com.paeki.fujirecipes.ui.components.IconSharpness
@@ -192,6 +195,11 @@ fun RecipeEditorScreen(
     var clarity by remember(seed) { mutableIntStateOf(seed.tone["Clarity"].signedIntOrZero()) }
     var monoWc by remember(seed) { mutableIntStateOf(seed.tone["Mono WC"].signedIntOrZero()) }
     var monoMg by remember(seed) { mutableIntStateOf(seed.tone["Mono MG"].signedIntOrZero()) }
+    var isoMin by remember(seed) { mutableStateOf(seed.isoMin) }
+    var isoMax by remember(seed) { mutableStateOf(seed.isoMax) }
+    var exposureCompMin by remember(seed) { mutableStateOf(seed.exposureCompMin) }
+    var exposureCompMax by remember(seed) { mutableStateOf(seed.exposureCompMax) }
+    var sensorGens by remember(seed) { mutableStateOf(seed.sensorGens) }
 
     val isMono = sim in monoSims
     val supportsSmoothSkin = !cameraModel.contains("X-Pro3", ignoreCase = true)
@@ -223,6 +231,11 @@ fun RecipeEditorScreen(
         isMono,
         supportsSmoothSkin,
         supportsClarity,
+        isoMin,
+        isoMax,
+        exposureCompMin,
+        exposureCompMax,
+        sensorGens,
     ) {
         buildRecipe(
             base = seed,
@@ -248,6 +261,11 @@ fun RecipeEditorScreen(
             monoMg = monoMg,
             referenceImageUris = referenceImageUris,
             isMono = isMono,
+            isoMin = isoMin,
+            isoMax = isoMax,
+            exposureCompMin = exposureCompMin,
+            exposureCompMax = exposureCompMax,
+            sensorGens = sensorGens,
         )
     }
     val cleanSeed = remember(seed, initialRecipe) {
@@ -404,6 +422,53 @@ fun RecipeEditorScreen(
                             StepperControl("WB Shift R", IconWBShift, wbRed, -9, 9) { wbRed = it }
                             StepperControl("WB Shift B", IconWBShift, wbBlue, -9, 9) { wbBlue = it }
                         }
+                    }
+
+                    EditorSection("Shooting Settings") {
+                        OptionalFieldHeader(label = "Recommended ISO", icon = IconISO, isSet = isoMin != null || isoMax != null) { isoMin = null; isoMax = null }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            StepperControl("", null, isoMin ?: 0, 0, 12800, step = 100, valueText = isoMin?.toString() ?: "—", modifier = Modifier.weight(1f)) { isoMin = it.takeIf { v -> v > 0 } }
+                            Text(
+                                text = when {
+                                    isoMin != null && isoMax == null -> ">"
+                                    isoMin == null && isoMax != null -> "<"
+                                    else -> "–"
+                                },
+                                fontFamily = MonoFamily,
+                                fontSize = 16.sp,
+                                color = TextDim,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                            StepperControl("", null, isoMax ?: 0, 0, 12800, step = 100, valueText = isoMax?.toString() ?: "—", modifier = Modifier.weight(1f)) { isoMax = it.takeIf { v -> v > 0 } }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
+                        OptionalFieldHeader(label = "Exposure Compensation", icon = IconExposureComp, isSet = exposureCompMin != null || exposureCompMax != null) { exposureCompMin = null; exposureCompMax = null }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            HalfStepControl("", null, exposureCompMin ?: 0f, -5f, 5f, modifier = Modifier.weight(1f)) { exposureCompMin = it }
+                            Text(
+                                text = when {
+                                    exposureCompMin != null && exposureCompMax == null -> ">"
+                                    exposureCompMin == null && exposureCompMax != null -> "<"
+                                    else -> "–"
+                                },
+                                fontFamily = MonoFamily,
+                                fontSize = 16.sp,
+                                color = TextDim,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                            HalfStepControl("", null, exposureCompMax ?: 0f, -5f, 5f, modifier = Modifier.weight(1f)) { exposureCompMax = it }
+                        }
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
+                        OptionalFieldHeader(label = "Supported Sensors", icon = IconCamera, isSet = sensorGens.isNotEmpty()) { sensorGens = emptyList() }
+                        SensorGenCheckboxes(selected = sensorGens) { sensorGens = it }
                     }
 
                     Spacer(Modifier.height(120.dp))
@@ -796,16 +861,17 @@ private fun ChipGrid(
 @Composable
 private fun StepperControl(
     label: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     value: Int,
     min: Int,
     max: Int,
     step: Int = 1,
     valueText: String = value.signedDisplay(),
+    modifier: Modifier = Modifier,
     onValueChange: (Int) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -834,14 +900,15 @@ private fun StepperControl(
 @Composable
 private fun HalfStepControl(
     label: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     value: Float,
     min: Float,
     max: Float,
+    modifier: Modifier = Modifier,
     onValueChange: (Float) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -883,7 +950,7 @@ private fun StepButton(label: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ControlLabel(
     label: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
@@ -892,8 +959,78 @@ private fun ControlLabel(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = if (enabled) Gold else TextDim, modifier = Modifier.size(18.dp))
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = if (enabled) Gold else TextDim, modifier = Modifier.size(18.dp))
+        }
         Text(label, fontFamily = SansFamily, fontSize = 14.5.sp, color = if (enabled) TextPrimary else TextDim)
+    }
+}
+
+@Composable
+private fun OptionalFieldHeader(
+    label: String,
+    icon: ImageVector,
+    isSet: Boolean,
+    onClear: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ControlLabel(label = label, icon = icon)
+        if (isSet) {
+            Text(
+                text = "CLEAR",
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.sp,
+                letterSpacing = 1.2.sp,
+                color = TextMuted,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onClear)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SensorGenCheckboxes(
+    selected: List<Int>,
+    onChanged: (List<Int>) -> Unit,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        (1..5).forEach { gen ->
+            val active = gen in selected
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (active) Gold else PanelHigh)
+                    .border(1.dp, if (active) Gold else Border, RoundedCornerShape(8.dp))
+                    .clickable {
+                        onChanged(
+                            if (active) selected - gen else (selected + gen).sorted()
+                        )
+                    }
+                    .padding(horizontal = 13.dp, vertical = 11.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "X-Trans $gen",
+                    fontFamily = SansFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.5.sp,
+                    color = if (active) Bg else TextMuted,
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }
 
@@ -945,6 +1082,11 @@ private fun buildRecipe(
     monoMg: Int,
     referenceImageUris: List<String>,
     isMono: Boolean,
+    isoMin: Int?,
+    isoMax: Int?,
+    exposureCompMin: Float?,
+    exposureCompMax: Float?,
+    sensorGens: List<Int>,
 ): RecipeUiModel {
     val effects = linkedMapOf(
         "D Range Priority" to dRangePriority.normalizedDRangePriorityLabel(),
@@ -983,6 +1125,11 @@ private fun buildRecipe(
         wb = wb,
         referenceImageUris = referenceImageUris,
         pills = buildPills(dRangePriority.normalizedDRangePriorityLabel(), dynamicRange.normalizedDynamicRangeLabel(), grain, colorChrome, colorChromeBlue, highlight, shadow, color, clarity, isMono),
+        isoMin = isoMin,
+        isoMax = isoMax,
+        exposureCompMin = exposureCompMin,
+        exposureCompMax = exposureCompMax,
+        sensorGens = sensorGens,
     )
 }
 

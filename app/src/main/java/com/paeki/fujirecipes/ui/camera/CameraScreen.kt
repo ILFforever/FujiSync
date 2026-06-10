@@ -733,6 +733,10 @@ private fun RearrangeRecipesSheet(
         FujiHaptics.perform(context, view, FujiHapticEffect.SheetOpen)
     }
 
+    LaunchedEffect(readingSlotIndex) {
+        if (readingSlotIndex >= 0) FujiHaptics.performStepClick(context, view, step = readingSlotIndex, total = 7)
+    }
+
     // While writes run the sheet slides away so it never shows behind the loader.
     val sheetVisible = visible && !writing
 

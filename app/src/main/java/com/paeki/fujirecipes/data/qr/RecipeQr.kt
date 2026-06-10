@@ -34,6 +34,11 @@ object RecipeQr {
             put("t", JSONObject(recipe.tone as Map<*, *>))
             put("w", JSONObject(recipe.wb as Map<*, *>))
             put("p", JSONArray(recipe.pills))
+            recipe.isoMin?.let { put("iMin", it) }
+            recipe.isoMax?.let { put("iMax", it) }
+            recipe.exposureCompMin?.let { put("ecMin", it.toDouble()) }
+            recipe.exposureCompMax?.let { put("ecMax", it.toDouble()) }
+            if (recipe.sensorGens.isNotEmpty()) put("sg", JSONArray(recipe.sensorGens))
         }.toString()
 
     fun decode(payload: String): RecipeUiModel? = runCatching {
@@ -49,6 +54,11 @@ object RecipeQr {
             effects = obj.optJSONObject("e")?.toStringMap().orEmpty(),
             tone = obj.optJSONObject("t")?.toStringMap().orEmpty(),
             wb = obj.optJSONObject("w")?.toStringMap().orEmpty(),
+            isoMin = obj.optInt("iMin", -1).takeIf { it >= 0 },
+            isoMax = obj.optInt("iMax", -1).takeIf { it >= 0 },
+            exposureCompMin = obj.optDouble("ecMin", Double.NaN).takeIf { !it.isNaN() }?.toFloat(),
+            exposureCompMax = obj.optDouble("ecMax", Double.NaN).takeIf { !it.isNaN() }?.toFloat(),
+            sensorGens = obj.optJSONArray("sg")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } } ?: emptyList(),
         )
     }.getOrNull()
 

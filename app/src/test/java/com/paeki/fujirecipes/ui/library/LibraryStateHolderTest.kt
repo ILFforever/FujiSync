@@ -241,13 +241,13 @@ class LibraryStateHolderTest {
     }
 
     @Test
-    fun `cloneRecipe prepends copy with Copy of prefix and a new ID`() {
+    fun `cloneRecipe keeps same name and assigns a new ID`() {
         seed(recipe(id = "orig", name = "Eterna Flat"))
 
         holder.cloneRecipe(RecipeUiModel(slot = "", name = "Eterna Flat", sim = "Eterna", pills = emptyList(), libraryId = "orig"))
 
         val clone = holder.state.value.recipes.first()
-        assertEquals("Copy of Eterna Flat", clone.name)
+        assertEquals("Eterna Flat", clone.name)
         assertNotEquals("orig", clone.id)
         assertEquals(2, holder.state.value.recipes.size)
     }

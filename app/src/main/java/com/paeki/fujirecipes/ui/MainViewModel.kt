@@ -994,7 +994,12 @@ class MainViewModel @Inject constructor(
         when {
             recipe.libraryId != null -> {
                 libraryHolder.updateRecipe(recipe)
-                _uiState.update { it.copy(editorRecipe = null, creatingRecipe = false, editorReferenceImageUris = emptyList()) }
+                _uiState.update { it.copy(
+                    detailRecipe = if (it.detailRecipe?.libraryId == recipe.libraryId) recipe else it.detailRecipe,
+                    editorRecipe = null,
+                    creatingRecipe = false,
+                    editorReferenceImageUris = emptyList(),
+                ) }
             }
             recipe.slot.isNotBlank() -> {
                 _uiState.update {
@@ -1054,6 +1059,11 @@ class MainViewModel @Inject constructor(
                     groupIds = normalizedRecipe.groupIds,
                     group = groupLabel(normalizedRecipe.groupIds, groups),
                     favorite = normalizedRecipe.favorite,
+                    isoMin = normalizedRecipe.isoMin,
+                    isoMax = normalizedRecipe.isoMax,
+                    exposureCompMin = normalizedRecipe.exposureCompMin,
+                    exposureCompMax = normalizedRecipe.exposureCompMax,
+                    sensorGens = normalizedRecipe.sensorGens,
                 )
             )
         }

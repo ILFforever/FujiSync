@@ -154,6 +154,11 @@ class LibraryStateHolder @Inject constructor(
                             referenceImageUris = recipe.referenceImageUris,
                             groupIds = recipe.groupIds,
                             favorite = recipe.favorite,
+                            isoMin = recipe.isoMin,
+                            isoMax = recipe.isoMax,
+                            exposureCompMin = recipe.exposureCompMin,
+                            exposureCompMax = recipe.exposureCompMax,
+                            sensorGens = recipe.sensorGens,
                         )
                     } else {
                         existing
@@ -599,6 +604,11 @@ class LibraryStateHolder @Inject constructor(
             referenceImageUris = referenceImageUris,
             groupIds = groupIds,
             favorite = favorite,
+            isoMin = isoMin,
+            isoMax = isoMax,
+            exposureCompMin = exposureCompMin,
+            exposureCompMax = exposureCompMax,
+            sensorGens = sensorGens,
         )
 
     private fun FxwRecipe.toLibraryRecipeUiModel(name: String, referenceUris: List<String> = emptyList()): LibraryRecipeUiModel {
@@ -606,6 +616,8 @@ class LibraryStateHolder @Inject constructor(
         val effectKeys = setOf("Dynamic Range", "D Range Priority", "Grain Effect", "Color Chrome", "Color Chrome FX Blue", "Smooth Skin")
         val toneKeys = setOf("Highlight Tone", "Shadow Tone", "Color", "Sharpness", "High ISO NR", "Clarity")
         val wbKeys = setOf("White Balance", "WB Shift R", "WB Shift B")
+        val (isoMin, isoMax) = parseIsoRange(params["ISO"] ?: "")
+        val (ecMin, ecMax) = parseExposureCompRange(params["Exposure Compensation"] ?: "")
         return LibraryRecipeUiModel(
             id = "lib-${UUID.randomUUID()}",
             name = LibraryRecipeName.sanitize(name),
@@ -616,6 +628,10 @@ class LibraryStateHolder @Inject constructor(
             tone = normalized.filterKeys { it in toneKeys },
             wb = normalized.filterKeys { it in wbKeys },
             referenceImageUris = referenceUris,
+            isoMin = isoMin,
+            isoMax = isoMax,
+            exposureCompMin = ecMin,
+            exposureCompMax = ecMax,
         )
     }
 
@@ -731,5 +747,42 @@ internal fun String.normalizedDynamicRangeLabel(): String {
         "DR400", "400", "400%" -> "DR400%"
         "DRAUTO", "AUTO", "DR0" -> "DR Auto"
         else -> trim()
+    }
+}
+
+// Parses ISO strings like "Auto, up to ISO 6400", "ISO 200-6400", "640", "200 to 3200"
+internal fun parseIsoRange(raw: String): Pair<Int?, Int?> {
+    if (raw.isBlank()) return null to null
+    val numbers = Regex("\\d+").findAll(raw).map { it.value.toInt() }.filter { it in 50..51200 }.toList()
+    return when {
+        numbers.size >= 2 -> numbers.first() to numbers.last()
+        numbers.size == 1 -> {
+            val lower = raw.lowercase()
+            if (lower.contains("up to") || lower.contains("max")) null to numbers.first()
+            else numbers.first() to null
+        }
+        else -> null to null
+    }
+}
+
+// Parses exposure comp strings like "+1/3 to +1 (typically)", "-1 to +2", "+2/3"
+internal fun parseExposureCompRange(raw: String): Pair<Float?, Float?> {
+    if (raw.isBlank()) return null to null
+    val pattern = Regex("[+\\-−]?\\d+(?:/\\d+)?(?:\\.\\d+)?")
+    val values = pattern.findAll(raw).mapNotNull { match ->
+        val s = match.value.replace('−', '-')
+        if ('/' in s) {
+            val parts = s.split('/')
+            val num = parts[0].toFloatOrNull() ?: return@mapNotNull null
+            val den = parts[1].toFloatOrNull()?.takeIf { it != 0f } ?: return@mapNotNull null
+            kotlin.math.round(num / den * 10f) / 10f
+        } else {
+            s.toFloatOrNull()
+        }
+    }.filter { it in -5f..5f }.toList()
+    return when {
+        values.size >= 2 -> values.first() to values.last()
+        values.size == 1 -> values.first() to values.first()
+        else -> null to null
     }
 }
