@@ -131,6 +131,20 @@ class LibraryStateHolder @Inject constructor(
         _state.update { it.copy(duplicateDialog = null) }
     }
 
+    fun appendReferenceImage(libraryId: String, imageUri: String) {
+        _state.update {
+            it.copy(
+                recipes = it.recipes.map { r ->
+                    if (r.id == libraryId) {
+                        val merged = (r.referenceImageUris + imageUri).distinct().take(MAX_REFERENCE_IMAGES)
+                        r.copy(referenceImageUris = merged)
+                    } else r
+                },
+            )
+        }
+        persist()
+    }
+
     private fun doAddRecipe(recipe: RecipeUiModel, source: LibraryRecipeSource?) {
         val saved = recipe.toLibraryRecipe(source)
         _state.update { it.copy(recipes = listOf(saved) + it.recipes) }

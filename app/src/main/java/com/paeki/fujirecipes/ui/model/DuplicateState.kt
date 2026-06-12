@@ -13,6 +13,12 @@ data class DuplicateDialogState(
     val topMatch: DuplicateMatch,
 )
 
+data class SmartRefResult(
+    val matchedRecipe: LibraryRecipeUiModel,
+    val matchKind: DuplicateMatchKind,
+    val localImageUri: String,
+)
+
 
 data class SaveAllSkipped(
     val slot: String,

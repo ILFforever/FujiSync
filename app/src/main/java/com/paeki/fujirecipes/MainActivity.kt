@@ -63,6 +63,11 @@ class MainActivity : ComponentActivity() {
         viewModel.handleShutterCheckResult(uri)
     }
 
+    private val smartRefPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.handleSmartRefResult(uri)
+    }
+
     private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.handleOcrImportResult(uri)
@@ -184,6 +189,9 @@ class MainActivity : ComponentActivity() {
                     onDismissBackupMessage = viewModel::handleBackupMessageDismiss,
                     onShutterCheck = viewModel::handleLaunchShutterCheck,
                     onShutterCheckDismiss = viewModel::handleShutterCheckDismiss,
+                    onSmartRefChoosePhoto = viewModel::handleLaunchSmartRef,
+                    onSmartRefConfirm = viewModel::handleSmartRefConfirm,
+                    onSmartRefDismiss = viewModel::handleSmartRefDismiss,
                     )
                 } // else
             }
@@ -205,6 +213,7 @@ class MainActivity : ComponentActivity() {
                     is MainViewModelEvent.LaunchBackupExport -> backupExportPicker.launch(event.fileName)
                     MainViewModelEvent.LaunchBackupImport -> backupImportPicker.launch(arrayOf("application/json", "text/*", "*/*"))
                     MainViewModelEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchSmartRefPicker -> smartRefPicker.launch(arrayOf("image/*"))
                 }
             }
         }

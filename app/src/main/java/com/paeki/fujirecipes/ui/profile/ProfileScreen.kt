@@ -141,6 +141,7 @@ fun ProfileScreen(
     onImportBackupReplace: () -> Unit = {},
     onDismissBackupMessage: () -> Unit = {},
     onShutterCheck: () -> Unit = {},
+    onSmartRef: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -225,6 +226,13 @@ fun ProfileScreen(
                         label = "Shutter count",
                         subtitle = "Check actuations from a JPEG",
                         onClick = { haptic(); onShutterCheck() },
+                        inCard = true,
+                    )
+                    ProfileDivider()
+                    ProfileNavRow(
+                        label = "Smart reference",
+                        subtitle = "Tag a JPEG to a library recipe",
+                        onClick = { haptic(); onSmartRef() },
                         inCard = true,
                     )
                 }

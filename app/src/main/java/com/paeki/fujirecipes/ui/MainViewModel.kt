@@ -1,4 +1,4 @@
-package com.paeki.fujirecipes.ui
+﻿package com.paeki.fujirecipes.ui
 
 import android.content.Context
 import android.hardware.usb.UsbDevice
@@ -34,6 +34,7 @@ import com.paeki.fujirecipes.ui.model.LibraryRecipeSource
 import com.paeki.fujirecipes.ui.model.SaveAllReport
 import com.paeki.fujirecipes.ui.model.LibraryRecipeUiModel
 import com.paeki.fujirecipes.ui.model.RecipeUiModel
+import com.paeki.fujirecipes.ui.model.SmartRefResult
 import com.paeki.fujirecipes.ui.model.SlotBackupMeta
 import com.paeki.fujirecipes.ui.model.SlotBackupSet
 import com.paeki.fujirecipes.ui.model.toPreset
@@ -70,6 +71,7 @@ sealed class MainViewModelEvent {
     data class LaunchBackupExport(val fileName: String) : MainViewModelEvent()
     object LaunchBackupImport : MainViewModelEvent()
     object LaunchShutterCheckPicker : MainViewModelEvent()
+    object LaunchSmartRefPicker : MainViewModelEvent()
 }
 
 enum class BackupImportMode { Merge, Replace }
@@ -766,6 +768,84 @@ class MainViewModel @Inject constructor(
 
     fun handleShutterCheckDismiss() {
         _uiState.update { it.copy(shutterCount = null, shutterCheckLoading = false, shutterCheckError = null) }
+    }
+
+    // ── Smart Reference ───────────────────────────────────────────────
+
+    fun handleLaunchSmartRef() {
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchSmartRefPicker) }
+    }
+
+    fun handleSmartRefResult(uri: android.net.Uri) {
+        _uiState.update { it.copy(smartRefLoading = true, smartRefError = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            val recipe = runCatching { FujiExifReader.readRecipe(appContext, uri) }
+            delay(minLoadMs(started))
+            when {
+                recipe.isFailure || recipe.getOrNull() == null -> _uiState.update {
+                    it.copy(
+                        smartRefLoading = false,
+                        smartRefError = "Couldn't read recipe data from this file. Use an unedited JPEG from a Fujifilm X-series camera.",
+                    )
+                }
+                else -> {
+                    val exif = recipe.getOrNull() ?: return@launch
+                    val uiModel = exif.toPreset("").toUiModel().copy(slot = "")
+                    val match = libraryHolder.findDuplicate(uiModel)
+                    if (match == null) {
+                        _uiState.update {
+                            it.copy(
+                                smartRefLoading = false,
+                                smartRefError = "No matching recipe found in your library. The settings in this photo don't match any saved recipe.",
+                            )
+                        }
+                        return@launch
+                    }
+                    val localImageUri = runCatching { localStore.copyReferenceImage(uri) }.getOrNull()
+                    if (localImageUri == null) {
+                        _uiState.update {
+                            it.copy(
+                                smartRefLoading = false,
+                                smartRefError = "Couldn't copy the image. Please try again.",
+                            )
+                        }
+                        return@launch
+                    }
+                    _uiState.update {
+                        it.copy(
+                            smartRefLoading = false,
+                            smartRefResult = SmartRefResult(
+                                matchedRecipe = match.libraryRecipe,
+                                matchKind = match.kind,
+                                localImageUri = localImageUri,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun handleSmartRefConfirm() {
+        val result = _uiState.value.smartRefResult ?: return
+        libraryHolder.appendReferenceImage(result.matchedRecipe.id, result.localImageUri)
+        val name = result.matchedRecipe.name
+        _uiState.update { it.copy(smartRefResult = null, toastMessage = "Image added to $name") }
+        viewModelScope.launch {
+            delay(2_800)
+            _uiState.update { if (it.toastMessage?.startsWith("Image added") == true) it.copy(toastMessage = null) else it }
+        }
+    }
+
+    fun handleSmartRefDismiss() {
+        val result = _uiState.value.smartRefResult
+        if (result != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { localStore.deleteReferenceImageFile(result.localImageUri) }
+            }
+        }
+        _uiState.update { it.copy(smartRefLoading = false, smartRefError = null, smartRefResult = null) }
     }
 
     // ── OCR / screenshot import ───────────────────────────────────────
