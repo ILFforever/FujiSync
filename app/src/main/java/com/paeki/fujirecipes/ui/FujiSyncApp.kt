@@ -88,6 +88,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.paeki.fujirecipes.ui.camera.CameraCardUiModel
 import com.paeki.fujirecipes.ui.camera.CameraConnected
 import com.paeki.fujirecipes.ui.camera.CameraImageTunerScreen
@@ -208,6 +209,9 @@ data class FujiSyncUiState(
     val settings: AppSettings = AppSettings(),
     val exifImportLoading: Boolean = false,
     val exifImportError: String? = null,
+    val shutterCount: Int? = null,
+    val shutterCheckLoading: Boolean = false,
+    val shutterCheckError: String? = null,
     val ocrImportLoading: Boolean = false,
     val ocrImportError: String? = null,
     val ocrRawText: String? = null,
@@ -219,6 +223,7 @@ data class FujiSyncUiState(
     val captureLog: String? = null,
     val update: UpdateUiState = UpdateUiState(),
     val backup: BackupUiState = BackupUiState(),
+    val toastMessage: String? = null,
 )
 
 data class WriteToastState(val slot: String, val name: String, val savedToLibrary: Boolean = false)
@@ -239,6 +244,8 @@ data class UpdateUiState(
 data class BackupUiState(
     val exporting: Boolean = false,
     val importing: Boolean = false,
+    val exportProgress: Float = 0f,
+    val exportTotal: Int = 0,
     val message: String? = null,
     val error: String? = null,
 )
@@ -286,6 +293,7 @@ fun FujiSyncApp(
     onToggleFavorite: (String) -> Unit,
     onToggleLibraryShowImages: () -> Unit,
     onToggleReferenceImageBlur: () -> Unit = {},
+    onToggleFavoritesOnTop: () -> Unit = {},
     onToggleHaptics: () -> Unit = {},
     onWriteLibraryRecipeToSlot: (String) -> Unit = {},
     onImportFromPhoto: () -> Unit = {},
@@ -307,6 +315,8 @@ fun FujiSyncApp(
     onImportBackupMerge: () -> Unit = {},
     onImportBackupReplace: () -> Unit = {},
     onDismissBackupMessage: () -> Unit = {},
+    onShutterCheck: () -> Unit = {},
+    onShutterCheckDismiss: () -> Unit = {},
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showWriteDelayBench by remember { mutableStateOf(false) }
@@ -382,6 +392,9 @@ fun FujiSyncApp(
         OverlayLayer(showImportFromPhotoGuide) { showImportFromPhotoGuide = false },
         OverlayLayer(showImportFromScreenshotGuide) { showImportFromScreenshotGuide = false },
         OverlayLayer(showQrScanner) { showQrScanner = false },
+        OverlayLayer(state.shutterCheckError != null) { onShutterCheckDismiss() },
+        OverlayLayer(state.shutterCheckLoading) { },
+        OverlayLayer(state.shutterCount != null) { onShutterCheckDismiss() },
         OverlayLayer(state.exifImportError != null) { onExifImportErrorDismiss() },
         OverlayLayer(state.exifImportLoading) { },  // blocks back during import, no dismiss action
         OverlayLayer(state.ocrImportError != null) { onOcrImportErrorDismiss() },
@@ -473,6 +486,7 @@ fun FujiSyncApp(
                     }
                     AppTab.Library -> LibraryScreen(
                         showImages = state.settings.showLibraryImages,
+                        favoritesOnTop = state.settings.favoritesOnTop,
                         scrollToTopSignal = state.library.saveConfirmed,
                         onOpenItem = onOpenLibraryItem,
                         onCreateRecipe = onOpenRecipeCreator,
@@ -495,6 +509,7 @@ fun FujiSyncApp(
                         settings = state.settings,
                         onToggleLibraryShowImages = onToggleLibraryShowImages,
                         onToggleReferenceImageBlur = onToggleReferenceImageBlur,
+                        onToggleFavoritesOnTop = onToggleFavoritesOnTop,
                         onToggleHaptics = onToggleHaptics,
                         onOpenCameraImageTuner = onOpenCameraImageTuner,
                         onLoadSampleLibrary = onLoadSampleLibrary,
@@ -517,6 +532,7 @@ fun FujiSyncApp(
                         onImportBackupMerge = onImportBackupMerge,
                         onImportBackupReplace = onImportBackupReplace,
                         onDismissBackupMessage = onDismissBackupMessage,
+                        onShutterCheck = onShutterCheck,
                     )
                 }
 
@@ -588,6 +604,8 @@ fun FujiSyncApp(
                         showQrScanner = false
                         onImportQrFromImage()
                     },
+                    onShutterCheckDismiss = onShutterCheckDismiss,
+                    onShutterCheckRetry = onShutterCheck,
                 )
             }
 
@@ -734,6 +752,8 @@ private fun BoxScope.AppOverlays(
     onQrScannerClose: () -> Unit,
     onQrRecipeDetected: (RecipeUiModel) -> Unit,
     onQrScannerOpenImage: () -> Unit,
+    onShutterCheckDismiss: () -> Unit,
+    onShutterCheckRetry: () -> Unit,
 ) {
     val context = LocalContext.current
     val writeDelayBenchVm: WriteDelayBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
@@ -772,6 +792,29 @@ private fun BoxScope.AppOverlays(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 16.dp),
         )
+    }
+
+    state.toastMessage?.let { msg ->
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(com.paeki.fujirecipes.ui.theme.PanelHigh)
+                .border(1.dp, Gold, RoundedCornerShape(12.dp))
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(text = "✓", color = Gold, fontSize = 16.sp)
+            Text(
+                text = msg,
+                fontFamily = com.paeki.fujirecipes.ui.theme.SansFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = com.paeki.fujirecipes.ui.theme.TextPrimary,
+            )
+        }
     }
 
     if (state.camera.showImageTuner) {
@@ -933,6 +976,23 @@ private fun BoxScope.AppOverlays(
             onDismiss = onQrImportErrorDismiss,
             onRetry = onImportQrRetry,
         )
+    }
+
+    if (state.shutterCheckLoading) {
+        ExifImportLoadingScreen(eyebrow = "READING IMAGE", subtitle = "Checking shutter count")
+    }
+
+    state.shutterCheckError?.let { error ->
+        ExifImportErrorScreen(
+            title = "NO COUNT FOUND",
+            message = error,
+            onDismiss = onShutterCheckDismiss,
+            onRetry = onShutterCheckRetry,
+        )
+    }
+
+    state.shutterCount?.let { count ->
+        ShutterCheckResultDialog(count = count, onDismiss = onShutterCheckDismiss)
     }
 
     AnimatedVisibility(
@@ -1773,6 +1833,75 @@ private fun RearrangeSlotsLoadingScreen(
     }
 }
 
+// ── Shutter check result ──────────────────────────────────────────
+
+@Composable
+private fun ShutterCheckResultDialog(count: Int, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(PanelLow)
+                .border(1.dp, Border, RoundedCornerShape(16.dp))
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "SHUTTER COUNT",
+                fontFamily = MonoFamily,
+                fontSize = 10.sp,
+                letterSpacing = 2.4.sp,
+                color = Gold,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = java.text.NumberFormat.getIntegerInstance().format(count),
+                fontFamily = SansFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 48.sp,
+                letterSpacing = (-1).sp,
+                color = TextPrimary,
+            )
+            Text(
+                text = "actuations",
+                fontFamily = SansFamily,
+                fontSize = 13.sp,
+                color = TextMuted,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Fujifilm X-series mechanical shutters are typically rated for 150,000 actuations or more.",
+                fontFamily = SansFamily,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = TextDim,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(24.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Gold.copy(alpha = 0.10f))
+                    .border(1.dp, Gold.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Done",
+                    fontFamily = SansFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 15.sp,
+                    color = Gold,
+                )
+            }
+        }
+    }
+}
+
 // ── EXIF import loading ───────────────────────────────────────────
 
 @Composable
@@ -1918,6 +2047,7 @@ private fun ExifImportErrorScreen(
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
     onShareRawDump: (() -> Unit)? = null,
+    title: String = "NO RECIPE FOUND",
 ) {
     Box(
         modifier = Modifier.fillMaxSize().background(Bg),
@@ -1951,7 +2081,7 @@ private fun ExifImportErrorScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "NO RECIPE FOUND",
+                    text = title,
                     fontFamily = MonoFamily,
                     fontSize = 10.sp,
                     letterSpacing = 2.4.sp,

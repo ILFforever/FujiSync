@@ -58,6 +58,11 @@ class MainActivity : ComponentActivity() {
         viewModel.handleExifImportResult(uri)
     }
 
+    private val shutterCheckPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.handleShutterCheckResult(uri)
+    }
+
     private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.handleOcrImportResult(uri)
@@ -68,7 +73,7 @@ class MainActivity : ComponentActivity() {
         viewModel.handleQrImportResult(uri)
     }
 
-    private val backupExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    private val backupExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         viewModel.handleBackupExportDestination(uri)
     }
 
@@ -155,6 +160,7 @@ class MainActivity : ComponentActivity() {
                     onToggleFavorite = viewModel::handleToggleFavoriteById,
                     onToggleLibraryShowImages = viewModel::handleToggleLibraryShowImages,
                     onToggleReferenceImageBlur = viewModel::handleToggleReferenceImageBlur,
+                    onToggleFavoritesOnTop = viewModel::handleToggleFavoritesOnTop,
                     onToggleHaptics = viewModel::handleToggleHaptics,
                     onWriteLibraryRecipeToSlot = viewModel::handleWriteToSlot,
                     onImportFromPhoto = viewModel::handleLaunchExifImport,
@@ -176,6 +182,8 @@ class MainActivity : ComponentActivity() {
                     onImportBackupMerge = { viewModel.handleLaunchBackupImport(BackupImportMode.Merge) },
                     onImportBackupReplace = { viewModel.handleLaunchBackupImport(BackupImportMode.Replace) },
                     onDismissBackupMessage = viewModel::handleBackupMessageDismiss,
+                    onShutterCheck = viewModel::handleLaunchShutterCheck,
+                    onShutterCheckDismiss = viewModel::handleShutterCheckDismiss,
                     )
                 } // else
             }
@@ -196,6 +204,7 @@ class MainActivity : ComponentActivity() {
                     MainViewModelEvent.OpenInstallPermissionSettings -> openInstallPermissionSettings()
                     is MainViewModelEvent.LaunchBackupExport -> backupExportPicker.launch(event.fileName)
                     MainViewModelEvent.LaunchBackupImport -> backupImportPicker.launch(arrayOf("application/json", "text/*", "*/*"))
+                    MainViewModelEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("image/*"))
                 }
             }
         }

@@ -13,6 +13,7 @@ import com.paeki.fujirecipes.domain.model.FujiPropertyCode
 
 // Fujifilm MakerNote tags not yet named in metadata-extractor 2.19.0.
 // Values confirmed from controlled X-H2 fw 5.20 test shots; see PROTOCOL.md §13.2.
+// TAG_IMAGE_NUMBER (0x1438) is the total shutter actuation counter on X-series cameras.
 private const val EXIF_TAG_CLARITY        = 0x100f
 private const val EXIF_TAG_SHADOW_TONE    = 0x1040
 private const val EXIF_TAG_HIGHLIGHT_TONE = 0x1041
@@ -55,6 +56,15 @@ object FujiExifReader {
         }
 
         return ExifResult(sections)
+    }
+
+    // ── Shutter count ─────────────────────────────────────────────────────────
+
+    fun readShutterCount(context: Context, uri: Uri): Int? {
+        val stream = runCatching { context.contentResolver.openInputStream(uri) }.getOrNull() ?: return null
+        val metadata = runCatching { stream.use { ImageMetadataReader.readMetadata(it) } }.getOrNull() ?: return null
+        val dir = metadata.getFirstDirectoryOfType(FujifilmMakernoteDirectory::class.java) ?: return null
+        return dir.getInteger(FujifilmMakernoteDirectory.TAG_IMAGE_NUMBER)
     }
 
     // ── Typed recipe decoder ──────────────────────────────────────────────────

@@ -69,6 +69,7 @@ sealed class MainViewModelEvent {
     object OpenInstallPermissionSettings : MainViewModelEvent()
     data class LaunchBackupExport(val fileName: String) : MainViewModelEvent()
     object LaunchBackupImport : MainViewModelEvent()
+    object LaunchShutterCheckPicker : MainViewModelEvent()
 }
 
 enum class BackupImportMode { Merge, Replace }
@@ -736,6 +737,37 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(exifImportLoading = false, exifImportError = null) }
     }
 
+    // ── Shutter count check ───────────────────────────────────────────
+
+    fun handleLaunchShutterCheck() {
+        _uiState.update { it.copy(shutterCheckError = null, shutterCount = null) }
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchShutterCheckPicker) }
+    }
+
+    fun handleShutterCheckResult(uri: android.net.Uri) {
+        _uiState.update { it.copy(shutterCheckLoading = true, shutterCheckError = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            val count = runCatching { FujiExifReader.readShutterCount(appContext, uri) }
+            delay(minLoadMs(started))
+            _uiState.update {
+                val n = count.getOrNull()
+                if (n == null) {
+                    it.copy(
+                        shutterCheckLoading = false,
+                        shutterCheckError = "No shutter count found. Use an unedited JPEG taken on a Fujifilm X-series camera.",
+                    )
+                } else {
+                    it.copy(shutterCheckLoading = false, shutterCount = n)
+                }
+            }
+        }
+    }
+
+    fun handleShutterCheckDismiss() {
+        _uiState.update { it.copy(shutterCount = null, shutterCheckLoading = false, shutterCheckError = null) }
+    }
+
     // ── OCR / screenshot import ───────────────────────────────────────
 
     fun handleLaunchOcrImport() {
@@ -1086,6 +1118,11 @@ class MainViewModel @Inject constructor(
         persistSettings()
     }
 
+    fun handleToggleFavoritesOnTop() {
+        _uiState.update { it.copy(settings = it.settings.copy(favoritesOnTop = !it.settings.favoritesOnTop)) }
+        persistSettings()
+    }
+
     fun handleSetPropertyWriteDelay(ms: Long) {
         _uiState.update { it.copy(settings = it.settings.copy(propertyWriteDelayMs = ms.coerceIn(0L, 300L))) }
         persistSettings()
@@ -1093,7 +1130,7 @@ class MainViewModel @Inject constructor(
 
     fun handleLaunchBackupExport() {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm", Locale.US))
-        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchBackupExport("fujisync-backup-$stamp.json")) }
+        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchBackupExport("fujisync-backup-$stamp.zip")) }
     }
 
     fun handleLaunchBackupImport(mode: BackupImportMode) {
@@ -1103,20 +1140,29 @@ class MainViewModel @Inject constructor(
 
     fun handleBackupExportDestination(uri: Uri?) {
         uri ?: return
-        _uiState.update { it.copy(backup = it.backup.copy(exporting = true, message = null, error = null)) }
+        _uiState.update { it.copy(backup = it.backup.copy(exporting = true, exportProgress = 0f, exportTotal = 0, message = null, error = null)) }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val state = _uiState.value
-                    val json = localStore.backupJson(
-                        settings = state.settings,
-                        cameraLabels = state.camera.cameraLabels,
-                        cameraModels = state.camera.cameraModels,
-                        cameraFirmwares = state.camera.cameraFirmwares,
-                        libraryData = libraryHolder.exportData(),
-                    )
+                    val libraryData = libraryHolder.exportData()
                     appContext.contentResolver.openOutputStream(uri)?.use { output ->
-                        output.write(json.toByteArray(Charsets.UTF_8))
+                        localStore.backupZip(
+                            outputStream = output,
+                            settings = state.settings,
+                            cameraLabels = state.camera.cameraLabels,
+                            cameraModels = state.camera.cameraModels,
+                            cameraFirmwares = state.camera.cameraFirmwares,
+                            libraryData = libraryData,
+                            onProgress = { current, total ->
+                                _uiState.update {
+                                    it.copy(backup = it.backup.copy(
+                                        exportProgress = current.toFloat() / total,
+                                        exportTotal = total,
+                                    ))
+                                }
+                            },
+                        )
                     } ?: error("Could not open export file.")
                 }
             }
@@ -1126,8 +1172,13 @@ class MainViewModel @Inject constructor(
                         exporting = false,
                         message = if (result.isSuccess) "Backup exported." else null,
                         error = result.exceptionOrNull()?.message,
-                    )
+                    ),
+                    toastMessage = if (result.isSuccess) "Backup exported successfully" else result.exceptionOrNull()?.message,
                 )
+            }
+            if (_uiState.value.toastMessage != null) {
+                delay(UiTimings.TOAST_DISMISS_MS)
+                _uiState.update { it.copy(toastMessage = null) }
             }
         }
     }
@@ -1138,10 +1189,15 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val content = appContext.contentResolver.openInputStream(uri)?.use { input ->
-                        input.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    appContext.contentResolver.openInputStream(uri)?.use { input ->
+                        val bytes = input.readBytes()
+                        if (bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte()) {
+                            // ZIP file (PK header)
+                            localStore.restoreBackupZip(java.io.ByteArrayInputStream(bytes))
+                        } else {
+                            localStore.parseBackupJson(String(bytes, Charsets.UTF_8))
+                        }
                     } ?: error("Could not open backup file.")
-                    localStore.parseBackupJson(content)
                 }
             }
             result

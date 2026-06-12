@@ -133,6 +133,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LibraryScreen(
     showImages: Boolean = false,
+    favoritesOnTop: Boolean = false,
     scrollToTopSignal: Boolean = false,
     onOpenItem: (LibraryRecipeUiModel) -> Unit,
     onCreateRecipe: () -> Unit,
@@ -163,6 +164,8 @@ fun LibraryScreen(
             lazyListState.animateScrollToItem(0)
         }
     }
+
+    LaunchedEffect(favoritesOnTop) { vm.setFavoritesOnTop(favoritesOnTop) }
 
     LaunchedEffect(state.groupedView, state.openGroup) {
         if (state.groupedView && state.openGroup == null) {

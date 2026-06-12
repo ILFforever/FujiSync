@@ -69,7 +69,7 @@ class LibraryViewModel @Inject constructor(
             .sortedBy { it.second }
 
         val filtered = applyFilters(data.recipes, ui, groupNamesById)
-        val sorted = applySort(filtered, data.sort)
+        val sorted = applySort(filtered, data.sort, ui.favoritesOnTop)
         val activeFilterCount = listOf(
             ui.filterFavorites,
             ui.filterPhotoState != LibraryPhotoFilter.All,
@@ -143,6 +143,7 @@ class LibraryViewModel @Inject constructor(
     fun setPendingBatchDelete(pending: Boolean) = _ui.update { it.copy(pendingBatchDelete = pending) }
     fun setCustomGroupRecipeId(id: String?) = _ui.update { it.copy(customGroupRecipeId = id, customGroupDraft = "") }
     fun setCustomGroupDraft(draft: String) = _ui.update { it.copy(customGroupDraft = draft) }
+    fun setFavoritesOnTop(on: Boolean) = _ui.update { it.copy(favoritesOnTop = on) }
 
     fun resetToTop() {
         _ui.update {
@@ -230,13 +231,15 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    private fun applySort(recipes: List<LibraryRecipeUiModel>, sortBy: String): List<LibraryRecipeUiModel> =
-        when (sortBy) {
+    private fun applySort(recipes: List<LibraryRecipeUiModel>, sortBy: String, favoritesOnTop: Boolean): List<LibraryRecipeUiModel> {
+        val sorted = when (sortBy) {
             "OLDEST" -> recipes.reversed()
             "NAME_ASC" -> recipes.sortedBy { it.name.lowercase() }
             "NAME_DESC" -> recipes.sortedByDescending { it.name.lowercase() }
             else -> recipes
         }
+        return if (favoritesOnTop) sorted.sortedByDescending { it.favorite } else sorted
+    }
 }
 
 internal fun LibraryRecipeUiModel.sourceFilterKey(): String? {
@@ -267,4 +270,5 @@ private data class LibraryScreenUiState(
     val pendingBatchDelete: Boolean = false,
     val customGroupRecipeId: String? = null,
     val customGroupDraft: String = "",
+    val favoritesOnTop: Boolean = false,
 )

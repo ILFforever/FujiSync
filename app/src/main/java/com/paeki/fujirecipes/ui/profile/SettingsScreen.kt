@@ -51,6 +51,7 @@ fun SettingsScreen(
     settings: AppSettings,
     onToggleLibraryShowImages: () -> Unit,
     onToggleReferenceImageBlur: () -> Unit = {},
+    onToggleFavoritesOnTop: () -> Unit = {},
     onToggleHaptics: () -> Unit = {},
     onBack: () -> Unit,
 ) {
@@ -126,6 +127,13 @@ fun SettingsScreen(
                     description = "Show a blurred preview while the full image loads in the lightbox",
                     enabled = settings.showReferenceImageBlur,
                     onClick = onToggleReferenceImageBlur,
+                )
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Border))
+                SettingsToggleRow(
+                    label = "Favorites on top",
+                    description = "Pin favorited recipes to the top of the library list",
+                    enabled = settings.favoritesOnTop,
+                    onClick = onToggleFavoritesOnTop,
                 )
             }
 

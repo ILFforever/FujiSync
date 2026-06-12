@@ -173,6 +173,7 @@ class LocalStore(context: Context) {
             put("showLibraryImages", settings.showLibraryImages)
             put("showReferenceImageBlur", settings.showReferenceImageBlur)
             put("hapticsEnabled", settings.hapticsEnabled)
+            put("favoritesOnTop", settings.favoritesOnTop)
             put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
         }.toString())
     }
@@ -186,6 +187,7 @@ class LocalStore(context: Context) {
                 showLibraryImages = o.optBoolean("showLibraryImages", true),
                 showReferenceImageBlur = o.optBoolean("showReferenceImageBlur", true),
                 hapticsEnabled = o.optBoolean("hapticsEnabled", true),
+                favoritesOnTop = o.optBoolean("favoritesOnTop", false),
                 propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
             )
         }.getOrElse { AppSettings() }
@@ -220,23 +222,7 @@ class LocalStore(context: Context) {
     }
 
     suspend fun parseBackupJson(content: String): BackupData = mutex.withLock {
-        val root = JSONObject(content)
-        if (root.optString("format") != "fujisync-backup") {
-            error("This is not a FujiSync backup file.")
-        }
-        val cameras = root.optJSONObject("cameras") ?: JSONObject()
-        val library = root.optJSONObject("library") ?: JSONObject()
-        BackupData(
-            settings = root.optJSONObject("settings")?.let(::settingsFromJson) ?: AppSettings(),
-            cameraLabels = cameras.optJSONObject("labels")?.toStringMap() ?: emptyMap(),
-            cameraModels = cameras.optJSONObject("models")?.toStringMap() ?: emptyMap(),
-            cameraFirmwares = cameras.optJSONObject("firmwares")?.toStringMap() ?: emptyMap(),
-            library = LibraryData(
-                recipes = library.optJSONArray("recipes")?.let(::recipesFromJson) ?: emptyList(),
-                groups = library.optJSONArray("groups")?.let(::groupsFromJson) ?: emptyList(),
-                styles = library.optJSONObject("styles")?.let(::stylesFromJson) ?: emptyMap(),
-            ),
-        )
+        parseBackupJsonInternal(content)
     }
 
     // ── Camera labels ─────────────────────────────────────────────────
@@ -327,6 +313,7 @@ class LocalStore(context: Context) {
         put("showLibraryImages", settings.showLibraryImages)
         put("showReferenceImageBlur", settings.showReferenceImageBlur)
         put("hapticsEnabled", settings.hapticsEnabled)
+        put("favoritesOnTop", settings.favoritesOnTop)
         put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
     }
 
@@ -335,6 +322,7 @@ class LocalStore(context: Context) {
             showLibraryImages = o.optBoolean("showLibraryImages", true),
             showReferenceImageBlur = o.optBoolean("showReferenceImageBlur", true),
             hapticsEnabled = o.optBoolean("hapticsEnabled", true),
+            favoritesOnTop = o.optBoolean("favoritesOnTop", false),
             propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
         )
 
@@ -554,4 +542,157 @@ class LocalStore(context: Context) {
         val cameraFirmwares: Map<String, String>,
         val library: LibraryData,
     )
+
+    // ── Zip backup (JSON + reference images) ──────────────────────────
+
+    suspend fun backupZip(
+        outputStream: java.io.OutputStream,
+        settings: AppSettings,
+        cameraLabels: Map<String, String>,
+        cameraModels: Map<String, String>,
+        cameraFirmwares: Map<String, String>,
+        libraryData: LibraryData,
+        onProgress: (current: Int, total: Int) -> Unit = { _, _ -> },
+    ) = mutex.withLock {
+        // Collect every referenced image that exists on disk and assign each a
+        // unique zip entry name. Basenames are NOT unique (e.g. discover recipes
+        // store images as references/<slug>/image_0.jpg), so we index them and
+        // record an explicit original-uri -> entry-name manifest.
+        val allUris = (libraryData.recipes.flatMap { it.referenceImageUris } +
+            libraryData.styles.values.mapNotNull { it.imageUri }).distinct()
+
+        val entriesToWrite = LinkedHashMap<String, File>() // entryName -> source file
+        val manifest = JSONObject()                        // original uri -> entryName
+        for (uriStr in allUris) {
+            val file = uriToLocalFile(uriStr) ?: continue
+            if (!file.exists()) continue
+            val ext = file.name.substringAfterLast('.', "jpg")
+            val entryName = "images/${entriesToWrite.size}.$ext"
+            entriesToWrite[entryName] = file
+            manifest.put(uriStr, entryName)
+        }
+
+        val json = JSONObject().apply {
+            put("format", "fujisync-backup")
+            put("version", 3)
+            put("settings", settingsToJson(settings))
+            put("cameras", JSONObject().apply {
+                put("labels", stringMapToJson(cameraLabels))
+                put("models", stringMapToJson(cameraModels))
+                put("firmwares", stringMapToJson(cameraFirmwares))
+            })
+            put("library", JSONObject().apply {
+                put("recipes", recipesToJson(libraryData.recipes))
+                put("groups", groupsToJson(libraryData.groups))
+                put("styles", stylesToJson(libraryData.styles))
+            })
+            put("referenceImages", manifest)
+        }.toString(2)
+
+        val total = entriesToWrite.size + 1 // +1 for JSON
+        var current = 0
+
+        java.util.zip.ZipOutputStream(outputStream.buffered()).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("backup.json"))
+            zip.write(json.toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+            current++
+            onProgress(current, total)
+
+            for ((entryName, file) in entriesToWrite) {
+                zip.putNextEntry(java.util.zip.ZipEntry(entryName))
+                file.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+                current++
+                onProgress(current, total)
+            }
+        }
+    }
+
+    suspend fun restoreBackupZip(inputStream: java.io.InputStream): BackupData = mutex.withLock {
+        val refDir = File(dir, "ref_images").also { it.mkdirs() }
+        val extractedByEntry = mutableMapOf<String, String>()    // zip entry name -> new local uri
+        val extractedByBasename = mutableMapOf<String, String>() // basename -> new local uri (legacy fallback)
+        var jsonContent: String? = null
+
+        java.util.zip.ZipInputStream(inputStream.buffered()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val name = entry.name
+                when {
+                    name == "backup.json" -> {
+                        jsonContent = zip.readBytes().toString(Charsets.UTF_8)
+                    }
+                    !entry.isDirectory && (name.startsWith("images/") || name.startsWith("ref_images/")) -> {
+                        // Extract under a fresh unique name so destination files never collide.
+                        val ext = name.substringAfterLast('.', "jpg")
+                        val dest = File(refDir, "${UUID.randomUUID()}.$ext")
+                        dest.outputStream().use { out -> zip.copyTo(out) }
+                        val uri = fileToUriString(dest)
+                        extractedByEntry[name] = uri
+                        extractedByBasename[name.substringAfterLast('/')] = uri
+                    }
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+
+        val content = jsonContent ?: error("Backup zip does not contain backup.json")
+        val backup = parseBackupJsonInternal(content)
+
+        // Manifest maps each original uri to the zip entry that holds its bytes.
+        val manifest = JSONObject(content).optJSONObject("referenceImages")
+        fun remap(uri: String): String {
+            manifest?.optString(uri)?.takeIf { it.isNotEmpty() }?.let { entryName ->
+                extractedByEntry[entryName]?.let { return it }
+            }
+            // Legacy fallback for the early intermediate zip format (filename match).
+            uriToFileName(uri)?.let { base -> extractedByBasename[base]?.let { return it } }
+            return uri
+        }
+
+        val remappedRecipes = backup.library.recipes.map { recipe ->
+            recipe.copy(referenceImageUris = recipe.referenceImageUris.map(::remap))
+        }
+        val remappedStyles = backup.library.styles.mapValues { (_, style) ->
+            style.imageUri?.let { style.copy(imageUri = remap(it)) } ?: style
+        }
+
+        backup.copy(library = backup.library.copy(recipes = remappedRecipes, styles = remappedStyles))
+    }
+
+    private fun parseBackupJsonInternal(content: String): BackupData {
+        val root = JSONObject(content)
+        if (root.optString("format") != "fujisync-backup") {
+            error("This is not a FujiSync backup file.")
+        }
+        val cameras = root.optJSONObject("cameras") ?: JSONObject()
+        val library = root.optJSONObject("library") ?: JSONObject()
+        return BackupData(
+            settings = root.optJSONObject("settings")?.let(::settingsFromJson) ?: AppSettings(),
+            cameraLabels = cameras.optJSONObject("labels")?.toStringMap() ?: emptyMap(),
+            cameraModels = cameras.optJSONObject("models")?.toStringMap() ?: emptyMap(),
+            cameraFirmwares = cameras.optJSONObject("firmwares")?.toStringMap() ?: emptyMap(),
+            library = LibraryData(
+                recipes = library.optJSONArray("recipes")?.let(::recipesFromJson) ?: emptyList(),
+                groups = library.optJSONArray("groups")?.let(::groupsFromJson) ?: emptyList(),
+                styles = library.optJSONObject("styles")?.let(::stylesFromJson) ?: emptyMap(),
+            ),
+        )
+    }
+
+    private fun uriToLocalFile(uriStr: String): File? =
+        if (uriStr.startsWith("file://")) {
+            File(java.net.URLDecoder.decode(uriStr.removePrefix("file://"), "UTF-8"))
+        } else null
+
+    private fun uriToFileName(uriStr: String): String? =
+        if (uriStr.startsWith("file://")) {
+            File(java.net.URLDecoder.decode(uriStr.removePrefix("file://"), "UTF-8")).name.ifBlank { null }
+        } else null
+
+    // Matches android.net.Uri.fromFile(...).toString() for the unencoded
+    // filesDir paths we store (absolute path with no special characters).
+    private fun fileToUriString(file: File): String = "file://" + file.absolutePath
 }

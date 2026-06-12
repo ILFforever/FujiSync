@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -116,6 +117,7 @@ fun ProfileScreen(
     settings: AppSettings = AppSettings(),
     onToggleLibraryShowImages: () -> Unit = {},
     onToggleReferenceImageBlur: () -> Unit = {},
+    onToggleFavoritesOnTop: () -> Unit = {},
     onToggleHaptics: () -> Unit = {},
     onOpenCameraImageTuner: () -> Unit = {},
     onLoadSampleLibrary: () -> Unit = {},
@@ -138,6 +140,7 @@ fun ProfileScreen(
     onImportBackupMerge: () -> Unit = {},
     onImportBackupReplace: () -> Unit = {},
     onDismissBackupMessage: () -> Unit = {},
+    onShutterCheck: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -208,6 +211,26 @@ fun ProfileScreen(
 
                 Spacer(Modifier.height(24.dp))
 
+                // ── Tools ──────────────────────────────────────────────────
+                SectionLabel(text = "Tools")
+                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(PanelLow)
+                        .border(1.dp, Border, RoundedCornerShape(14.dp)),
+                ) {
+                    ProfileNavRow(
+                        label = "Shutter count",
+                        subtitle = "Check actuations from a JPEG",
+                        onClick = { haptic(); onShutterCheck() },
+                        inCard = true,
+                    )
+                }
+
+                Spacer(Modifier.height(24.dp))
+
                 // ── Dev ────────────────────────────────────────────────────
                 SectionLabel(text = "Dev")
                 Spacer(Modifier.height(8.dp))
@@ -260,6 +283,7 @@ fun ProfileScreen(
                 settings = settings,
                 onToggleLibraryShowImages = onToggleLibraryShowImages,
                 onToggleReferenceImageBlur = onToggleReferenceImageBlur,
+                onToggleFavoritesOnTop = onToggleFavoritesOnTop,
                 onToggleHaptics = onToggleHaptics,
                 onBack = { settingsOpen = false },
             )
@@ -391,7 +415,7 @@ private fun BackupRestoreScreen(
             ) {
                 BackupActionRow(
                     label = if (backup.exporting) "Exporting..." else "Export backup",
-                    description = "Save app settings, cameras, groups, and film simulation recipes to one JSON file.",
+                    description = "Save recipes, settings, and reference images to a backup file.",
                     enabled = !backup.exporting && !backup.importing,
                     onClick = onExportBackup,
                 )
@@ -412,24 +436,28 @@ private fun BackupRestoreScreen(
                 )
             }
 
-            val status = backup.error ?: backup.message
-            if (status != null) {
-                Spacer(Modifier.height(16.dp))
-                Box(
+            if (backup.exporting && backup.exportTotal > 0) {
+                Spacer(Modifier.height(12.dp))
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .background(PanelLow)
-                        .border(1.dp, if (backup.error != null) Gold.copy(alpha = 0.5f) else Border, RoundedCornerShape(14.dp))
-                        .clickable(onClick = onDismissBackupMessage)
+                        .border(1.dp, Border, RoundedCornerShape(14.dp))
                         .padding(16.dp),
                 ) {
                     Text(
-                        text = status,
+                        text = "Packing ${backup.exportTotal - 1} images…",
                         fontFamily = SansFamily,
                         fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        color = if (backup.error != null) Gold else TextMuted,
+                        color = TextMuted,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { backup.exportProgress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                        color = Gold,
+                        trackColor = Border,
                     )
                 }
             }
@@ -931,6 +959,7 @@ internal fun ProfileNavRow(
     onClick: () -> Unit,
     inCard: Boolean = false,
     badge: String? = null,
+    subtitle: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -938,18 +967,28 @@ internal fun ProfileNavRow(
             .clickable(onClick = onClick)
             .padding(
                 horizontal = if (inCard) 16.dp else 4.dp,
-                vertical = 16.dp,
+                vertical = if (subtitle != null) 12.dp else 16.dp,
             ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            fontFamily = SansFamily,
-            fontSize = 14.5.sp,
-            color = TextPrimary,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontFamily = SansFamily,
+                fontSize = 14.5.sp,
+                color = TextPrimary,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    fontFamily = SansFamily,
+                    fontSize = 12.sp,
+                    color = TextDim,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
         if (badge != null) {
             Text(
                 text = badge,
