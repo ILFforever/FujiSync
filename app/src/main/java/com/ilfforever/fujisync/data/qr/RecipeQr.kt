@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.qr
+package com.ilfforever.fujisync.data.qr
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,7 +15,7 @@ import com.google.zxing.common.BitMatrix
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.google.zxing.qrcode.QRCodeWriter
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
 import org.json.JSONArray
 import org.json.JSONObject
 

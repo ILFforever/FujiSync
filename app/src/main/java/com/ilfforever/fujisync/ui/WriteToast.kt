@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,9 +15,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.TextMuted
 
 // ── Write toast ───────────────────────────────────────────────────
 @Composable
@@ -30,7 +30,7 @@ fun WriteToast(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(com.ilfforever.fujirecipes.ui.theme.PanelHigh)
+            .background(com.ilfforever.fujisync.ui.theme.PanelHigh)
             .border(1.dp, Gold, RoundedCornerShape(12.dp))
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -40,10 +40,10 @@ fun WriteToast(
         Column {
             Text(
                 text = if (savedToLibrary) "Saved $name" else "Wrote $name → $slot",
-                fontFamily = com.ilfforever.fujirecipes.ui.theme.SansFamily,
+                fontFamily = com.ilfforever.fujisync.ui.theme.SansFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
-                color = com.ilfforever.fujirecipes.ui.theme.TextPrimary,
+                color = com.ilfforever.fujisync.ui.theme.TextPrimary,
             )
             Text(
                 text = if (savedToLibrary) "ADDED TO LIBRARY" else "RECIPE LIVE ON CAMERA",

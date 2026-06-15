@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -43,14 +43,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.model.DuplicateMatchKind
-import com.ilfforever.fujirecipes.ui.model.SmartRefResult
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.model.DuplicateMatchKind
+import com.ilfforever.fujisync.ui.model.SmartRefResult
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -71,7 +71,7 @@ internal fun SmartRefResultSheet(
     val view = LocalView.current
 
     fun dismissWithMotion() {
-        com.ilfforever.fujirecipes.ui.haptics.FujiHaptics.perform(context, view, com.ilfforever.fujirecipes.ui.haptics.FujiHapticEffect.SheetDismiss)
+        com.ilfforever.fujisync.ui.haptics.FujiHaptics.perform(context, view, com.ilfforever.fujisync.ui.haptics.FujiHapticEffect.SheetDismiss)
         if (!motionEnabled) { onDismiss(); return }
         scope.launch { visible = false; delay(180); onDismiss() }
     }
@@ -79,7 +79,7 @@ internal fun SmartRefResultSheet(
     BackHandler(onBack = ::dismissWithMotion)
     LaunchedEffect(motionEnabled) {
         visible = true
-        com.ilfforever.fujirecipes.ui.haptics.FujiHaptics.perform(context, view, com.ilfforever.fujirecipes.ui.haptics.FujiHapticEffect.SheetOpen)
+        com.ilfforever.fujisync.ui.haptics.FujiHaptics.perform(context, view, com.ilfforever.fujisync.ui.haptics.FujiHapticEffect.SheetOpen)
     }
 
     val overlayTransition = updateTransition(targetState = visible, label = "smart-ref-overlay")
@@ -117,8 +117,8 @@ internal fun SmartRefResultSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(com.ilfforever.fujirecipes.ui.theme.SheetBg)
-                    .border(1.dp, com.ilfforever.fujirecipes.ui.theme.SheetBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(com.ilfforever.fujisync.ui.theme.SheetBg)
+                    .border(1.dp, com.ilfforever.fujisync.ui.theme.SheetBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .clickable(onClick = {})
                     .navigationBarsPadding(),
             ) {
@@ -157,7 +157,7 @@ internal fun SmartRefResultSheet(
                                 fontFamily = SansFamily,
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp,
-                                color = com.ilfforever.fujirecipes.ui.theme.TextMuted,
+                                color = com.ilfforever.fujisync.ui.theme.TextMuted,
                             )
                         }
                         Spacer(Modifier.width(12.dp))
@@ -182,7 +182,7 @@ internal fun SmartRefResultSheet(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .background(Color(0xFF141210))
-                            .border(1.dp, com.ilfforever.fujirecipes.ui.theme.SheetBorder, RoundedCornerShape(14.dp))
+                            .border(1.dp, com.ilfforever.fujisync.ui.theme.SheetBorder, RoundedCornerShape(14.dp))
                             .padding(14.dp),
                     ) {
                         Row(
@@ -229,7 +229,7 @@ internal fun SmartRefResultSheet(
                                 verticalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
                                 result.matchedRecipe.pills.take(5).forEach {
-                                    com.ilfforever.fujirecipes.ui.components.Pill(text = it)
+                                    com.ilfforever.fujisync.ui.components.Pill(text = it)
                                 }
                             }
                         }
@@ -268,7 +268,7 @@ internal fun SmartRefResultSheet(
                                         fontFamily = SansFamily,
                                         fontSize = 12.sp,
                                         lineHeight = 17.sp,
-                                        color = com.ilfforever.fujirecipes.ui.theme.TextMuted,
+                                        color = com.ilfforever.fujisync.ui.theme.TextMuted,
                                     )
                                 }
                             } else {
@@ -277,7 +277,7 @@ internal fun SmartRefResultSheet(
                                     fontFamily = SansFamily,
                                     fontSize = 12.sp,
                                     lineHeight = 17.sp,
-                                    color = com.ilfforever.fujirecipes.ui.theme.TextMuted,
+                                    color = com.ilfforever.fujisync.ui.theme.TextMuted,
                                 )
                             }
                         }
@@ -285,10 +285,10 @@ internal fun SmartRefResultSheet(
 
                     Spacer(Modifier.height(20.dp))
 
-                    com.ilfforever.fujirecipes.ui.components.PrimaryCTA(
+                    com.ilfforever.fujisync.ui.components.PrimaryCTA(
                         label = if (result.isAlreadyRef) "Done" else "Add to ${result.matchedRecipe.name}",
                         onClick = {
-                            com.ilfforever.fujirecipes.ui.haptics.FujiHaptics.perform(context, view, com.ilfforever.fujirecipes.ui.haptics.FujiHapticEffect.Confirm)
+                            com.ilfforever.fujisync.ui.haptics.FujiHaptics.perform(context, view, com.ilfforever.fujisync.ui.haptics.FujiHapticEffect.Confirm)
                             if (result.isAlreadyRef) onDismiss() else onConfirm()
                         },
                         busy = false,
@@ -309,7 +309,7 @@ internal fun SmartRefResultSheet(
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.sp,
                                 letterSpacing = 1.4.sp,
-                                color = com.ilfforever.fujirecipes.ui.theme.TextMuted,
+                                color = com.ilfforever.fujisync.ui.theme.TextMuted,
                             )
                         }
                     }

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.components
+package com.ilfforever.fujisync.ui.components
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
@@ -24,12 +24,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.R
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelHigh
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.R
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelHigh
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 @DrawableRes
 fun filmSimulationBadgeRes(sim: String): Int? = when (sim.normalizedFilmSim()) {

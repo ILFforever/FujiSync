@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes
+package com.ilfforever.fujisync
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp

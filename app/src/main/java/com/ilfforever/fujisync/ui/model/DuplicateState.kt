@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.model
+package com.ilfforever.fujisync.ui.model
 
 enum class DuplicateMatchKind { ExactSettings, SameName, Similar }
 

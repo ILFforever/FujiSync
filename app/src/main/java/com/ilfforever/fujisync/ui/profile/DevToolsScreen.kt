@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.profile
+package com.ilfforever.fujisync.ui.profile
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -37,16 +37,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.components.IconClose
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelHigh
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.components.IconClose
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelHigh
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 private const val MAX_PROPERTY_WRITE_DELAY_MS = 300L
 private val DevWarningRed = Color(0xFFFF6B5F)
@@ -64,6 +64,7 @@ fun DevToolsScreen(
     onOpenNameBench: () -> Unit,
     onOpenReadSlotsBench: () -> Unit,
     onOpenDrPriorityBench: () -> Unit,
+    onOpenUsbReadWriteBench: () -> Unit,
     onOpenHapticBench: () -> Unit,
     onOpenPtpLog: () -> Unit,
     onAddMockCamera: () -> Unit,
@@ -151,6 +152,8 @@ fun DevToolsScreen(
                     .background(PanelLow)
                     .border(1.dp, Border, RoundedCornerShape(14.dp)),
             ) {
+                ProfileNavRow(label = "USB read/write bench", onClick = onOpenUsbReadWriteBench, inCard = true)
+                ProfileDivider()
                 ProfileNavRow(label = "Name bench", onClick = onOpenNameBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Read slots bench", onClick = onOpenReadSlotsBench, inCard = true)

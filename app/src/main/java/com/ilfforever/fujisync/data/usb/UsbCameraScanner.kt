@@ -1,8 +1,8 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
-import com.ilfforever.fujirecipes.data.ptp.PtpConstants
+import com.ilfforever.fujisync.data.ptp.PtpConstants
 
 data class FujiUsbDevice(
     val device: UsbDevice,

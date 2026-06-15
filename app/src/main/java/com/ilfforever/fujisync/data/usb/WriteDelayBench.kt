@@ -1,15 +1,15 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
-import com.ilfforever.fujirecipes.data.ptp.CameraPresetName
-import com.ilfforever.fujirecipes.data.ptp.MONO_SIM_CODES
-import com.ilfforever.fujirecipes.data.ptp.PtpConstants
-import com.ilfforever.fujirecipes.data.ptp.encodePtpString
-import com.ilfforever.fujirecipes.data.ptp.uint16Le
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
-import com.ilfforever.fujirecipes.domain.model.RecipePreset
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.toPreset
+import com.ilfforever.fujisync.data.ptp.CameraPresetName
+import com.ilfforever.fujisync.data.ptp.MONO_SIM_CODES
+import com.ilfforever.fujisync.data.ptp.PtpConstants
+import com.ilfforever.fujisync.data.ptp.encodePtpString
+import com.ilfforever.fujisync.data.ptp.uint16Le
+import com.ilfforever.fujisync.domain.model.CameraSlot
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.domain.model.RecipePreset
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.toPreset
 import kotlinx.coroutines.delay
 
 data class DelayBenchResult(

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.update
+package com.ilfforever.fujisync.data.update
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

@@ -1,7 +1,7 @@
-package com.ilfforever.fujirecipes.data.remote
+package com.ilfforever.fujisync.data.remote
 
-import com.ilfforever.fujirecipes.ui.library.normalizedDRangePriorityLabel
-import com.ilfforever.fujirecipes.ui.library.normalizedDynamicRangeLabel
+import com.ilfforever.fujisync.ui.library.normalizedDRangePriorityLabel
+import com.ilfforever.fujisync.ui.library.normalizedDynamicRangeLabel
 
 data class FxwRecipeVariant(
     val label: String,  // film simulation name, e.g. "Classic Chrome", "Eterna"

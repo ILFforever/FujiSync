@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
 enum class CameraUsbMode {
     NotPlugged,

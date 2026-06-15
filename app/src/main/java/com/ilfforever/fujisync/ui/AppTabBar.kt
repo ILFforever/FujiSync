@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,17 +26,17 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.components.IconCamera
-import com.ilfforever.fujirecipes.ui.components.IconFolder
-import com.ilfforever.fujirecipes.ui.components.IconProfile
-import com.ilfforever.fujirecipes.ui.components.IconSearch
-import com.ilfforever.fujirecipes.ui.haptics.FujiHapticEffect
-import com.ilfforever.fujirecipes.ui.haptics.FujiHaptics
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.components.IconCamera
+import com.ilfforever.fujisync.ui.components.IconFolder
+import com.ilfforever.fujisync.ui.components.IconProfile
+import com.ilfforever.fujisync.ui.components.IconSearch
+import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
+import com.ilfforever.fujisync.ui.haptics.FujiHaptics
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.TextMuted
 
 // ── Tab bar ───────────────────────────────────────────────────────
 private data class TabItem(val id: AppTab, val label: String, val icon: ImageVector)

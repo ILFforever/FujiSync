@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.di
+package com.ilfforever.fujisync.di
 
 import javax.inject.Qualifier
 

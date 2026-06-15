@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.components
+package com.ilfforever.fujisync.ui.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -50,18 +50,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.GoldDim
-import com.ilfforever.fujirecipes.ui.theme.GoldFaint
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelHigh
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.GoldDim
+import com.ilfforever.fujisync.ui.theme.GoldFaint
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelHigh
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 // ── Wordmark ─────────────────────────────────────────────────────
 @Composable

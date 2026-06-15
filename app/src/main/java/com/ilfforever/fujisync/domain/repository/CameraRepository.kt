@@ -1,7 +1,7 @@
-package com.ilfforever.fujirecipes.domain.repository
+package com.ilfforever.fujisync.domain.repository
 
-import com.ilfforever.fujirecipes.data.usb.CameraUsbMode
-import com.ilfforever.fujirecipes.data.usb.FujiUsbDevice
+import com.ilfforever.fujisync.data.usb.CameraUsbMode
+import com.ilfforever.fujisync.data.usb.FujiUsbDevice
 
 interface CameraRepository {
     fun scanUsb(): List<FujiUsbDevice>

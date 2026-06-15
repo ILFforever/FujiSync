@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.capture
+package com.ilfforever.fujisync.capture
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -19,8 +19,8 @@ import android.os.IBinder
 import android.util.DisplayMetrics
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
-import com.ilfforever.fujirecipes.MainActivity
-import com.ilfforever.fujirecipes.R
+import com.ilfforever.fujisync.MainActivity
+import com.ilfforever.fujisync.R
 import java.io.File
 import java.io.FileOutputStream
 
@@ -29,7 +29,7 @@ class OcrCaptureService : Service() {
     companion object {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
-        const val ACTION_OCR_TILE_RESULT = "com.ilfforever.fujirecipes.OCR_TILE_RESULT"
+        const val ACTION_OCR_TILE_RESULT = "com.ilfforever.fujisync.OCR_TILE_RESULT"
         const val EXTRA_CAPTURE_URI = "capture_uri"
         const val EXTRA_CAPTURE_TOKEN = "capture_token"
         private const val NOTIF_CHANNEL_ID = "ocr_capture"

@@ -1,14 +1,14 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
-import com.ilfforever.fujirecipes.ui.model.AppSettings
-import com.ilfforever.fujirecipes.ui.model.DuplicateDialogState
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupStyle
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupUiModel
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.SaveAllReport
-import com.ilfforever.fujirecipes.ui.model.SlotBackupMeta
-import com.ilfforever.fujirecipes.ui.model.SlotBackupSet
+import com.ilfforever.fujisync.ui.model.AppSettings
+import com.ilfforever.fujisync.ui.model.DuplicateDialogState
+import com.ilfforever.fujisync.ui.model.LibraryGroupStyle
+import com.ilfforever.fujisync.ui.model.LibraryGroupUiModel
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.SaveAllReport
+import com.ilfforever.fujisync.ui.model.SlotBackupMeta
+import com.ilfforever.fujisync.ui.model.SlotBackupSet
 
 enum class AppTab { Camera, Library, Discover, Profile }
 
@@ -60,6 +60,7 @@ data class CameraUiState(
     val cameraModels: Map<String, String> = emptyMap(),
     val cameraFirmwares: Map<String, String> = emptyMap(),
     val showImageTuner: Boolean = false,
+    val writeDelayMs: Long = 0L,
 )
 
 data class LibraryUiState(
@@ -70,6 +71,7 @@ data class LibraryUiState(
     val groupStyles: Map<String, LibraryGroupStyle> = emptyMap(),
     val saveConfirmed: Boolean = false,
     val duplicateDialog: DuplicateDialogState? = null,
+    val loadError: String? = null,
 )
 
 data class FujiSyncUiState(
@@ -91,7 +93,7 @@ data class FujiSyncUiState(
     val ocrImportLoading: Boolean = false,
     val ocrImportError: String? = null,
     val ocrRawText: String? = null,
-    val ocrParseResult: com.ilfforever.fujirecipes.data.ocr.OcrParseResult? = null,
+    val ocrParseResult: com.ilfforever.fujisync.data.ocr.OcrParseResult? = null,
     val qrImportLoading: Boolean = false,
     val qrImportError: String? = null,
     val saveAllSlotsConfirmed: Boolean = false,
@@ -103,8 +105,8 @@ data class FujiSyncUiState(
     val smartRefLoading: Boolean = false,
     val smartRefError: String? = null,
     val smartRefPendingUri: android.net.Uri? = null,
-    val smartRefPendingRecipe: com.ilfforever.fujirecipes.ui.model.RecipeUiModel? = null,
-    val smartRefResult: com.ilfforever.fujirecipes.ui.model.SmartRefResult? = null,
+    val smartRefPendingRecipe: com.ilfforever.fujisync.ui.model.RecipeUiModel? = null,
+    val smartRefResult: com.ilfforever.fujisync.ui.model.SmartRefResult? = null,
 )
 
 data class WriteToastState(val slot: String, val name: String, val savedToLibrary: Boolean = false)

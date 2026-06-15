@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.model
+package com.ilfforever.fujisync.ui.model
 
 data class RecipeUiModel(
     val libraryId: String? = null,
@@ -14,6 +14,8 @@ data class RecipeUiModel(
     val sourceCameraName: String? = null,
     val sourceCameraModel: String? = null,
     val sourceUsbId: String? = null,
+    val sourceUrl: String? = null,
+    val sourceLabel: String? = null,
     val referenceImageUris: List<String> = emptyList(),
     val groupIds: List<String> = emptyList(),
     val group: String? = null,
@@ -45,6 +47,8 @@ data class LibraryRecipeUiModel(
     val sourceCameraName: String? = null,
     val sourceCameraModel: String? = null,
     val sourceUsbId: String? = null,
+    val sourceUrl: String? = null,
+    val sourceLabel: String? = null,
     val referenceImageUris: List<String> = emptyList(),
     val groupIds: List<String> = emptyList(),
     val favorite: Boolean = false,

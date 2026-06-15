@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.exif
+package com.ilfforever.fujisync.data.exif
 
 import android.content.Context
 import android.net.Uri
@@ -6,10 +6,10 @@ import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.exif.ExifIFD0Directory
 import com.drew.metadata.exif.ExifSubIFDDirectory
 import com.drew.metadata.exif.makernotes.FujifilmMakernoteDirectory
-import com.ilfforever.fujirecipes.data.mapper.FujiValueMapper
-import com.ilfforever.fujirecipes.data.ptp.MONO_SIM_CODES
-import com.ilfforever.fujirecipes.domain.model.FujiFilmSimulation
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.data.mapper.FujiValueMapper
+import com.ilfforever.fujisync.data.ptp.MONO_SIM_CODES
+import com.ilfforever.fujisync.domain.model.FujiFilmSimulation
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
 
 // Fujifilm MakerNote tags not yet named in metadata-extractor 2.19.0.
 // Values confirmed from controlled X-H2 fw 5.20 test shots; see PROTOCOL.md §13.2.

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -33,15 +33,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 // ── EXIF import loading ───────────────────────────────────────────
 
@@ -266,7 +266,7 @@ internal fun ExifImportErrorScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                com.ilfforever.fujirecipes.ui.components.PrimaryCTA(
+                com.ilfforever.fujisync.ui.components.PrimaryCTA(
                     label = "Try Another Photo",
                     onClick = onRetry,
                 )
@@ -330,7 +330,7 @@ internal fun ExifImportErrorScreen(
 
 internal fun formatOcrDump(
     rawText: String?,
-    result: com.ilfforever.fujirecipes.data.ocr.OcrParseResult?,
+    result: com.ilfforever.fujisync.data.ocr.OcrParseResult?,
 ): String = buildString {
     appendLine("=== PARSE RESULT ===")
     if (result == null) {

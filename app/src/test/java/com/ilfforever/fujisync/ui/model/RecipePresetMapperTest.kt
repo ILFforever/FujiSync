@@ -1,8 +1,8 @@
-package com.ilfforever.fujirecipes.ui.model
+package com.ilfforever.fujisync.ui.model
 
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
-import com.ilfforever.fujirecipes.domain.model.RecipePreset
+import com.ilfforever.fujisync.domain.model.CameraSlot
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.domain.model.RecipePreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -298,8 +298,11 @@ class RecipePresetMapperTest {
     }
 
     @Test
-    fun `toPreset encodes grain Off as 6`() {
+    fun `toPreset encodes grain Off as 1 (write value, not readback 6)`() {
+        // PROTOCOL.md §6.3: GRAIN_EFFECT readback is 6 for factory-default slots, but the
+        // camera rejects writes of 6. The valid write value for Off is 1. So a round-trip
+        // of readback-6 → "Off" → write must emit 1, not 6.
         val ui = preset(props = mapOf(FujiPropertyCode.GrainEffect to 6)).toUiModel()
-        assertEquals(6, ui.toPreset(CameraSlot.C1).properties[FujiPropertyCode.GrainEffect])
+        assertEquals(1, ui.toPreset(CameraSlot.C1).properties[FujiPropertyCode.GrainEffect])
     }
 }

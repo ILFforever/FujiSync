@@ -1,17 +1,17 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
-import com.ilfforever.fujirecipes.data.ptp.CameraPresetName
-import com.ilfforever.fujirecipes.data.ptp.MONO_SIM_CODES
-import com.ilfforever.fujirecipes.data.ptp.PtpConstants
-import com.ilfforever.fujirecipes.data.ptp.decodeInt16Le
-import com.ilfforever.fujirecipes.data.ptp.decodeUInt16Le
-import com.ilfforever.fujirecipes.data.ptp.encodePtpString
-import com.ilfforever.fujirecipes.data.ptp.parsePtpString
-import com.ilfforever.fujirecipes.data.ptp.uint16Le
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
-import com.ilfforever.fujirecipes.domain.model.FujiFilmSimulation
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
-import com.ilfforever.fujirecipes.domain.model.RecipePreset
+import com.ilfforever.fujisync.data.ptp.CameraPresetName
+import com.ilfforever.fujisync.data.ptp.MONO_SIM_CODES
+import com.ilfforever.fujisync.data.ptp.PtpConstants
+import com.ilfforever.fujisync.data.ptp.decodeInt16Le
+import com.ilfforever.fujisync.data.ptp.decodeUInt16Le
+import com.ilfforever.fujisync.data.ptp.encodePtpString
+import com.ilfforever.fujisync.data.ptp.parsePtpString
+import com.ilfforever.fujisync.data.ptp.uint16Le
+import com.ilfforever.fujisync.domain.model.CameraSlot
+import com.ilfforever.fujisync.domain.model.FujiFilmSimulation
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.domain.model.RecipePreset
 import kotlinx.coroutines.delay
 
 private val COLOR_ONLY_PROPS = setOf(
@@ -65,7 +65,7 @@ class FujiRecipeCamera(
     }
 
     suspend fun writePresetName(slot: CameraSlot, name: String): Boolean {
-        selectSlot(slot)
+        if (!selectSlot(slot)) return false
         delay(SLOT_SWITCH_DELAY_MS)
 
         val safe = CameraPresetName.sanitizeOrFallback(name, fallback = slot.label)

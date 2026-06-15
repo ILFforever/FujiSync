@@ -1,8 +1,8 @@
-package com.ilfforever.fujirecipes.ui.profile
+package com.ilfforever.fujisync.ui.profile
 
-import com.ilfforever.fujirecipes.ui.overlay.OverlayLayer
-import com.ilfforever.fujirecipes.ui.overlay.BackHandler as OverlayBackHandler
-import com.ilfforever.fujirecipes.ui.overlay.overlayStackOf
+import com.ilfforever.fujisync.ui.overlay.OverlayLayer
+import com.ilfforever.fujisync.ui.overlay.BackHandler as OverlayBackHandler
+import com.ilfforever.fujisync.ui.overlay.overlayStackOf
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -76,33 +76,33 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.ilfforever.fujirecipes.R
-import com.ilfforever.fujirecipes.ui.BackupUiState
-import com.ilfforever.fujirecipes.ui.UpdateUiState
-import com.ilfforever.fujirecipes.ui.camera.CameraImageTuning
-import com.ilfforever.fujirecipes.ui.camera.cameraImageTuning
-import com.ilfforever.fujirecipes.ui.components.DeleteConfirmDialog
-import com.ilfforever.fujirecipes.ui.components.IconEdit
-import com.ilfforever.fujirecipes.ui.components.IconMoreVertical
-import com.ilfforever.fujirecipes.ui.components.IconRefresh
-import com.ilfforever.fujirecipes.ui.components.IconTrash
-import com.ilfforever.fujirecipes.ui.components.MetaRow
-import com.ilfforever.fujirecipes.ui.components.SectionLabel
-import com.ilfforever.fujirecipes.ui.components.Wordmark
-import com.ilfforever.fujirecipes.ui.haptics.FujiHapticEffect
-import com.ilfforever.fujirecipes.ui.haptics.FujiHaptics
-import com.ilfforever.fujirecipes.ui.model.AppSettings
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.SheetBg
-import com.ilfforever.fujirecipes.ui.theme.SheetBorder
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.R
+import com.ilfforever.fujisync.ui.BackupUiState
+import com.ilfforever.fujisync.ui.UpdateUiState
+import com.ilfforever.fujisync.ui.camera.CameraImageTuning
+import com.ilfforever.fujisync.ui.camera.cameraImageTuning
+import com.ilfforever.fujisync.ui.components.DeleteConfirmDialog
+import com.ilfforever.fujisync.ui.components.IconEdit
+import com.ilfforever.fujisync.ui.components.IconMoreVertical
+import com.ilfforever.fujisync.ui.components.IconRefresh
+import com.ilfforever.fujisync.ui.components.IconTrash
+import com.ilfforever.fujisync.ui.components.MetaRow
+import com.ilfforever.fujisync.ui.components.SectionLabel
+import com.ilfforever.fujisync.ui.components.Wordmark
+import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
+import com.ilfforever.fujisync.ui.haptics.FujiHaptics
+import com.ilfforever.fujisync.ui.model.AppSettings
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.SheetBg
+import com.ilfforever.fujisync.ui.theme.SheetBorder
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 @Composable
 fun ProfileScreen(
@@ -125,6 +125,7 @@ fun ProfileScreen(
     onExploreDemo: () -> Unit = {},
     onOpenExifBench: () -> Unit = {},
     onOpenFxwSearchBench: () -> Unit = {},
+    onOpenUsbReadWriteBench: () -> Unit = {},
     onOpenWriteDelayBench: () -> Unit = {},
     onOpenNameBench: () -> Unit = {},
     onOpenReadSlotsBench: () -> Unit = {},
@@ -350,6 +351,7 @@ fun ProfileScreen(
                 onExploreDemo = onExploreDemo,
                 onOpenExifBench = onOpenExifBench,
                 onOpenFxwSearchBench = onOpenFxwSearchBench,
+                onOpenUsbReadWriteBench = onOpenUsbReadWriteBench,
                 onOpenWriteDelayBench = onOpenWriteDelayBench,
                 onOpenNameBench = onOpenNameBench,
                 onOpenReadSlotsBench = onOpenReadSlotsBench,

@@ -1,4 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Fuji Sync</string>
+
+    <!-- CameraViewModel errors -->
+    <string name="error_camera_not_found">Camera not found. Reconnect the USB cable.</string>
+    <string name="error_card_reader_mode">Camera is connected in card reader mode. Set USB mode to USB RAW CONV. / Backup Restore, then reconnect.</string>
+    <string name="error_no_ptp_interface">Fujifilm camera found, but it is not exposing a PTP recipe interface. Set USB mode to USB RAW CONV. / Backup Restore.</string>
+    <string name="error_no_camera_found">No camera found. Make sure USB mode is set to USB RAW CONV.</string>
+    <string name="error_usb_permission_denied">USB permission denied.</string>
+    <string name="error_probe_failed">Probe failed.</string>
+    <string name="error_camera_disconnected">Camera disconnected. Reconnect the USB cable.</string>
+    <string name="error_write_failed">Write failed.</string>
+    <string name="error_rearrange_failed">Rearrange failed.</string>
+    <string name="error_connect_before_rearrange">Connect camera before rearranging recipes.</string>
+    <string name="error_connect_before_backup">Connect a camera before backing up slots.</string>
+    <string name="error_backup_save_failed">Could not save backup set.</string>
+    <string name="error_connect_before_restore">Connect camera before restoring a set.</string>
+    <string name="error_restore_failed">Restore failed.</string>
+    <string name="error_slots_could_not_read">%1$d slot(s) could not be read.</string>
+    <string name="error_write_errors_on">Write errors on %1$s. Validating what landed.</string>
+    <string name="error_restore_write_errors">Restore reported write errors for %1$s. Validating camera slots now.</string>
+    <string name="error_backup_read_failed">Could not back up %1$s. Reconnect and try again.</string>
 </resources>

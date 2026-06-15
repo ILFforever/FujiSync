@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.ptp
+package com.ilfforever.fujisync.data.ptp
 
 data class PtpTransaction(
     val data: PtpContainer?,

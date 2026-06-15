@@ -1,12 +1,12 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
 import android.hardware.usb.UsbDevice
 import android.util.Log
-import com.ilfforever.fujirecipes.data.ptp.PtpConstants
-import com.ilfforever.fujirecipes.data.ptp.PtpDeviceInfo
-import com.ilfforever.fujirecipes.data.ptp.hexDump
-import com.ilfforever.fujirecipes.data.ptp.parseDeviceInfo
-import com.ilfforever.fujirecipes.data.ptp.parsePtpString
+import com.ilfforever.fujisync.data.ptp.PtpConstants
+import com.ilfforever.fujisync.data.ptp.PtpDeviceInfo
+import com.ilfforever.fujisync.data.ptp.hexDump
+import com.ilfforever.fujisync.data.ptp.parseDeviceInfo
+import com.ilfforever.fujisync.data.ptp.parsePtpString
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 

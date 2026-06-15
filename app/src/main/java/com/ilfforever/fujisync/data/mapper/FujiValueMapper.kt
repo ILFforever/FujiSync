@@ -1,6 +1,6 @@
-package com.ilfforever.fujirecipes.data.mapper
+package com.ilfforever.fujisync.data.mapper
 
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
 
 /**
  * Canonical translation between raw PTP wire values and human dial positions.
@@ -65,7 +65,7 @@ object FujiValueMapper {
         3 -> "Strong Small"
         4 -> "Weak Large"
         5 -> "Strong Large"
-        else -> "Off" // 1, 6, null, or unknown
+        else -> "Off" // 1=write-Off, 6=factory-default Off, 7=X-H2 fw5+ Off variant, null/unknown
     }
 
     fun grainLabelToRaw(label: String?): Int = when (label) {
@@ -73,7 +73,7 @@ object FujiValueMapper {
         "Strong Small" -> 3
         "Weak Large" -> 4
         "Strong Large" -> 5
-        else -> 6  // Off/default; protocol also accepts 1 as Off on read.
+        else -> 1  // Off. Camera reads back 6 for factory-default slots but rejects writes of 6; write 1.
     }
 
     // ── Off / Weak / Strong (Color Chrome, FX Blue, Smooth Skin) ────────────────

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.ocr
+package com.ilfforever.fujisync.data.ocr
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

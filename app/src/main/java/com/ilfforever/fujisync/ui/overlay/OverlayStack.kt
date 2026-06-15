@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.overlay
+package com.ilfforever.fujisync.ui.overlay
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable

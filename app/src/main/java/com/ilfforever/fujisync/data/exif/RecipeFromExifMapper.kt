@@ -1,8 +1,8 @@
-package com.ilfforever.fujirecipes.data.exif
+package com.ilfforever.fujisync.data.exif
 
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
-import com.ilfforever.fujirecipes.domain.model.RecipePreset
+import com.ilfforever.fujisync.domain.model.CameraSlot
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.domain.model.RecipePreset
 import kotlin.math.roundToInt
 
 fun RecipeFromExif.toPreset(name: String, slot: CameraSlot = CameraSlot.C1): RecipePreset {

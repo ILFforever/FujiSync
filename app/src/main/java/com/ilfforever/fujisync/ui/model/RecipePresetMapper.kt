@@ -1,13 +1,13 @@
-package com.ilfforever.fujirecipes.ui.model
+package com.ilfforever.fujisync.ui.model
 
-import com.ilfforever.fujirecipes.data.mapper.FujiValueMapper
-import com.ilfforever.fujirecipes.data.ptp.MONO_SIM_CODES
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
-import com.ilfforever.fujirecipes.domain.model.FujiFilmSimulation
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
-import com.ilfforever.fujirecipes.ui.library.normalizedDRangePriorityLabel
-import com.ilfforever.fujirecipes.ui.library.normalizedDynamicRangeLabel
-import com.ilfforever.fujirecipes.domain.model.RecipePreset
+import com.ilfforever.fujisync.data.mapper.FujiValueMapper
+import com.ilfforever.fujisync.data.ptp.MONO_SIM_CODES
+import com.ilfforever.fujisync.domain.model.CameraSlot
+import com.ilfforever.fujisync.domain.model.FujiFilmSimulation
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.ui.library.normalizedDRangePriorityLabel
+import com.ilfforever.fujisync.ui.library.normalizedDynamicRangeLabel
+import com.ilfforever.fujisync.domain.model.RecipePreset
 
 fun RecipePreset.toUiModel(): RecipeUiModel {
     val props = properties

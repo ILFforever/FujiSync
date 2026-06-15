@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.camera
+package com.ilfforever.fujisync.ui.camera
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -34,23 +34,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
-import com.ilfforever.fujirecipes.ui.components.FilmSimBadgeImage
-import com.ilfforever.fujirecipes.ui.components.FilmSimLabel
-import com.ilfforever.fujirecipes.ui.components.IconChevronRight
-import com.ilfforever.fujirecipes.ui.components.Pill
-import com.ilfforever.fujirecipes.ui.components.PrimaryCTA
-import com.ilfforever.fujirecipes.ui.components.PropRow
-import com.ilfforever.fujirecipes.ui.components.recipePropertyRows
-import com.ilfforever.fujirecipes.ui.components.SectionLabel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelHigh
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.components.FilmSimBadgeImage
+import com.ilfforever.fujisync.ui.components.FilmSimLabel
+import com.ilfforever.fujisync.ui.components.IconChevronRight
+import com.ilfforever.fujisync.ui.components.Pill
+import com.ilfforever.fujisync.ui.components.PrimaryCTA
+import com.ilfforever.fujisync.ui.components.PropRow
+import com.ilfforever.fujisync.ui.components.recipePropertyRows
+import com.ilfforever.fujisync.ui.components.SectionLabel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelHigh
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 // ── Bottom sheet content ──────────────────────────────────────────
 @OptIn(ExperimentalLayoutApi::class)

@@ -1,20 +1,21 @@
-package com.ilfforever.fujirecipes.di
+package com.ilfforever.fujisync.di
 
 import android.content.Context
 import android.hardware.usb.UsbManager
-import com.ilfforever.fujirecipes.data.local.LocalStore
-import com.ilfforever.fujirecipes.BuildConfig
-import com.ilfforever.fujirecipes.data.update.GitHubReleaseUpdater
-import com.ilfforever.fujirecipes.data.usb.CameraHeartbeat
-import com.ilfforever.fujirecipes.data.usb.UsbCameraRepository
-import com.ilfforever.fujirecipes.data.usb.UsbCameraScanner
-import com.ilfforever.fujirecipes.data.usb.UsbPtpConnection
-import com.ilfforever.fujirecipes.domain.repository.CameraRepository
+import com.ilfforever.fujisync.data.local.LocalStore
+import com.ilfforever.fujisync.BuildConfig
+import com.ilfforever.fujisync.data.update.GitHubReleaseUpdater
+import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.UsbCameraRepository
+import com.ilfforever.fujisync.data.usb.UsbCameraScanner
+import com.ilfforever.fujisync.data.usb.UsbPtpConnection
+import com.ilfforever.fujisync.domain.repository.CameraRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,6 +55,15 @@ object AppModule {
     fun provideGitHubReleaseUpdater(@ApplicationContext context: Context): GitHubReleaseUpdater =
         GitHubReleaseUpdater(context, BuildConfig.GITHUB_REPO)
 
+    @Provides
+    @IoDispatcher
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
+
+    /**
+     * Application-scoped [CoroutineScope] for @Singleton holders (e.g. LibraryStateHolder).
+     * Uses [SupervisorJob] so one child failure doesn't cancel siblings.
+     * Lives as long as the process — intentional for @Singleton components.
+     */
     @Provides
     @Singleton
     @ApplicationScope

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes
+package com.ilfforever.fujisync
 
 import android.app.Activity
 import android.app.PendingIntent
@@ -24,20 +24,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import com.ilfforever.fujirecipes.capture.CaptureDiag
-import com.ilfforever.fujirecipes.capture.OcrCaptureService
-import com.ilfforever.fujirecipes.ui.FujiSyncApp
-import com.ilfforever.fujirecipes.ui.BackupImportMode
-import com.ilfforever.fujirecipes.ui.MainViewModel
-import com.ilfforever.fujirecipes.ui.MainViewModelEvent
-import com.ilfforever.fujirecipes.ui.SplashScreen
-import com.ilfforever.fujirecipes.ui.theme.FujiRecipesTheme
+import com.ilfforever.fujisync.capture.CaptureDiag
+import com.ilfforever.fujisync.capture.OcrCaptureService
+import com.ilfforever.fujisync.ui.FujiSyncApp
+import com.ilfforever.fujisync.ui.BackupImportMode
+import com.ilfforever.fujisync.ui.MainViewModel
+import com.ilfforever.fujisync.ui.MainViewModelEvent
+import com.ilfforever.fujisync.ui.SplashScreen
+import com.ilfforever.fujisync.ui.camera.CameraEvent
+import com.ilfforever.fujisync.ui.camera.CameraViewModel
+import com.ilfforever.fujisync.ui.profile.ImportEvent
+import com.ilfforever.fujisync.ui.profile.ImportViewModel
+import com.ilfforever.fujisync.ui.theme.FujiRecipesTheme
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private val cameraVm: CameraViewModel by viewModels()
+    private val importVm: ImportViewModel by viewModels()
 
     private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@registerForActivityResult
@@ -55,27 +61,27 @@ class MainActivity : ComponentActivity() {
 
     private val exifImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
-        viewModel.handleExifImportResult(uri)
+        importVm.handleExifImportResult(uri)
     }
 
     private val shutterCheckPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
-        viewModel.handleShutterCheckResult(uri)
+        importVm.handleShutterCheckResult(uri)
     }
 
     private val smartRefPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
-        viewModel.handleSmartRefResult(uri)
+        importVm.handleSmartRefResult(uri)
     }
 
     private val ocrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
-        viewModel.handleOcrImportResult(uri)
+        importVm.handleOcrImportResult(uri)
     }
 
     private val qrImagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@registerForActivityResult
-        viewModel.handleQrImportResult(uri)
+        importVm.handleQrImportResult(uri)
     }
 
     private val backupExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -91,7 +97,7 @@ class MainActivity : ComponentActivity() {
             if (intent.action != ACTION_USB_PERMISSION) return
             val device = intent.usbDeviceExtra() ?: return
             val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-            viewModel.onUsbPermissionResult(device, granted)
+            cameraVm.onUsbPermissionResult(device, granted)
         }
     }
 
@@ -120,22 +126,48 @@ class MainActivity : ComponentActivity() {
         setContent {
             FujiRecipesTheme {
                 val state by viewModel.uiState.collectAsState()
+                val cameraState by cameraVm.state.collectAsState()
+                val cameraWriteBusy by cameraVm.writeBusy.collectAsState()
+                val cameraWriteToast by cameraVm.writeToast.collectAsState()
+                val importState by importVm.state.collectAsState()
+                // Compose combined state: camera and import state from their VMs
+                val combinedState = state.copy(
+                    camera = cameraState,
+                    writeBusy = cameraWriteBusy || state.writeBusy,
+                    writeToast = cameraWriteToast ?: state.writeToast,
+                    exifImportLoading = importState.exifLoading,
+                    exifImportError = importState.exifError,
+                    shutterCount = importState.shutterCount,
+                    shutterCheckLoading = importState.shutterCheckLoading,
+                    shutterCheckError = importState.shutterCheckError,
+                    ocrImportLoading = importState.ocrLoading,
+                    ocrImportError = importState.ocrError,
+                    ocrRawText = importState.ocrRawText,
+                    ocrParseResult = importState.ocrParseResult,
+                    qrImportLoading = importState.qrLoading,
+                    qrImportError = importState.qrError,
+                    smartRefLoading = importState.smartRefLoading,
+                    smartRefError = importState.smartRefError,
+                    smartRefPendingUri = importState.smartRefPendingUri,
+                    smartRefPendingRecipe = importState.smartRefPendingRecipe,
+                    smartRefResult = importState.smartRefResult,
+                )
                 if (showSplash) {
                     SplashScreen(onComplete = { showSplash = false })
                 } else {
                     FujiSyncApp(
-                    state = state,
-                    onReconnect = viewModel::onReconnect,
+                    state = combinedState,
+                    onReconnect = cameraVm::onReconnect,
                     onTabChange = viewModel::setTab,
-                    onSelectSlot = viewModel::setSelectedSlotIdx,
+                    onSelectSlot = cameraVm::setSelectedSlotIdx,
                     onOpenDetail = viewModel::openDetail,
                     onCloseDetail = viewModel::closeDetail,
                     onOpenRecipeCreator = viewModel::openRecipeCreator,
                     onOpenRecipeEditor = viewModel::openRecipeEditor,
                     onCloseRecipeEditor = viewModel::closeRecipeEditor,
                     onSaveRecipeDraft = viewModel::saveRecipeDraft,
-                    onWrite = viewModel::handleWrite,
-                    onSaveToLibrary = viewModel::handleSaveToLibrary,
+                    onWrite = { cameraVm.handleWrite(combinedState.detailRecipe ?: combinedState.camera.slots.getOrNull(combinedState.camera.selectedSlotIdx) ?: return@FujiSyncApp) },
+                    onSaveToLibrary = { source -> viewModel.handleSaveToLibrary(source, combinedState.detailRecipe ?: combinedState.camera.slots.getOrNull(combinedState.camera.selectedSlotIdx)) },
                     onAddReferenceImage = viewModel::handleAddReferenceImage,
                     onRemoveReferenceImage = viewModel::handleRemoveReferenceImage,
                     onReorderReferenceImages = viewModel::handleReorderReferenceImages,
@@ -145,24 +177,24 @@ class MainActivity : ComponentActivity() {
                     onCloneLibraryRecipe = viewModel::handleCloneLibraryRecipe,
                     onAddLibraryGroupImage = viewModel::handleAddLibraryGroupImage,
                     onOpenLibraryItem = viewModel::openLibraryItem,
-                    onOpenCameraImageTuner = { viewModel.setShowCameraImageTuner(true) },
-                    onCloseCameraImageTuner = { viewModel.setShowCameraImageTuner(false) },
+                    onOpenCameraImageTuner = { cameraVm.setShowImageTuner(true) },
+                    onCloseCameraImageTuner = { cameraVm.setShowImageTuner(false) },
                     onLoadSampleLibrary = viewModel::handleLoadSampleLibrary,
                     onDuplicateSaveAsNew = viewModel::handleDuplicateSaveAsNew,
                     onDuplicateUpdateExisting = viewModel::handleDuplicateUpdateExisting,
                     onDuplicateDismiss = viewModel::handleDuplicateDismiss,
-                    onExploreDemo = viewModel::handleExploreDemo,
-                    onBackupSlots = { label -> viewModel.handleBackupSlots(label) },
-                    onRestoreSlots = viewModel::handleRestoreSlots,
-                    onDeleteSlotBackup = viewModel::handleDeleteSlotBackup,
-                    onRenameSlotBackup = viewModel::handleRenameSlotBackup,
-                    onSelectSlotBackup = viewModel::handleSelectSlotBackup,
-                    onRearrangeCameraSlots = viewModel::handleRearrangeCameraSlots,
-                    onRearrangeValidationDismiss = viewModel::dismissRearrangeValidation,
-                    rearrangeDebugLog = viewModel.rearrangeDebugLog.collectAsState().value,
-                    onRenameCameraLabel = { serial, label -> viewModel.handleRenameCameraLabel(serial, label) },
-                    onDeleteCamera = viewModel::handleDeleteCamera,
-                    onResetCameraLabel = viewModel::handleResetCameraLabel,
+                    onExploreDemo = cameraVm::exploreDemo,
+                    onBackupSlots = { label -> cameraVm.handleBackupSlots(label) },
+                    onRestoreSlots = cameraVm::handleRestoreSlots,
+                    onDeleteSlotBackup = cameraVm::handleDeleteSlotBackup,
+                    onRenameSlotBackup = cameraVm::handleRenameSlotBackup,
+                    onSelectSlotBackup = cameraVm::handleSelectSlotBackup,
+                    onRearrangeCameraSlots = cameraVm::handleRearrangeCameraSlots,
+                    onRearrangeValidationDismiss = cameraVm::dismissRearrangeValidation,
+                    rearrangeDebugLog = cameraVm.rearrangeDebugLog.collectAsState().value,
+                    onRenameCameraLabel = { serial, label -> cameraVm.renameCameraLabel(serial, label) },
+                    onDeleteCamera = cameraVm::deleteCamera,
+                    onResetCameraLabel = cameraVm::resetCameraLabel,
                     onToggleFavorite = viewModel::handleToggleFavoriteById,
                     onToggleLibraryShowImages = viewModel::handleToggleLibraryShowImages,
                     onToggleCardImageCount = viewModel::handleToggleCardImageCount,
@@ -171,34 +203,34 @@ class MainActivity : ComponentActivity() {
                     onToggleHaptics = viewModel::handleToggleHaptics,
                     onSetSmartRefSimilarityPct = viewModel::handleSetSmartRefSimilarityPct,
                     onSetMaxReferenceImages = viewModel::handleSetMaxReferenceImages,
-                    onWriteLibraryRecipeToSlot = viewModel::handleWriteToSlot,
-                    onImportFromPhoto = viewModel::handleLaunchExifImport,
-                    onExifImportErrorDismiss = viewModel::handleExifImportDismiss,
-                    onImportFromScreenshot = viewModel::handleLaunchOcrImport,
-                    onOcrImportErrorDismiss = viewModel::handleOcrImportDismiss,
-                    onQrRecipeDetected = viewModel::handleQrImportRecipe,
-                    onImportQrFromImage = viewModel::handleLaunchQrImageImport,
-                    onQrImportErrorDismiss = viewModel::handleQrImportDismiss,
-                    onAddMockCamera = viewModel::handleAddMockCamera,
-                    onSaveAllToLibrary = viewModel::handleSaveAllSlotsToLibrary,
+                    onWriteLibraryRecipeToSlot = { slot -> cameraVm.handleWriteToSlot(combinedState.detailRecipe ?: return@FujiSyncApp, slot) },
+                    onImportFromPhoto = importVm::launchExifImport,
+                    onExifImportErrorDismiss = importVm::dismissExifImport,
+                    onImportFromScreenshot = importVm::launchOcrImport,
+                    onOcrImportErrorDismiss = importVm::dismissOcrImport,
+                    onQrRecipeDetected = importVm::handleQrImportRecipe,
+                    onImportQrFromImage = importVm::launchQrImageImport,
+                    onQrImportErrorDismiss = importVm::dismissQrImport,
+                    onAddMockCamera = cameraVm::addMockCamera,
+                    onSaveAllToLibrary = { source -> viewModel.handleSaveAllSlotsToLibrary(source, combinedState.camera.slots) },
                     onSaveAllReportDismiss = viewModel::handleSaveAllReportDismiss,
                     onLoadCaptureLog = viewModel::loadCaptureLog,
                     onClearCaptureLog = viewModel::clearCaptureLog,
-                    onSetPropertyWriteDelay = viewModel::handleSetPropertyWriteDelay,
+                    onSetPropertyWriteDelay = { ms -> viewModel.handleSetPropertyWriteDelay(ms); cameraVm.setWriteDelayMs(ms) },
                     onCheckForUpdates = viewModel::handleCheckForUpdates,
                     onInstallUpdate = viewModel::handleInstallUpdate,
                     onExportBackup = viewModel::handleLaunchBackupExport,
                     onImportBackupMerge = { viewModel.handleLaunchBackupImport(BackupImportMode.Merge) },
                     onImportBackupReplace = { viewModel.handleLaunchBackupImport(BackupImportMode.Replace) },
                     onDismissBackupMessage = viewModel::handleBackupMessageDismiss,
-                    onShutterCheck = viewModel::handleLaunchShutterCheck,
-                    onShutterCheckDismiss = viewModel::handleShutterCheckDismiss,
-                    onSmartRefChoosePhoto = viewModel::handleLaunchSmartRef,
-                    onSmartRefConfirm = viewModel::handleSmartRefConfirm,
-                    onSmartRefDismiss = viewModel::handleSmartRefDismiss,
-                    onSmartRefConfirmAndContinue = viewModel::handleSmartRefConfirmAndContinue,
-                    onSmartRefDismissAndContinue = viewModel::handleSmartRefDismissAndContinue,
-                    onSmartRefCreateNew = viewModel::handleSmartRefCreateNew,
+                    onShutterCheck = importVm::launchShutterCheck,
+                    onShutterCheckDismiss = importVm::dismissShutterCheck,
+                    onSmartRefChoosePhoto = importVm::launchSmartRef,
+                    onSmartRefConfirm = importVm::handleSmartRefConfirm,
+                    onSmartRefDismiss = importVm::handleSmartRefDismiss,
+                    onSmartRefConfirmAndContinue = importVm::handleSmartRefConfirmAndContinue,
+                    onSmartRefDismissAndContinue = importVm::handleSmartRefDismissAndContinue,
+                    onSmartRefCreateNew = importVm::handleSmartRefCreateNew,
                     )
                 } // else
             }
@@ -222,6 +254,29 @@ class MainActivity : ComponentActivity() {
                     MainViewModelEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("image/*"))
                     MainViewModelEvent.LaunchSmartRefPicker -> smartRefPicker.launch(arrayOf("image/*"))
                 }
+            }
+        }
+        lifecycleScope.launch {
+            cameraVm.events.collect { event ->
+                when (event) {
+                    is CameraEvent.RequestUsbPermission -> requestUsbPermission(event.device)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            importVm.events.collect { event ->
+                when (event) {
+                    ImportEvent.LaunchExifImagePicker -> exifImagePicker.launch(arrayOf("image/*"))
+                    ImportEvent.LaunchOcrImagePicker -> ocrImagePicker.launch(arrayOf("image/*"))
+                    ImportEvent.LaunchQrImagePicker -> qrImagePicker.launch(arrayOf("image/*"))
+                    ImportEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("image/*"))
+                    ImportEvent.LaunchSmartRefPicker -> smartRefPicker.launch(arrayOf("image/*"))
+                }
+            }
+        }
+        lifecycleScope.launch {
+            importVm.importedRecipe.collect { imported ->
+                viewModel.handleImportedRecipe(imported.recipe, imported.referenceImageUris)
             }
         }
     }
@@ -292,7 +347,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         when (intent.action) {
             OcrCaptureService.ACTION_OCR_TILE_RESULT -> handleCaptureIntent(intent)
-            else -> if (!handleUsbAttachIntent(intent)) viewModel.refreshDevices()
+            else -> if (!handleUsbAttachIntent(intent)) cameraVm.refreshDevices()
         }
     }
 
@@ -312,22 +367,22 @@ class MainActivity : ComponentActivity() {
         }
         lastHandledCaptureToken = token
         CaptureDiag.log(this, "calling handleOcrImportResult")
-        viewModel.handleOcrImportResult(Uri.parse(uriString))
+        importVm.handleOcrImportResult(Uri.parse(uriString))
     }
 
     private fun handleUsbAttachIntent(intent: Intent?): Boolean {
         if (intent?.action != ACTION_USB_DEVICE_ATTACHED) return false
         val device = intent.usbDeviceExtra()
         if (device?.vendorId != FUJI_VENDOR_ID) {
-            viewModel.refreshDevices()
+            cameraVm.refreshDevices()
             return true
         }
-        viewModel.onReconnect()
+        cameraVm.onReconnect()
         return true
     }
 
     private companion object {
-        const val ACTION_USB_PERMISSION = "com.ilfforever.fujirecipes.USB_PERMISSION"
+        const val ACTION_USB_PERMISSION = "com.ilfforever.fujisync.USB_PERMISSION"
         const val FUJI_VENDOR_ID = 0x04CB
     }
 }

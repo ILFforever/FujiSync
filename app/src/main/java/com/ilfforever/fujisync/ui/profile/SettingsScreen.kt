@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.profile
+package com.ilfforever.fujisync.ui.profile
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -35,17 +35,17 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.components.SectionLabel
-import com.ilfforever.fujirecipes.ui.model.AppSettings
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.BorderStrong
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.GoldDim
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.components.SectionLabel
+import com.ilfforever.fujisync.ui.model.AppSettings
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.BorderStrong
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.GoldDim
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 @Composable
 fun SettingsScreen(
@@ -344,7 +344,7 @@ private fun SettingsStepperRow(
             Spacer(Modifier.width(8.dp))
             Text(
                 text = "$value$unit",
-                fontFamily = com.ilfforever.fujirecipes.ui.theme.MonoFamily,
+                fontFamily = com.ilfforever.fujisync.ui.theme.MonoFamily,
                 fontSize = 13.sp,
                 color = Gold,
                 modifier = Modifier.width(40.dp),

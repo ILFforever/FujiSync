@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.domain.model
+package com.ilfforever.fujisync.domain.model
 
 data class RecipePreset(
     val slot: CameraSlot,

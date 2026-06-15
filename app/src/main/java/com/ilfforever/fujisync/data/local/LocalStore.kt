@@ -1,17 +1,17 @@
-package com.ilfforever.fujirecipes.data.local
+package com.ilfforever.fujisync.data.local
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
-import com.ilfforever.fujirecipes.ui.model.AppSettings
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupStyle
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupUiModel
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.SlotBackupMeta
-import com.ilfforever.fujirecipes.ui.model.SlotBackupSet
+import com.ilfforever.fujisync.ui.model.AppSettings
+import com.ilfforever.fujisync.ui.model.LibraryGroupStyle
+import com.ilfforever.fujisync.ui.model.LibraryGroupUiModel
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.SlotBackupMeta
+import com.ilfforever.fujisync.ui.model.SlotBackupSet
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -53,7 +53,7 @@ class LocalStore(context: Context) {
                 },
             )
         }.onFailure { Log.e("LocalStore", "Library parse failed — file may be corrupt", it) }
-         .getOrNull()
+         .getOrThrow()
     }
 
     // ── Slot backup ───────────────────────────────────────────────────
@@ -406,6 +406,8 @@ class LocalStore(context: Context) {
         putOpt("sourceCameraName", r.sourceCameraName)
         putOpt("sourceCameraModel", r.sourceCameraModel)
         putOpt("sourceUsbId", r.sourceUsbId)
+        putOpt("sourceUrl", r.sourceUrl)
+        putOpt("sourceLabel", r.sourceLabel)
         put("referenceImageUris", JSONArray(r.referenceImageUris))
         put("groupIds", JSONArray(r.groupIds))
         r.groupId?.let { put("groupId", it) }
@@ -433,6 +435,8 @@ class LocalStore(context: Context) {
         sourceCameraName = o.optString("sourceCameraName").ifEmpty { null },
         sourceCameraModel = o.optString("sourceCameraModel").ifEmpty { null },
         sourceUsbId = o.optString("sourceUsbId").ifEmpty { null },
+        sourceUrl = o.optString("sourceUrl").ifEmpty { null },
+        sourceLabel = o.optString("sourceLabel").ifEmpty { null },
         referenceImageUris = o.referenceImageUris(),
         groupIds = o.optJSONArray("groupIds")?.toStringList()
             ?: o.optString("groupId").takeIf { it.isNotBlank() }?.let(::listOf)
@@ -505,6 +509,8 @@ class LocalStore(context: Context) {
         putOpt("sourceCameraName", r.sourceCameraName)
         putOpt("sourceCameraModel", r.sourceCameraModel)
         putOpt("sourceUsbId", r.sourceUsbId)
+        putOpt("sourceUrl", r.sourceUrl)
+        putOpt("sourceLabel", r.sourceLabel)
         put("referenceImageUris", JSONArray(r.referenceImageUris))
         put("groupIds", JSONArray(r.groupIds))
         putOpt("groupId", r.groupId)
@@ -561,6 +567,8 @@ class LocalStore(context: Context) {
         sourceCameraName = o.optString("sourceCameraName").ifEmpty { null },
         sourceCameraModel = o.optString("sourceCameraModel").ifEmpty { null },
         sourceUsbId = o.optString("sourceUsbId").ifEmpty { null },
+        sourceUrl = o.optString("sourceUrl").ifEmpty { null },
+        sourceLabel = o.optString("sourceLabel").ifEmpty { null },
         referenceImageUris = o.referenceImageUris(),
         groupIds = o.optJSONArray("groupIds")?.toStringList()
             ?: o.optString("groupId").takeIf { it.isNotBlank() }?.let(::listOf)

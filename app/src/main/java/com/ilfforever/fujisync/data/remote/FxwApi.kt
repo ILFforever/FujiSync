@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.remote
+package com.ilfforever.fujisync.data.remote
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,6 +11,7 @@ object FxwApi {
 
     private const val BASE = "https://fujixweekly.com/wp-json/wp/v2"
     private const val FIELDS = "id,slug,link,title,content,date"
+    private const val MAX_RESPONSE_BYTES = 4L * 1024L * 1024L
 
     private val IMG_SRC = Regex("""<img[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
     private val IMG_WIDTH = Regex("""width=["']?(\d+)["']?""", RegexOption.IGNORE_CASE)
@@ -37,7 +38,7 @@ object FxwApi {
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000
             conn.readTimeout = 15_000
-            conn.setRequestProperty("User-Agent", "FujiRecipes/${com.ilfforever.fujirecipes.BuildConfig.VERSION_NAME} Android")
+            conn.setRequestProperty("User-Agent", "FujiRecipes/${com.ilfforever.fujisync.BuildConfig.VERSION_NAME} Android")
             etag?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("If-None-Match", it) }
             lastModified?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("If-Modified-Since", it) }
             try {
@@ -57,7 +58,19 @@ object FxwApi {
                     val body = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                     throw IOException("Fuji X Weekly returned HTTP $code${body.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}")
                 }
-                val body = conn.inputStream.bufferedReader().readText()
+                val body = conn.inputStream.use { input ->
+                    val buffer = StringBuilder()
+                    val chunk = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var total = 0L
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        total += read
+                        if (total > MAX_RESPONSE_BYTES) throw IOException("Response too large (>${MAX_RESPONSE_BYTES / 1024 / 1024} MB)")
+                        buffer.append(String(chunk, 0, read, Charsets.UTF_8))
+                    }
+                    buffer.toString()
+                }
                 val arr = JSONArray(body)
                 val rawCount = arr.length()
                 val recipes = (0 until rawCount)

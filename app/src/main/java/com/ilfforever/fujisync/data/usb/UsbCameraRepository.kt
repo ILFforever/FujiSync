@@ -1,6 +1,6 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
-import com.ilfforever.fujirecipes.domain.repository.CameraRepository
+import com.ilfforever.fujisync.domain.repository.CameraRepository
 
 class UsbCameraRepository(
     private val scanner: UsbCameraScanner,

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.discover
+package com.ilfforever.fujisync.ui.discover
 
 import android.content.Context
 import androidx.compose.runtime.getValue
@@ -6,9 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ilfforever.fujirecipes.data.remote.FxwApi
-import com.ilfforever.fujirecipes.data.remote.FxwRecipe
-import com.ilfforever.fujirecipes.data.remote.FxwRepository
+import com.ilfforever.fujisync.data.remote.FxwApi
+import com.ilfforever.fujisync.data.remote.FxwRecipe
+import com.ilfforever.fujisync.data.remote.FxwRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job

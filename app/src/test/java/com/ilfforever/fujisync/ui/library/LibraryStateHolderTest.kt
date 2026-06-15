@@ -1,13 +1,14 @@
-package com.ilfforever.fujirecipes.ui.library
+package com.ilfforever.fujisync.ui.library
 
 import android.content.Context
 import app.cash.turbine.test
-import com.ilfforever.fujirecipes.data.local.LocalStore
-import com.ilfforever.fujirecipes.data.ptp.CameraPresetName
-import com.ilfforever.fujirecipes.ui.model.DuplicateMatchKind
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeSource
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.data.local.LocalStore
+import com.ilfforever.fujisync.data.ptp.CameraPresetName
+import com.ilfforever.fujisync.data.remote.FxwRecipe
+import com.ilfforever.fujisync.ui.model.DuplicateMatchKind
+import com.ilfforever.fujisync.ui.model.LibraryRecipeSource
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -366,6 +367,45 @@ class LibraryStateHolderTest {
             assertEquals("to-keep", next.recipes.first().id)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ── Discover import ───────────────────────────────────────────────
+
+    @Test
+    fun `saveFromDiscover sets sourceUrl and sourceLabel on saved recipe`() = runTest {
+        val fxwRecipe = FxwRecipe(
+            id = 1,
+            slug = "test-recipe",
+            title = "Test Recipe",
+            postUrl = "https://fujixweekly.com/test-recipe",
+            date = "Jun 15, 2026",
+            params = mapOf("Film Simulation" to "Classic Chrome"),
+        )
+
+        holder.saveFromDiscover(fxwRecipe, "Test Recipe", includePhotos = false)
+
+        val saved = holder.state.value.recipes.first()
+        assertEquals("https://fujixweekly.com/test-recipe", saved.sourceUrl)
+        assertEquals("Fuji X Weekly", saved.sourceLabel)
+    }
+
+    @Test
+    fun `saveFromDiscover prepends recipe to library`() = runTest {
+        seed(recipe(id = "existing"))
+
+        val fxwRecipe = FxwRecipe(
+            id = 2,
+            slug = "new-recipe",
+            title = "New Recipe",
+            postUrl = "https://fujixweekly.com/new-recipe",
+            date = "Jun 15, 2026",
+            params = mapOf("Film Simulation" to "Velvia"),
+        )
+
+        holder.saveFromDiscover(fxwRecipe, "New Recipe", includePhotos = false)
+
+        assertEquals(2, holder.state.value.recipes.size)
+        assertEquals("New Recipe", holder.state.value.recipes.first().name)
     }
 
     // ── WB normalization utilities ────────────────────────────────────

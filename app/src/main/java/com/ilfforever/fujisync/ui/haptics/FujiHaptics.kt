@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.haptics
+package com.ilfforever.fujisync.ui.haptics
 
 import android.content.Context
 import android.os.Build

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.components
+package com.ilfforever.fujisync.ui.components
 
 import android.animation.ValueAnimator
 import androidx.activity.compose.BackHandler
@@ -42,16 +42,16 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.haptics.FujiHapticEffect
-import com.ilfforever.fujirecipes.ui.haptics.FujiHaptics
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.SheetBg
-import com.ilfforever.fujirecipes.ui.theme.SheetBorder
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
+import com.ilfforever.fujisync.ui.haptics.FujiHaptics
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.SheetBg
+import com.ilfforever.fujisync.ui.theme.SheetBorder
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

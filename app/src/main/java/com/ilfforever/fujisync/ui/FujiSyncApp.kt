@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -27,21 +27,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.ilfforever.fujirecipes.ui.camera.CameraCardUiModel
-import com.ilfforever.fujirecipes.ui.camera.CameraConnected
-import com.ilfforever.fujirecipes.ui.camera.ConnectGuide
-import com.ilfforever.fujirecipes.ui.components.AppHeader
-import com.ilfforever.fujirecipes.ui.discover.DiscoverScreen
-import com.ilfforever.fujirecipes.ui.haptics.FujiHaptics
-import com.ilfforever.fujirecipes.ui.library.LibraryScreen
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeSource
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.overlay.BackHandler
-import com.ilfforever.fujirecipes.ui.overlay.OverlayLayer
-import com.ilfforever.fujirecipes.ui.overlay.overlayStackOf
-import com.ilfforever.fujirecipes.ui.profile.ProfileScreen
-import com.ilfforever.fujirecipes.ui.theme.Bg
+import com.ilfforever.fujisync.ui.camera.CameraCardUiModel
+import com.ilfforever.fujisync.ui.camera.CameraConnected
+import com.ilfforever.fujisync.ui.camera.ConnectGuide
+import com.ilfforever.fujisync.ui.components.AppHeader
+import com.ilfforever.fujisync.ui.discover.DiscoverScreen
+import com.ilfforever.fujisync.ui.haptics.FujiHaptics
+import com.ilfforever.fujisync.ui.library.LibraryScreen
+import com.ilfforever.fujisync.ui.model.LibraryRecipeSource
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.overlay.BackHandler
+import com.ilfforever.fujisync.ui.overlay.OverlayLayer
+import com.ilfforever.fujisync.ui.overlay.overlayStackOf
+import com.ilfforever.fujisync.ui.profile.ProfileScreen
+import com.ilfforever.fujisync.ui.theme.Bg
 
 @Composable
 fun FujiSyncApp(
@@ -123,6 +123,7 @@ fun FujiSyncApp(
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showFxwSearchBench by remember { mutableStateOf(false) }
+    var showUsbReadWriteBench by remember { mutableStateOf(false) }
     var showWriteDelayBench by remember { mutableStateOf(false) }
     var showNameBench by remember { mutableStateOf(false) }
     var showReadSlotsBench by remember { mutableStateOf(false) }
@@ -226,6 +227,7 @@ fun FujiSyncApp(
         OverlayLayer(state.camera.rearrangingSlots) { }, // blocks back while rearranging camera slots
         OverlayLayer(showExifBench) { showExifBench = false },
         OverlayLayer(showFxwSearchBench) { showFxwSearchBench = false },
+        OverlayLayer(showUsbReadWriteBench) { showUsbReadWriteBench = false },
         OverlayLayer(showWriteDelayBench) { showWriteDelayBench = false },
         OverlayLayer(showNameBench) { showNameBench = false },
         OverlayLayer(showReadSlotsBench) { showReadSlotsBench = false },
@@ -340,6 +342,7 @@ fun FujiSyncApp(
                         onExploreDemo = onExploreDemo,
                         onOpenExifBench = { showExifBench = true },
                         onOpenFxwSearchBench = { showFxwSearchBench = true },
+                        onOpenUsbReadWriteBench = { showUsbReadWriteBench = true },
                         onOpenWriteDelayBench = { showWriteDelayBench = true },
                         onOpenNameBench = { showNameBench = true },
                         onOpenReadSlotsBench = { showReadSlotsBench = true },
@@ -370,6 +373,7 @@ fun FujiSyncApp(
                     cameraDetail = cameraDetail,
                     showExifBench = showExifBench,
                     showFxwSearchBench = showFxwSearchBench,
+                    showUsbReadWriteBench = showUsbReadWriteBench,
                     showWriteDelayBench = showWriteDelayBench,
                     showNameBench = showNameBench,
                     showReadSlotsBench = showReadSlotsBench,
@@ -406,6 +410,7 @@ fun FujiSyncApp(
                     onDuplicateDismiss = onDuplicateDismiss,
                     onExifBenchClose = { showExifBench = false },
                     onFxwSearchBenchClose = { showFxwSearchBench = false },
+                    onUsbReadWriteBenchClose = { showUsbReadWriteBench = false },
                     onWriteDelayBenchClose = { showWriteDelayBench = false },
                     onNameBenchClose = { showNameBench = false },
                     onReadSlotsBenchClose = { showReadSlotsBench = false },
@@ -513,7 +518,7 @@ fun FujiSyncApp(
                     Text(log,
                         color = androidx.compose.ui.graphics.Color(0xFFCCCCCC),
                         fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp),
-                        fontFamily = com.ilfforever.fujirecipes.ui.theme.MonoFamily,
+                        fontFamily = com.ilfforever.fujisync.ui.theme.MonoFamily,
                         lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp),
                     )
                     Spacer(Modifier.height(12.dp))

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.update
+package com.ilfforever.fujisync.data.update
 
 import android.content.Context
 import android.net.Uri

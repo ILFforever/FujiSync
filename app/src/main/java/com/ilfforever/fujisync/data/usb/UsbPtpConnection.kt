@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
@@ -6,12 +6,12 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import com.ilfforever.fujirecipes.data.ptp.PtpContainer
-import com.ilfforever.fujirecipes.data.ptp.PtpConstants
-import com.ilfforever.fujirecipes.data.ptp.PtpProtocolException
-import com.ilfforever.fujirecipes.data.ptp.PtpTransaction
-import com.ilfforever.fujirecipes.data.ptp.buildCommandPacket
-import com.ilfforever.fujirecipes.data.ptp.buildDataOutPacket
+import com.ilfforever.fujisync.data.ptp.PtpContainer
+import com.ilfforever.fujisync.data.ptp.PtpConstants
+import com.ilfforever.fujisync.data.ptp.PtpProtocolException
+import com.ilfforever.fujisync.data.ptp.PtpTransaction
+import com.ilfforever.fujisync.data.ptp.buildCommandPacket
+import com.ilfforever.fujisync.data.ptp.buildDataOutPacket
 import java.util.concurrent.atomic.AtomicInteger
 
 class UsbPtpConnection(

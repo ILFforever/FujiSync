@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.ptp
+package com.ilfforever.fujisync.data.ptp
 
 object PtpConstants {
     const val FUJI_VENDOR_ID = 0x04CB

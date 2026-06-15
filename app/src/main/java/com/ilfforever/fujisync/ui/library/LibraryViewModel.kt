@@ -1,13 +1,13 @@
-package com.ilfforever.fujirecipes.ui.library
+package com.ilfforever.fujisync.ui.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ilfforever.fujirecipes.domain.model.canonicalFilmSimLabel
-import com.ilfforever.fujirecipes.ui.LibraryUiState
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupStyle
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupUiModel
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.sourceCameraDisplayName
+import com.ilfforever.fujisync.domain.model.canonicalFilmSimLabel
+import com.ilfforever.fujisync.ui.LibraryUiState
+import com.ilfforever.fujisync.ui.model.LibraryGroupStyle
+import com.ilfforever.fujisync.ui.model.LibraryGroupUiModel
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.sourceCameraDisplayName
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

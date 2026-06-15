@@ -1,25 +1,25 @@
-package com.ilfforever.fujirecipes.ui.library
+package com.ilfforever.fujisync.ui.library
 
 import android.content.Context
 import android.net.Uri
-import com.ilfforever.fujirecipes.data.local.LocalStore
-import com.ilfforever.fujirecipes.data.ptp.CameraPresetName
-import com.ilfforever.fujirecipes.data.remote.FxwRecipe
-import com.ilfforever.fujirecipes.domain.model.canonicalFilmSimLabel
-import com.ilfforever.fujirecipes.di.ApplicationScope
-import com.ilfforever.fujirecipes.ui.LibraryUiState
-import com.ilfforever.fujirecipes.ui.UiTimings
-import com.ilfforever.fujirecipes.ui.model.DuplicateDialogState
-import com.ilfforever.fujirecipes.ui.model.DuplicateMatch
-import com.ilfforever.fujirecipes.ui.model.DuplicateMatchKind
-import com.ilfforever.fujirecipes.ui.model.SaveAllReport
-import com.ilfforever.fujirecipes.ui.model.SaveAllSkipped
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupStyle
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupUiModel
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeSource
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.SampleData
+import com.ilfforever.fujisync.data.local.LocalStore
+import com.ilfforever.fujisync.data.ptp.CameraPresetName
+import com.ilfforever.fujisync.data.remote.FxwRecipe
+import com.ilfforever.fujisync.domain.model.canonicalFilmSimLabel
+import com.ilfforever.fujisync.di.ApplicationScope
+import com.ilfforever.fujisync.ui.LibraryUiState
+import com.ilfforever.fujisync.ui.UiTimings
+import com.ilfforever.fujisync.ui.model.DuplicateDialogState
+import com.ilfforever.fujisync.ui.model.DuplicateMatch
+import com.ilfforever.fujisync.ui.model.DuplicateMatchKind
+import com.ilfforever.fujisync.ui.model.SaveAllReport
+import com.ilfforever.fujisync.ui.model.SaveAllSkipped
+import com.ilfforever.fujisync.ui.model.LibraryGroupStyle
+import com.ilfforever.fujisync.ui.model.LibraryGroupUiModel
+import com.ilfforever.fujisync.ui.model.LibraryRecipeSource
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.SampleData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +60,15 @@ object LibraryRecipeName {
         CameraPresetName.sanitize(raw).lowercase(Locale.US)
 }
 
+/**
+ * Singleton holder for all library mutations (CRUD, duplicates, groups, favorites, persistence).
+ *
+ * Uses an [ApplicationScope] [CoroutineScope] that lives as long as the process.
+ * This is intentional: a @Singleton outlives any single Activity or ViewModel, so its
+ * coroutine scope must also be process-scoped. The [SupervisorJob] ensures one failed
+ * child coroutine doesn't cancel siblings. When the Android process is killed, all
+ * coroutines are terminated by the runtime — no explicit cancellation is needed.
+ */
 @Singleton
 class LibraryStateHolder @Inject constructor(
     @ApplicationContext private val appContext: Context,
@@ -73,9 +82,14 @@ class LibraryStateHolder @Inject constructor(
 
     fun load() {
         scope.launch {
-            val (library, prefs) = withContext(Dispatchers.IO) {
-                localStore.loadLibrary() to localStore.loadLibraryViewPrefs()
-            }
+            val library = runCatching {
+                withContext(Dispatchers.IO) { localStore.loadLibrary() }
+            }.onFailure {
+                _state.update { s -> s.copy(loadError = "Your recipe library could not be loaded. The data file may be corrupted.") }
+            }.getOrNull()
+
+            val prefs = withContext(Dispatchers.IO) { localStore.loadLibraryViewPrefs() }
+
             if (library != null) {
                 _state.update {
                     it.copy(
@@ -690,6 +704,8 @@ class LibraryStateHolder @Inject constructor(
             tone = normalized.filterKeys { it in toneKeys },
             wb = normalized.filterKeys { it in wbKeys },
             referenceImageUris = referenceUris,
+            sourceUrl = postUrl,
+            sourceLabel = "Fuji X Weekly",
             isoMin = isoMin,
             isoMax = isoMax,
             exposureCompMin = ecMin,

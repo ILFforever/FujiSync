@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.remote
+package com.ilfforever.fujisync.data.remote
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

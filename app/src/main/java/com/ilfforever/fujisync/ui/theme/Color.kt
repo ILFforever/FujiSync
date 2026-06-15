@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.theme
+package com.ilfforever.fujisync.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,45 +1,25 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import android.content.Context
 import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbManager
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
-import com.ilfforever.fujirecipes.BuildConfig
-import com.ilfforever.fujirecipes.data.exif.FujiExifReader
-import com.ilfforever.fujirecipes.data.ocr.OcrRecipeParser
-import com.ilfforever.fujirecipes.data.exif.toPreset
-import com.ilfforever.fujirecipes.data.local.LocalStore
-import com.ilfforever.fujirecipes.data.remote.FxwRecipe
-import com.ilfforever.fujirecipes.data.update.AppUpdateRelease
-import com.ilfforever.fujirecipes.data.update.GitHubReleaseUpdater
-import com.ilfforever.fujirecipes.data.update.isRemoteVersionNewer
-import com.ilfforever.fujirecipes.data.usb.CameraHeartbeat
-import com.ilfforever.fujirecipes.data.usb.CameraUsbMode
-import com.ilfforever.fujirecipes.data.usb.FujiPtpProbe
-import com.ilfforever.fujirecipes.data.usb.FujiPtpProbeResult
-import com.ilfforever.fujirecipes.data.usb.FujiRecipeCamera
-import com.ilfforever.fujirecipes.data.usb.UsbPtpConnection
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
-import com.ilfforever.fujirecipes.domain.repository.CameraRepository
-import com.ilfforever.fujirecipes.ui.library.LibraryStateHolder
-import com.ilfforever.fujirecipes.ui.model.AppSettings
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupUiModel
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeSource
-import com.ilfforever.fujirecipes.ui.model.SaveAllReport
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.model.SmartRefResult
-import com.ilfforever.fujirecipes.ui.model.SlotBackupMeta
-import com.ilfforever.fujirecipes.ui.model.SlotBackupSet
-import com.ilfforever.fujirecipes.ui.model.toPreset
-import com.ilfforever.fujirecipes.ui.model.toUiModel
-import kotlinx.coroutines.Job
+import com.ilfforever.fujisync.BuildConfig
+import com.ilfforever.fujisync.data.local.LocalStore
+import com.ilfforever.fujisync.data.remote.FxwRecipe
+import com.ilfforever.fujisync.data.update.AppUpdateRelease
+import com.ilfforever.fujisync.data.update.GitHubReleaseUpdater
+import com.ilfforever.fujisync.data.update.isRemoteVersionNewer
+import com.ilfforever.fujisync.ui.library.LibraryStateHolder
+import com.ilfforever.fujisync.ui.model.LibraryGroupUiModel
+import com.ilfforever.fujisync.ui.model.LibraryRecipeSource
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.toUiModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -48,10 +28,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -93,25 +71,13 @@ internal object UiTimings {
 @HiltViewModel
 class MainViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val usbManager: UsbManager,
-    private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val localStore: LocalStore,
-    private val heartbeat: CameraHeartbeat,
     private val libraryHolder: LibraryStateHolder,
     private val releaseUpdater: GitHubReleaseUpdater,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FujiSyncUiState())
     val uiState: StateFlow<FujiSyncUiState> = _uiState.asStateFlow()
-
-    // DEBUG: rearrange flow log
-    private val _rearrangeDebugLog = MutableStateFlow("")
-    val rearrangeDebugLog: StateFlow<String> = _rearrangeDebugLog.asStateFlow()
-    private fun rdbg(msg: String) {
-        val ts = System.currentTimeMillis() % 100000
-        _rearrangeDebugLog.value += "[$ts] $msg\n"
-    }
 
     private val _events = MutableSharedFlow<MainViewModelEvent>(extraBufferCapacity = 4)
     val events: SharedFlow<MainViewModelEvent> = _events.asSharedFlow()
@@ -121,10 +87,8 @@ class MainViewModel @Inject constructor(
 
     private var pendingReferenceTarget: ReferenceImageTarget? = null
     private var pendingGroupImageTarget: String? = null
-    private var heartbeatJob: Job? = null
 
     init {
-        refreshDevices()
         loadPersistedState()
         observeLibraryState()
     }
@@ -140,505 +104,19 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    // ── USB / connection ──────────────────────────────────────────────
-
-    fun refreshDevices() {
-        val devices = repository.scanUsb()
-        if (devices.none { it.mode == CameraUsbMode.Ptp }) {
-            stopHeartbeat()
-            _uiState.update { it.copy(camera = it.camera.copy(connected = false)) }
-        }
-    }
-
-    fun onReconnect() {
-        val state = _uiState.value
-        if (state.camera.connected) {
-            val ptpDevice = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-            if (ptpDevice == null) {
-                _uiState.update {
-                    it.copy(
-                        camera = it.camera.copy(
-                            connected = false,
-                            cameraModel = "",
-                            firmware = "",
-                            battery = "",
-                            slots = emptyList(),
-                            readingSlotIndex = -1,
-                            scanError = "Camera not found. Reconnect the USB cable.",
-                        ),
-                    )
-                }
-                return
-            }
-            if (!usbManager.hasPermission(ptpDevice.device)) {
-                _events.tryEmit(MainViewModelEvent.RequestUsbPermission(ptpDevice.device))
-                return
-            }
-            _uiState.update {
-                it.copy(camera = it.camera.copy(readingSlots = true, readingSlotIndex = -1, slots = emptyList(), scanError = null, isRearrangeValidation = false))
-            }
-            readAllSlots(ptpDevice.device)
-            return
-        }
-
-        _uiState.update { it.copy(camera = it.camera.copy(scanning = true, scanError = null)) }
-        viewModelScope.launch {
-            val devices = withContext(Dispatchers.IO) { repository.scanUsb() }
-            val ptpDevice = devices.firstOrNull { it.mode == CameraUsbMode.Ptp }
-            if (ptpDevice == null) {
-                val fujiMode = devices.firstOrNull()?.mode
-                val message = when (fujiMode) {
-                    CameraUsbMode.CardReader -> "Camera is connected in card reader mode. Set USB mode to USB RAW CONV. / Backup Restore, then reconnect."
-                    CameraUsbMode.Other -> "Fujifilm camera found, but it is not exposing a PTP recipe interface. Set USB mode to USB RAW CONV. / Backup Restore."
-                    CameraUsbMode.NotPlugged, null -> "No camera found. Make sure USB mode is set to USB RAW CONV."
-                    CameraUsbMode.Ptp -> "No camera found. Make sure USB mode is set to USB RAW CONV."
-                }
-                _uiState.update { it.copy(camera = it.camera.copy(scanning = false, scanError = message)) }
-                return@launch
-            }
-            if (!usbManager.hasPermission(ptpDevice.device)) {
-                _uiState.update { it.copy(camera = it.camera.copy(scanning = false)) }
-                _events.tryEmit(MainViewModelEvent.RequestUsbPermission(ptpDevice.device))
-                return@launch
-            }
-            probeDevice(ptpDevice.device)
-        }
-    }
-
-    fun onUsbPermissionResult(device: UsbDevice, granted: Boolean) {
-        if (granted) {
-            probeDevice(device)
-        } else {
-            _uiState.update { it.copy(camera = it.camera.copy(scanning = false, scanError = "USB permission denied."), writeBusy = false) }
-        }
-    }
-
-    fun probeDevice(device: UsbDevice) {
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching { FujiPtpProbe(connectionFactory).probe(device) }
-                    .getOrElse { FujiPtpProbeResult.NotReady(reason = it.message ?: "Probe failed.") }
-            }
-            when (result) {
-                is FujiPtpProbeResult.Ready -> {
-                    val model = result.deviceInfo.model.ifBlank { "Fujifilm" }
-                    val serial = result.bestSerial
-                    val fw = result.deviceInfo.deviceVersion.ifBlank { "—" }
-                    _uiState.update { state ->
-                        val updatedLabels = if (serial.isNotBlank() && serial !in state.camera.cameraLabels) {
-                            state.camera.cameraLabels + (serial to model)
-                        } else {
-                            state.camera.cameraLabels
-                        }
-                        val updatedModels = if (serial.isNotBlank()) {
-                            state.camera.cameraModels + (serial to model)
-                        } else {
-                            state.camera.cameraModels
-                        }
-                        val updatedFirmwares = if (serial.isNotBlank() && fw != "—") {
-                            state.camera.cameraFirmwares + (serial to fw)
-                        } else {
-                            state.camera.cameraFirmwares
-                        }
-                        state.copy(
-                            camera = state.camera.copy(
-                                connected = true,
-                                scanning = false,
-                                readingSlots = true,
-                                cameraModel = model,
-                                cameraSerial = serial,
-                                battery = result.batteryPercent?.let { pct -> "$pct%" } ?: "—",
-                                firmware = fw,
-                                slots = emptyList(),
-                                cameraLabels = updatedLabels,
-                                cameraModels = updatedModels,
-                                cameraFirmwares = updatedFirmwares,
-                                isRearrangeValidation = false,
-                            ),
-                        )
-                    }
-                    if (serial.isNotBlank()) {
-                        persistCameraLabels()
-                        persistCameraModels()
-                        persistCameraFirmwares()
-                    }
-                    startHeartbeat(device)
-                    readAllSlots(device)
-                }
-                is FujiPtpProbeResult.NotReady -> {
-                    _uiState.update { it.copy(camera = it.camera.copy(connected = false, scanning = false, scanError = result.reason)) }
-                }
-            }
-        }
-    }
-
-    private fun readAllSlots(device: UsbDevice) {
-        viewModelScope.launch {
-            var failCount = 0
-
-            heartbeat.usbMutex.withLock {
-                val conn = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val c = connectionFactory.open(device) ?: return@runCatching null
-                        if (!c.openSession()) { c.close(); return@runCatching null }
-                        c
-                    }.getOrNull()
-                }
-
-                if (conn == null) {
-                    _uiState.update {
-                        it.copy(
-                            camera = it.camera.copy(
-                                readingSlots = false,
-                                readingSlotIndex = -1,
-                                scanError = "Could not open camera for reading.",
-                            ),
-                        )
-                    }
-                    return@withLock
-                }
-
-                conn.use {
-                    val readSlots = mutableListOf<RecipeUiModel>()
-                    for ((idx, slot) in CameraSlot.entries.withIndex()) {
-                        _uiState.update { it.copy(camera = it.camera.copy(readingSlotIndex = idx)) }
-                        val preset = withContext(Dispatchers.IO) {
-                            runCatching { FujiRecipeCamera(conn).readPreset(slot) }.getOrNull()
-                        }
-                        val recipe = if (preset != null) {
-                            preset.toUiModel()
-                        } else {
-                            failCount++
-                            RecipeUiModel(slot = slot.label, name = "READ FAILED", sim = "—", pills = emptyList())
-                        }
-                        readSlots.add(recipe)
-                        _uiState.update { it.copy(camera = it.camera.copy(slots = readSlots.toList())) }
-                    }
-                    withContext(Dispatchers.IO) { runCatching { conn.closeSession() } }
-                }
-            }
-
-            _uiState.update {
-                it.copy(
-                    camera = it.camera.copy(
-                        readingSlots = false,
-                        readingSlotIndex = -1,
-                        isRestoringValidation = false,
-                        scanError = if (failCount > 0) "$failCount slot${if (failCount > 1) "s" else ""} could not be read." else null,
-                    ),
-                )
-            }
-        }
-    }
-
-    private fun startHeartbeat(device: UsbDevice) {
-        stopHeartbeat()
-        heartbeat.reset()
-        heartbeatJob = viewModelScope.launch {
-            launch { heartbeat.monitor(device) }
-            launch {
-                heartbeat.slots.collect { presets ->
-                    if (presets.isEmpty()) return@collect
-                    _uiState.update { state ->
-                        state.copy(
-                            camera = state.camera.copy(
-                                slots = presets.map { it.toUiModel() },
-                            ),
-                        )
-                    }
-                }
-            }
-            heartbeat.alive.drop(1).collect { alive ->
-                if (!alive && _uiState.value.camera.connected) {
-                    _uiState.update {
-                        it.copy(
-                            camera = it.camera.copy(
-                                connected = false,
-                                scanError = "Camera disconnected. Reconnect the USB cable.",
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun stopHeartbeat() {
-        heartbeatJob?.cancel()
-        heartbeatJob = null
-        heartbeat.reset()
-    }
-
-    // ── Write ─────────────────────────────────────────────────────────
-
-    fun handleWrite() {
-        val state = _uiState.value
-        val recipe = state.detailRecipe ?: state.camera.slots.getOrNull(state.camera.selectedSlotIdx) ?: return
-        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-
-        _uiState.update { it.copy(writeBusy = true) }
-
-        if (selected == null || !state.camera.connected) {
-            _uiState.update { it.copy(writeBusy = false) }
-            return
-        }
-
-        if (!usbManager.hasPermission(selected.device)) {
-            _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
-            return
-        }
-
-        val targetSlotLabel = recipe.slot.ifEmpty { "C1" }
-        val targetSlot = CameraSlot.entries.firstOrNull { it.label == targetSlotLabel } ?: CameraSlot.C1
-
-        viewModelScope.launch {
-            val writeResult = heartbeat.usbMutex.withLock {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val connection = connectionFactory.open(selected.device)
-                            ?: error("Unable to open the camera's PTP USB interface.")
-                        connection.use {
-                            check(connection.openSession()) { "OpenSession rejected." }
-                            try {
-                                FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs).writePreset(recipe.toPreset(targetSlot))
-                            } finally {
-                                connection.closeSession()
-                            }
-                        }
-                    }
-                }
-            }
-            if (writeResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        writeBusy = false,
-                        camera = it.camera.copy(scanError = writeResult.exceptionOrNull()?.message ?: "Write failed."),
-                    )
-                }
-                return@launch
-            }
-            val updatedRecipe = recipe.copy(slot = targetSlot.label)
-            _uiState.update {
-                it.copy(
-                    writeBusy    = false,
-                    detailRecipe = null,
-                    camera       = it.camera.copy(slots = it.camera.slots.replaceSlot(targetSlot, updatedRecipe)),
-                    writeToast   = WriteToastState(slot = targetSlotLabel, name = recipe.name),
-                )
-            }
-            delay(UiTimings.TOAST_DISMISS_MS)
-            _uiState.update { it.copy(writeToast = null) }
-        }
-    }
-
-    fun handleWriteToSlot(targetSlot: String) {
-        val state = _uiState.value
-        val recipe = state.detailRecipe ?: return
-        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-
-        _uiState.update { it.copy(writeBusy = true) }
-
-        if (selected == null || !state.camera.connected) {
-            _uiState.update { it.copy(writeBusy = false) }
-            return
-        }
-
-        if (!usbManager.hasPermission(selected.device)) {
-            _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
-            return
-        }
-
-        val slot = CameraSlot.entries.firstOrNull { it.label == targetSlot } ?: CameraSlot.C1
-
-        viewModelScope.launch {
-            val writeResult = heartbeat.usbMutex.withLock {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val connection = connectionFactory.open(selected.device)
-                            ?: error("Unable to open the camera's PTP USB interface.")
-                        connection.use {
-                            check(connection.openSession()) { "OpenSession rejected." }
-                            try {
-                                FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs).writePreset(recipe.toPreset(slot))
-                            } finally {
-                                connection.closeSession()
-                            }
-                        }
-                    }
-                }
-            }
-            if (writeResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        writeBusy = false,
-                        camera = it.camera.copy(scanError = writeResult.exceptionOrNull()?.message ?: "Write failed."),
-                    )
-                }
-                return@launch
-            }
-            val updatedRecipe = recipe.copy(slot = slot.label, libraryId = null)
-            _uiState.update {
-                it.copy(
-                    writeBusy    = false,
-                    detailRecipe = null,
-                    camera       = it.camera.copy(slots = it.camera.slots.replaceSlot(slot, updatedRecipe)),
-                    writeToast   = WriteToastState(slot = targetSlot, name = recipe.name),
-                )
-            }
-            delay(UiTimings.TOAST_DISMISS_MS)
-            _uiState.update { it.copy(writeToast = null) }
-        }
-    }
-
-    /** Clears the rearrange validation panel once the user dismisses it. */
-    fun dismissRearrangeValidation() {
-        _uiState.update { it.copy(camera = it.camera.copy(isRearrangeValidation = false)) }
-    }
-
-    fun handleRearrangeCameraSlots(nextSlots: List<RecipeUiModel>) {
-        _rearrangeDebugLog.value = "" // reset on new rearrange
-        rdbg("START writes=${nextSlots.size} slots")
-        val state = _uiState.value
-        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-        val ordered = CameraSlot.entries.mapIndexedNotNull { index, slot ->
-            nextSlots.getOrNull(index)?.copy(slot = slot.label, libraryId = null)
-        }
-        if (ordered.size != CameraSlot.entries.size) { rdbg("ABORT ordered.size=${ordered.size}"); return }
-        val writes = ordered.mapIndexedNotNull { index, recipe ->
-            val current = state.camera.slots.getOrNull(index)
-            if (current != null && current.sameRecipeIgnoringSlot(recipe)) null else CameraSlot.entries[index] to recipe
-        }
-        if (writes.isEmpty()) { rdbg("ABORT no changes"); return }
-        rdbg("writes needed: ${writes.size} slots: ${writes.map { it.first.label }}")
-
-        if (selected == null || !state.camera.connected) {
-            rdbg("ABORT no camera")
-            _uiState.update {
-                it.copy(camera = it.camera.copy(scanError = "Connect camera before rearranging recipes."))
-            }
-            return
-        }
-
-        if (!usbManager.hasPermission(selected.device)) {
-            rdbg("ABORT no permission")
-            _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
-            return
-        }
-
-        val previouslySelected = state.camera.slots.getOrNull(state.camera.selectedSlotIdx)
-        rdbg("SET writeBusy=true rearrangingSlots=true")
-        _uiState.update {
-            it.copy(
-                writeBusy = true,
-                camera = it.camera.copy(
-                    scanError = null,
-                    rearrangingSlots = true,
-                    rearrangingSlotIndex = -1,
-                    rearrangingWriteIndex = -1,
-                    rearrangingWriteTotal = writes.size,
-                ),
-            )
-        }
-
-        viewModelScope.launch {
-            rdbg("LAUNCH acquiring usbMutex")
-            val writeResult = heartbeat.usbMutex.withLock {
-                rdbg("LOCKED usbMutex")
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val connection = connectionFactory.open(selected.device)
-                            ?: error("Unable to open the camera's PTP USB interface.")
-                        connection.use {
-                            check(connection.openSession()) { "OpenSession rejected." }
-                            try {
-                                val camera = FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs)
-                                writes.mapIndexedNotNull { index, (slot, recipe) ->
-                                    rdbg("WRITE ${slot.label} ($index/${writes.size})")
-                                    _uiState.update {
-                                        it.copy(
-                                            camera = it.camera.copy(
-                                                rearrangingSlotIndex = CameraSlot.entries.indexOf(slot),
-                                                rearrangingWriteIndex = index,
-                                            ),
-                                        )
-                                    }
-                                    val result = camera.writePreset(recipe.toPreset(slot))
-                                    if (result.isOk) null else slot.label
-                                }
-                            } finally {
-                                connection.closeSession()
-                            }
-                        }
-                    }
-                }
-            }
-            rdbg("RELEASED usbMutex")
-
-            writeResult.fold(
-                onSuccess = { failed ->
-                    val selectedIdx = previouslySelected
-                        ?.let { selectedRecipe -> ordered.indexOfFirst { it.sameRecipeIgnoringSlot(selectedRecipe) } }
-                        ?.takeIf { it >= 0 }
-                        ?: _uiState.value.camera.selectedSlotIdx.coerceIn(0, ordered.lastIndex)
-                    val errorMsg = if (failed.isNotEmpty()) {
-                        rdbg("PARTIAL FAIL slots: $failed — proceeding to validation")
-                        failed.joinToString(prefix = "Write errors on ", postfix = ". Validating what landed.")
-                    } else {
-                        rdbg("SUCCESS → SET writeBusy=false isRearrangeValidation=true readingSlots=true")
-                        null
-                    }
-                    _uiState.update {
-                        it.copy(
-                            writeBusy = false,
-                            camera = it.camera.copy(
-                                slots = emptyList(),
-                                selectedSlotIdx = selectedIdx,
-                                scanError = errorMsg,
-                                rearrangingSlots = false,
-                                rearrangingSlotIndex = -1,
-                                rearrangingWriteIndex = -1,
-                                rearrangingWriteTotal = 0,
-                                readingSlots = true,
-                                readingSlotIndex = -1,
-                                isRearrangeValidation = true,
-                            ),
-                        )
-                    }
-                    rdbg("calling readAllSlots")
-                    readAllSlots(selected.device)
-                    rdbg("readAllSlots returned")
-                },
-                onFailure = { error ->
-                    rdbg("EXCEPTION: ${error.message}")
-                    _uiState.update {
-                        it.copy(
-                            writeBusy = false,
-                            camera = it.camera.copy(
-                                scanError = error.message ?: "Rearrange failed.",
-                                rearrangingSlots = false,
-                                rearrangingSlotIndex = -1,
-                                rearrangingWriteIndex = -1,
-                                rearrangingWriteTotal = 0,
-                            ),
-                        )
-                    }
-                },
-            )
-        }
-    }
+    // ── USB / connection (delegated to CameraViewModel) ─────────────
 
     // ── Library save / duplicate (delegates to LibraryStateHolder) ────
 
-    fun handleSaveToLibrary(source: LibraryRecipeSource) {
-        val state = _uiState.value
-        val recipe = state.detailRecipe ?: state.camera.slots.getOrNull(state.camera.selectedSlotIdx) ?: return
-        libraryHolder.addRecipe(recipe, source)
+    fun handleSaveToLibrary(source: LibraryRecipeSource, recipe: RecipeUiModel?) {
+        val target = recipe ?: _uiState.value.detailRecipe ?: return
+        libraryHolder.addRecipe(target, source)
     }
 
-    fun handleSaveAllSlotsToLibrary(source: LibraryRecipeSource) {
-        val slots = _uiState.value.camera.slots.filter { it.name != "READ FAILED" && it.sim.isNotBlank() }
-        if (slots.isEmpty()) return
-        val report = libraryHolder.addRecipesBatch(slots, source)
+    fun handleSaveAllSlotsToLibrary(source: LibraryRecipeSource, slots: List<RecipeUiModel>) {
+        val validSlots = slots.filter { it.name != "READ FAILED" && it.sim.isNotBlank() }
+        if (validSlots.isEmpty()) return
+        val report = libraryHolder.addRecipesBatch(validSlots, source)
         if (report.hasSkipped) {
             _uiState.update { it.copy(saveAllSlotsConfirmed = true, saveAllReport = report) }
         } else {
@@ -687,52 +165,20 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    // ── EXIF import ───────────────────────────────────────────────────
+    // ── Import (delegated to ImportViewModel) ───────────────────────
+
+    fun handleImportedRecipe(recipe: RecipeUiModel, referenceImageUris: List<String> = emptyList()) {
+        _uiState.update {
+            it.copy(
+                creatingRecipe = false,
+                editorRecipe = recipe,
+                editorReferenceImageUris = referenceImageUris,
+            )
+        }
+    }
 
     fun handleLaunchExifImport() {
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchExifImagePicker) }
-    }
-
-    fun handleExifImportResult(uri: android.net.Uri) {
-        _uiState.update { it.copy(exifImportLoading = true, exifImportError = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val started = System.currentTimeMillis()
-            val recipe = runCatching { FujiExifReader.readRecipe(appContext, uri) }
-            delay(minLoadMs(started))
-            when {
-                recipe.isFailure -> _uiState.update {
-                    it.copy(
-                        exifImportLoading = false,
-                        exifImportError = "Couldn't read this file. Make sure it's an unedited JPEG from a Fujifilm camera.",
-                    )
-                }
-                recipe.getOrNull() == null -> _uiState.update {
-                    it.copy(
-                        exifImportLoading = false,
-                        exifImportError = "No Fujifilm recipe found in this file. Use an original JPEG shot on an X-series camera.",
-                    )
-                }
-                else -> {
-                    val exif = recipe.getOrNull() ?: return@launch
-                    val localImageUri = runCatching { localStore.copyReferenceImage(uri) }.getOrNull()
-                    val imageName = imageDisplayName(uri)
-                    val uiModel = exif.toPreset("New Recipe").toUiModel().copy(
-                        slot = "",
-                        description = "Scanned from $imageName",
-                        referenceImageUris = listOfNotNull(localImageUri),
-                    )
-                    _uiState.update {
-                        it.copy(
-                            exifImportLoading = false,
-                            exifImportError = null,
-                            creatingRecipe = false,
-                            editorRecipe = uiModel,
-                            editorReferenceImageUris = uiModel.referenceImageUris,
-                        )
-                    }
-                }
-            }
-        }
     }
 
     fun handleExifImportDismiss() {
@@ -746,266 +192,30 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchShutterCheckPicker) }
     }
 
-    fun handleShutterCheckResult(uri: android.net.Uri) {
-        _uiState.update { it.copy(shutterCheckLoading = true, shutterCheckError = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val started = System.currentTimeMillis()
-            val count = runCatching { FujiExifReader.readShutterCount(appContext, uri) }
-            delay(minLoadMs(started))
-            _uiState.update {
-                val n = count.getOrNull()
-                if (n == null) {
-                    it.copy(
-                        shutterCheckLoading = false,
-                        shutterCheckError = "No shutter count found. Use an unedited JPEG taken on a Fujifilm X-series camera.",
-                    )
-                } else {
-                    it.copy(shutterCheckLoading = false, shutterCount = n)
-                }
-            }
-        }
-    }
-
     fun handleShutterCheckDismiss() {
         _uiState.update { it.copy(shutterCount = null, shutterCheckLoading = false, shutterCheckError = null) }
     }
 
-    // ── Smart Reference ───────────────────────────────────────────────
+    // ── Smart Reference (delegated to ImportViewModel) ────────────────
 
     fun handleLaunchSmartRef() {
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchSmartRefPicker) }
     }
 
-    fun handleSmartRefResult(uri: android.net.Uri) {
-        _uiState.update { it.copy(smartRefLoading = true, smartRefError = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val started = System.currentTimeMillis()
-            val recipe = runCatching { FujiExifReader.readRecipe(appContext, uri) }
-            delay(minLoadMs(started))
-            when {
-                recipe.isFailure || recipe.getOrNull() == null -> _uiState.update {
-                    it.copy(
-                        smartRefLoading = false,
-                        smartRefError = "Couldn't read recipe data from this file. Use an unedited JPEG from a Fujifilm X-series camera.",
-                    )
-                }
-                else -> {
-                    val exif = recipe.getOrNull() ?: return@launch
-                    val uiModel = exif.toPreset("").toUiModel().copy(slot = "")
-                    val threshold = _uiState.value.settings.smartRefSimilarityPct / 100f
-                    val match = libraryHolder.findDuplicate(uiModel, threshold)
-                    if (match == null) {
-                        _uiState.update {
-                            it.copy(
-                                smartRefLoading = false,
-                                smartRefError = "No matching recipe found in your library. The settings in this photo don't match any saved recipe.",
-                                smartRefPendingUri = uri,
-                                smartRefPendingRecipe = uiModel,
-                            )
-                        }
-                        return@launch
-                    }
-                    val existingRefUris = libraryHolder.referenceUrisFor(match.libraryRecipe.id)
-                    val localImageUri = runCatching { localStore.copyReferenceImage(uri) }.getOrNull()
-                    if (localImageUri == null) {
-                        _uiState.update {
-                            it.copy(
-                                smartRefLoading = false,
-                                smartRefError = "Couldn't copy the image. Please try again.",
-                            )
-                        }
-                        return@launch
-                    }
-                    // Hash the processed copy, not the original: stored reference images are
-                    // re-decoded/resized/re-compressed by copyReferenceImage, so the original's
-                    // bytes never match a stored copy. Comparing processed-against-processed
-                    // (deterministic encode) lets duplicate detection actually fire.
-                    val isAlreadyRef = localStore.isExistingReferenceImage(
-                        android.net.Uri.parse(localImageUri),
-                        existingRefUris,
-                    )
-                    _uiState.update {
-                        it.copy(
-                            smartRefLoading = false,
-                            smartRefResult = SmartRefResult(
-                                matchedRecipe = match.libraryRecipe,
-                                matchKind = match.kind,
-                                localImageUri = localImageUri,
-                                isAlreadyRef = isAlreadyRef,
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    fun handleSmartRefConfirm() {
-        val result = _uiState.value.smartRefResult ?: return
-        _uiState.update { it.copy(smartRefResult = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val existing = libraryHolder.referenceUrisFor(result.matchedRecipe.id)
-            val uriToUse = localStore.deduplicateReferenceImage(result.localImageUri, existing)
-            libraryHolder.appendReferenceImage(result.matchedRecipe.id, uriToUse)
-            val name = result.matchedRecipe.name
-            _uiState.update { it.copy(toastMessage = "Image added to $name") }
-            delay(2_800)
-            _uiState.update { if (it.toastMessage?.startsWith("Image added") == true) it.copy(toastMessage = null) else it }
-        }
-    }
-
-    fun handleSmartRefConfirmAndContinue() {
-        val result = _uiState.value.smartRefResult ?: return
-        _uiState.update { it.copy(smartRefResult = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val existing = libraryHolder.referenceUrisFor(result.matchedRecipe.id)
-            val uriToUse = localStore.deduplicateReferenceImage(result.localImageUri, existing)
-            libraryHolder.appendReferenceImage(result.matchedRecipe.id, uriToUse)
-            val name = result.matchedRecipe.name
-            _uiState.update { it.copy(toastMessage = "Image added to $name") }
-            delay(2_800)
-            _uiState.update { if (it.toastMessage?.startsWith("Image added") == true) it.copy(toastMessage = null) else it }
-        }
-        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchSmartRefPicker) }
-    }
-
-    fun handleSmartRefDismissAndContinue() {
-        val result = _uiState.value.smartRefResult
-        if (result != null) {
-            viewModelScope.launch(Dispatchers.IO) {
-                runCatching { localStore.deleteReferenceImageFile(result.localImageUri) }
-            }
-        }
-        _uiState.update { it.copy(smartRefLoading = false, smartRefError = null, smartRefPendingUri = null, smartRefPendingRecipe = null, smartRefResult = null) }
-        viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchSmartRefPicker) }
-    }
-
-    fun handleSmartRefDismiss() {
-        val result = _uiState.value.smartRefResult
-        if (result != null) {
-            viewModelScope.launch(Dispatchers.IO) {
-                runCatching { localStore.deleteReferenceImageFile(result.localImageUri) }
-            }
-        }
-        _uiState.update { it.copy(smartRefLoading = false, smartRefError = null, smartRefPendingUri = null, smartRefPendingRecipe = null, smartRefResult = null) }
-    }
-
-    fun handleSmartRefCreateNew() {
-        val uri = _uiState.value.smartRefPendingUri ?: return
-        val pendingRecipe = _uiState.value.smartRefPendingRecipe
-        _uiState.update { it.copy(smartRefError = null, smartRefPendingUri = null, smartRefPendingRecipe = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val localUri = runCatching { localStore.copyReferenceImage(uri) }.getOrNull()
-            val uris = if (localUri != null) listOf(localUri.toString()) else emptyList()
-            val draft = pendingRecipe?.copy(libraryId = null, slot = "") ?: run {
-                _uiState.update { it.copy(creatingRecipe = true, editorRecipe = null, editorReferenceImageUris = uris) }
-                return@launch
-            }
-            _uiState.update { it.copy(creatingRecipe = false, editorRecipe = draft, editorReferenceImageUris = uris) }
-        }
-    }
-
-    // ── OCR / screenshot import ───────────────────────────────────────
+    // ── OCR / screenshot import (delegated to ImportViewModel) ────────
 
     fun handleLaunchOcrImport() {
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchOcrImagePicker) }
-    }
-
-    fun handleOcrImportResult(uri: android.net.Uri) {
-        _uiState.update { it.copy(ocrImportLoading = true, ocrImportError = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val started = System.currentTimeMillis()
-            var capturedRaw: String? = null
-            val result = runCatching {
-                val input = OcrRecipeParser.recognizeText(appContext, uri)
-                capturedRaw = input.mlText.text
-                OcrRecipeParser.parse(input)
-            }
-            delay(minLoadMs(started))
-            when {
-                result.isFailure -> _uiState.update {
-                    it.copy(
-                        ocrImportLoading = false,
-                        ocrImportError = "Couldn't read this image. Make sure it's a clear screenshot.",
-                        ocrRawText = capturedRaw,
-                        ocrParseResult = null,
-                    )
-                }
-                result.getOrNull() == null -> _uiState.update {
-                    it.copy(
-                        ocrImportLoading = false,
-                        ocrImportError = "No recipe settings found in this screenshot. Try a clearer image with visible parameter labels.",
-                        ocrRawText = capturedRaw,
-                        ocrParseResult = null,
-                    )
-                }
-                else -> {
-                    val parsed = result.getOrNull()!!
-                    val imageName = imageDisplayName(uri)
-                    val description = buildString {
-                        append("Scanned from $imageName")
-                        if (parsed.unmatchedFields.isNotEmpty()) {
-                            append("\nCouldn't read: ${parsed.unmatchedFields.joinToString(", ")} — please verify.")
-                        }
-                    }
-                    val name = parsed.suggestedName.ifBlank { "OCR Import" }
-                    // Round-trip through toPreset → toUiModel to compute correct pills.
-                    val preliminary = RecipeUiModel(
-                        slot    = "C1",
-                        name    = name,
-                        sim     = parsed.sim,
-                        pills   = emptyList(),
-                        effects = parsed.effects,
-                        tone    = parsed.tone,
-                        wb      = parsed.wb,
-                    )
-                    val uiModel = preliminary
-                        .toPreset(com.ilfforever.fujirecipes.domain.model.CameraSlot.C1)
-                        .toUiModel()
-                        .copy(slot = "", name = name, description = description)
-                    _uiState.update {
-                        it.copy(
-                            ocrImportLoading  = false,
-                            ocrImportError    = null,
-                            ocrRawText        = capturedRaw,
-                            ocrParseResult    = parsed,
-                            creatingRecipe    = false,
-                            editorRecipe      = uiModel,
-                            editorReferenceImageUris = emptyList(),
-                        )
-                    }
-                }
-            }
-        }
     }
 
     fun handleOcrImportDismiss() {
         _uiState.update { it.copy(ocrImportLoading = false, ocrImportError = null, ocrRawText = null, ocrParseResult = null) }
     }
 
-    // ── QR import ─────────────────────────────────────────────────────
+    // ── QR import (delegated to ImportViewModel) ──────────────────────
 
     fun handleLaunchQrImageImport() {
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchQrImagePicker) }
-    }
-
-    fun handleQrImportResult(uri: Uri) {
-        _uiState.update { it.copy(qrImportLoading = true, qrImportError = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            val started = System.currentTimeMillis()
-            val recipe = runCatching { com.ilfforever.fujirecipes.data.qr.RecipeQr.decodeBitmap(appContext, uri) }.getOrNull()
-            delay(minLoadMs(started, minMs = 700))
-            if (recipe == null) {
-                _uiState.update {
-                    it.copy(
-                        qrImportLoading = false,
-                        qrImportError = "No FujiSync recipe QR found. Make sure the QR code is sharp and fully visible.",
-                    )
-                }
-            } else {
-                handleQrImportRecipe(recipe)
-            }
-        }
     }
 
     fun handleQrImportRecipe(recipe: RecipeUiModel) {
@@ -1026,28 +236,13 @@ class MainViewModel @Inject constructor(
     }
 
     fun loadCaptureLog() {
-        val log = com.ilfforever.fujirecipes.capture.CaptureDiag.read(appContext)
+        val log = com.ilfforever.fujisync.capture.CaptureDiag.read(appContext)
         _uiState.update { it.copy(captureLog = log.ifBlank { "(log is empty)" }) }
     }
 
     fun clearCaptureLog() {
-        com.ilfforever.fujirecipes.capture.CaptureDiag.clear(appContext)
+        com.ilfforever.fujisync.capture.CaptureDiag.clear(appContext)
         _uiState.update { it.copy(captureLog = null) }
-    }
-
-    private fun minLoadMs(startedAt: Long, minMs: Long = 1400): Long =
-        (minMs - (System.currentTimeMillis() - startedAt)).coerceAtLeast(0L)
-
-    private fun imageDisplayName(uri: Uri): String {
-        appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (index >= 0) {
-                    cursor.getString(index)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-                }
-            }
-        }
-        return uri.lastPathSegment?.substringAfterLast('/')?.trim()?.takeIf { it.isNotBlank() } ?: "image"
     }
 
     // ── Reference images ──────────────────────────────────────────────
@@ -1232,6 +427,8 @@ class MainViewModel @Inject constructor(
                     sourceCameraName = normalizedRecipe.sourceCameraName,
                     sourceCameraModel = normalizedRecipe.sourceCameraModel,
                     sourceUsbId = normalizedRecipe.sourceUsbId,
+                    sourceUrl = normalizedRecipe.sourceUrl,
+                    sourceLabel = normalizedRecipe.sourceLabel,
                     referenceImageUris = normalizedRecipe.referenceImageUris,
                     groupIds = normalizedRecipe.groupIds,
                     group = groupLabel(normalizedRecipe.groupIds, groups),
@@ -1556,335 +753,7 @@ class MainViewModel @Inject constructor(
 
     fun handleLoadSampleLibrary() = libraryHolder.loadSampleLibrary()
 
-    // ── Profile actions ───────────────────────────────────────────────
-
-    fun handleExploreDemo() {
-        _uiState.update {
-            it.copy(
-                camera = it.camera.copy(
-                    connected = true,
-                    scanning = false,
-                    scanError = null,
-                    cameraModel = "X-H2S",
-                    firmware = "3.10",
-                    battery = "87%",
-                    slots = com.ilfforever.fujirecipes.ui.model.SampleData.slots,
-                    readingSlots = false,
-                    readingSlotIndex = -1,
-                ),
-            )
-        }
-    }
-
-    fun handleAddMockCamera() {
-        val mockModels = listOf("X-H2", "X-T5", "X-S20", "X-T50", "X-M5", "X-E5", "X100VI", "X-Pro3", "X-T30 III")
-        val existingCount = _uiState.value.camera.cameraLabels.size
-        val model = mockModels[existingCount % mockModels.size]
-        val serial = "MOCK-${UUID.randomUUID().toString().take(8).uppercase()}"
-        val firmware = "%.2f".format(1 + (existingCount % 5) * 0.1)
-        _uiState.update { state ->
-            state.copy(
-                camera = state.camera.copy(
-                    cameraLabels = state.camera.cameraLabels + (serial to model),
-                    cameraModels = state.camera.cameraModels + (serial to model),
-                    cameraFirmwares = state.camera.cameraFirmwares + (serial to firmware),
-                ),
-            )
-        }
-        persistCameraLabels()
-        persistCameraModels()
-        persistCameraFirmwares()
-    }
-
-    fun handleRenameCameraLabel(serial: String, label: String) {
-        if (serial.isBlank()) return
-        val trimmed = label.trim().ifBlank { "My Camera" }
-        val oldName = _uiState.value.camera.cameraLabels[serial]
-        _uiState.update { it.copy(camera = it.camera.copy(cameraLabels = it.camera.cameraLabels + (serial to trimmed))) }
-        persistCameraLabels()
-        if (oldName != null) libraryHolder.renameCameraSource(oldName, trimmed)
-    }
-
-    fun handleDeleteCamera(serial: String) {
-        if (serial.isBlank()) return
-        _uiState.update { state ->
-            state.copy(
-                camera = state.camera.copy(
-                    cameraLabels = state.camera.cameraLabels - serial,
-                    cameraModels = state.camera.cameraModels - serial,
-                    cameraFirmwares = state.camera.cameraFirmwares - serial,
-                )
-            )
-        }
-        persistCameraLabels()
-        persistCameraModels()
-        persistCameraFirmwares()
-    }
-
-    fun handleResetCameraLabel(serial: String) {
-        if (serial.isBlank()) return
-        val model = _uiState.value.camera.cameraModels[serial] ?: return
-        _uiState.update { it.copy(camera = it.camera.copy(cameraLabels = it.camera.cameraLabels + (serial to model))) }
-        persistCameraLabels()
-    }
-
-    fun handleBackupSlots(label: String) {
-        val state = _uiState.value
-        val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-
-        if (selected == null || !state.camera.connected) {
-            _uiState.update {
-                it.copy(camera = it.camera.copy(scanError = "Connect a camera before backing up slots."))
-            }
-            return
-        }
-
-        if (!usbManager.hasPermission(selected.device)) {
-            _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
-            return
-        }
-
-        val savedAt = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
-        val meta = SlotBackupMeta(
-            label = label.trim().ifBlank { "C1–C7 · $savedAt" },
-            savedAt = savedAt,
-            id = "slot-backup-${UUID.randomUUID()}",
-        )
-        viewModelScope.launch {
-            val startedAt = System.currentTimeMillis()
-            _uiState.update {
-                it.copy(
-                    camera = it.camera.copy(
-                        backingUpSlots = true,
-                        backingUpSlotIndex = -1,
-                        scanError = null,
-                    )
-                )
-            }
-
-            val readResult = heartbeat.usbMutex.withLock {
-                val conn = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val c = connectionFactory.open(selected.device) ?: return@runCatching null
-                        if (!c.openSession()) { c.close(); return@runCatching null }
-                        c
-                    }.getOrNull()
-                }
-
-                if (conn == null) {
-                    Result.failure(IllegalStateException("Could not open camera for backup."))
-                } else {
-                    conn.use {
-                        val readSlots = mutableListOf<RecipeUiModel>()
-                        val failedSlots = mutableListOf<String>()
-                        for ((idx, slot) in CameraSlot.entries.withIndex()) {
-                            _uiState.update { current ->
-                                current.copy(camera = current.camera.copy(backingUpSlotIndex = idx))
-                            }
-                            val preset = withContext(Dispatchers.IO) {
-                                runCatching { FujiRecipeCamera(conn).readPreset(slot) }.getOrNull()
-                            }
-                            if (preset != null) {
-                                readSlots += preset.toUiModel()
-                            } else {
-                                failedSlots += slot.label
-                            }
-                        }
-                        withContext(Dispatchers.IO) { runCatching { conn.closeSession() } }
-
-                        if (failedSlots.isEmpty()) {
-                            Result.success(readSlots.toList())
-                        } else {
-                            Result.failure(
-                                IllegalStateException(
-                                    "Could not back up ${failedSlots.joinToString(", ")}. Reconnect and try again.",
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
-
-            val result = readResult.mapCatching { slots ->
-                withContext(Dispatchers.IO) {
-                    localStore.saveSlotBackupSet(meta, slots)
-                    slots to localStore.loadSlotBackupSets()
-                }
-            }
-            val remainingAnimationMs = 900L - (System.currentTimeMillis() - startedAt)
-            if (remainingAnimationMs > 0L) delay(remainingAnimationMs)
-
-            result
-                .onSuccess { (slots, sets) ->
-                    _uiState.update {
-                        it.copy(
-                            camera = it.camera.copy(
-                                backingUpSlots = false,
-                                backingUpSlotIndex = -1,
-                                hasSlotBackup = sets.isNotEmpty(),
-                                slotBackupMeta = meta,
-                                slotBackupSlots = slots,
-                                slotBackupSets = sets,
-                                slots = slots,
-                            )
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _uiState.update {
-                        it.copy(
-                            camera = it.camera.copy(
-                                backingUpSlots = false,
-                                backingUpSlotIndex = -1,
-                                scanError = error.message ?: "Could not save backup set.",
-                            )
-                        )
-                    }
-                }
-        }
-    }
-
-    fun handleDeleteSlotBackup() {
-        val selectedId = _uiState.value.camera.slotBackupMeta?.id ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            localStore.deleteSlotBackup(selectedId)
-            val sets = localStore.loadSlotBackupSets()
-            val next = sets.firstOrNull()
-            _uiState.update {
-                it.copy(
-                    camera = it.camera.copy(
-                        hasSlotBackup = sets.isNotEmpty(),
-                        slotBackupMeta = next?.meta,
-                        slotBackupSlots = next?.slots,
-                        slotBackupSets = sets,
-                    )
-                )
-            }
-        }
-    }
-
-    fun handleRenameSlotBackup(newLabel: String) {
-        val meta = _uiState.value.camera.slotBackupMeta ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            localStore.renameSlotBackup(meta.id, newLabel)
-            val sets = localStore.loadSlotBackupSets()
-            val selected = sets.firstOrNull { it.meta.id == meta.id }
-            _uiState.update { state ->
-                state.copy(
-                    camera = state.camera.copy(
-                        slotBackupMeta = selected?.meta,
-                        slotBackupSlots = selected?.slots,
-                        slotBackupSets = sets,
-                    )
-                )
-            }
-        }
-    }
-
-    fun handleSelectSlotBackup(id: String) {
-        val selected = _uiState.value.camera.slotBackupSets.firstOrNull { it.meta.id == id } ?: return
-        _uiState.update { state ->
-            state.copy(camera = state.camera.copy(slotBackupMeta = selected.meta, slotBackupSlots = selected.slots))
-        }
-    }
-
-    fun handleRestoreSlots() {
-        viewModelScope.launch {
-            val backup = _uiState.value.camera.slotBackupSlots
-            if (backup.isNullOrEmpty()) return@launch
-
-            val state = _uiState.value
-            val selected = repository.scanUsb().firstOrNull { it.mode == CameraUsbMode.Ptp }
-            if (selected == null || !state.camera.connected) {
-                _uiState.update {
-                    it.copy(camera = it.camera.copy(scanError = "Connect camera before restoring a set."))
-                }
-                return@launch
-            }
-
-            if (!usbManager.hasPermission(selected.device)) {
-                _events.tryEmit(MainViewModelEvent.RequestUsbPermission(selected.device))
-                return@launch
-            }
-
-            _uiState.update {
-                it.copy(
-                    writeBusy = true,
-                    camera = it.camera.copy(
-                        scanError = null,
-                        restoringSlots = true,
-                        restoringSlotIndex = -1,
-                    ),
-                )
-            }
-
-            val backupBySlot = backup.associateBy { it.slot }
-            val orderedBackup = CameraSlot.entries.mapNotNull { slot ->
-                backupBySlot[slot.label]?.copy(slot = slot.label)
-            }
-            val failedSlots = heartbeat.usbMutex.withLock {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val connection = connectionFactory.open(selected.device)
-                            ?: error("Unable to open the camera's PTP USB interface.")
-                        connection.use {
-                            check(connection.openSession()) { "OpenSession rejected." }
-                            try {
-                                val camera = FujiRecipeCamera(connection, _uiState.value.settings.propertyWriteDelayMs)
-                                orderedBackup.mapIndexedNotNull { index, recipe ->
-                                    _uiState.update {
-                                        it.copy(camera = it.camera.copy(restoringSlotIndex = index))
-                                    }
-                                    val slot = CameraSlot.entries.first { it.label == recipe.slot }
-                                    val result = camera.writePreset(recipe.toPreset(slot))
-                                    if (result.isOk) null else slot.label
-                                }
-                            } finally {
-                                connection.closeSession()
-                            }
-                        }
-                    }
-                }
-            }
-
-            failedSlots.fold(
-                onSuccess = { failed ->
-                    // Re-read all slots from camera after the restore pass to validate what actually landed.
-                    _uiState.update {
-                        it.copy(
-                            writeBusy = false,
-                            camera = it.camera.copy(
-                                connected = true,
-                                scanError = failed
-                                    .takeIf { it.isNotEmpty() }
-                                    ?.joinToString(prefix = "Restore reported write errors for ", postfix = ". Validating camera slots now."),
-                                restoringSlots = false,
-                                restoringSlotIndex = -1,
-                                readingSlots = true,
-                                readingSlotIndex = -1,
-                                slots = emptyList(),
-                                isRestoringValidation = true,
-                            ),
-                            tab = AppTab.Camera,
-                        )
-                    }
-                    readAllSlots(selected.device)
-                },
-                onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            writeBusy = false,
-                            camera = it.camera.copy(
-                                scanError = error.message ?: "Restore failed.",
-                                restoringSlots = false,
-                                restoringSlotIndex = -1,
-                            ),
-                        )
-                    }
-                },
-            )
-        }
-    }
+    // ── Profile/Camera actions (delegated to CameraViewModel) ──────
 
     // ── Discover → Library ────────────────────────────────────────────
 
@@ -1897,43 +766,10 @@ class MainViewModel @Inject constructor(
     private fun loadPersistedState() {
         libraryHolder.load()
         viewModelScope.launch {
-            val backupSets = withContext(Dispatchers.IO) { localStore.loadSlotBackupSets() }
-            val selectedBackup = backupSets.firstOrNull()
-            val cameraLabels = withContext(Dispatchers.IO) { localStore.loadCameraLabels() }
-            val cameraModels = withContext(Dispatchers.IO) { localStore.loadCameraModels() }
-            val cameraFirmwares = withContext(Dispatchers.IO) { localStore.loadCameraFirmwares() }
             val settings = withContext(Dispatchers.IO) { localStore.loadSettings() }
             libraryHolder.maxReferenceImages = settings.maxReferenceImages
-            _uiState.update {
-                it.copy(
-                    camera = it.camera.copy(
-                        hasSlotBackup = backupSets.isNotEmpty(),
-                        slotBackupMeta = selectedBackup?.meta,
-                        slotBackupSlots = selectedBackup?.slots,
-                        slotBackupSets = backupSets,
-                        cameraLabels = cameraLabels,
-                        cameraModels = cameraModels,
-                        cameraFirmwares = cameraFirmwares,
-                    ),
-                    settings = settings,
-                )
-            }
+            _uiState.update { it.copy(settings = settings) }
         }
-    }
-
-    private fun persistCameraLabels() {
-        val labels = _uiState.value.camera.cameraLabels
-        viewModelScope.launch(Dispatchers.IO) { localStore.saveCameraLabels(labels) }
-    }
-
-    private fun persistCameraModels() {
-        val models = _uiState.value.camera.cameraModels
-        viewModelScope.launch(Dispatchers.IO) { localStore.saveCameraModels(models) }
-    }
-
-    private fun persistCameraFirmwares() {
-        val firmwares = _uiState.value.camera.cameraFirmwares
-        viewModelScope.launch(Dispatchers.IO) { localStore.saveCameraFirmwares(firmwares) }
     }
 
     private fun persistSettings() {
@@ -1942,18 +778,6 @@ class MainViewModel @Inject constructor(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
-
-    private fun List<RecipeUiModel>.replaceSlot(slot: CameraSlot, recipe: RecipeUiModel): List<RecipeUiModel> {
-        val slotIndex = indexOfFirst { it.slot == slot.label }
-        return if (slotIndex >= 0) {
-            mapIndexed { index, existing -> if (index == slotIndex) recipe else existing }
-        } else {
-            this + recipe
-        }
-    }
-
-    private fun RecipeUiModel.sameRecipeIgnoringSlot(other: RecipeUiModel): Boolean =
-        copy(slot = "") == other.copy(slot = "")
 
     private fun List<String>.appendReferenceImages(uris: List<String>): List<String> =
         (this + uris).distinct().take(_uiState.value.settings.maxReferenceImages)

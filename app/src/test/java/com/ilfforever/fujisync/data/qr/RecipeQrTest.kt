@@ -1,6 +1,6 @@
-package com.ilfforever.fujirecipes.data.qr
+package com.ilfforever.fujisync.data.qr
 
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

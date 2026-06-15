@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ilfforever.fujirecipes"
+    namespace = "com.ilfforever.fujisync"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ilfforever.fujirecipes"
+        applicationId = "com.ilfforever.fujisync"
         minSdk = 26
         targetSdk = 36
         versionCode = 2
@@ -85,6 +85,7 @@ dependencies {
     implementation("com.google.guava:guava:33.3.1-android")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.browser:browser:1.8.0")
 

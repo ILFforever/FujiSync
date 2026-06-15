@@ -1,7 +1,7 @@
-package com.ilfforever.fujirecipes.data.exif
+package com.ilfforever.fujisync.data.exif
 
-import com.ilfforever.fujirecipes.domain.model.FujiFilmSimulation
-import com.ilfforever.fujirecipes.domain.model.FujiPropertyCode
+import com.ilfforever.fujisync.domain.model.FujiFilmSimulation
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
 
 /**
  * Recipe parameters decoded from a Fujifilm JPEG MakerNote.

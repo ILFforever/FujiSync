@@ -1,7 +1,7 @@
-package com.ilfforever.fujirecipes.data.usb
+package com.ilfforever.fujisync.data.usb
 
-import com.ilfforever.fujirecipes.data.ptp.CameraPresetName
-import com.ilfforever.fujirecipes.domain.model.CameraSlot
+import com.ilfforever.fujisync.data.ptp.CameraPresetName
+import com.ilfforever.fujisync.domain.model.CameraSlot
 
 data class NameBenchCase(
     val slot: CameraSlot,

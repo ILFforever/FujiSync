@@ -1,6 +1,6 @@
 @file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
 
-package com.ilfforever.fujirecipes.ui.theme
+package com.ilfforever.fujisync.ui.theme
 
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.IndicationInstance

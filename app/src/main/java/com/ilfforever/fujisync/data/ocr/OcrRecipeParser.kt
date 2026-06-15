@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.ocr
+package com.ilfforever.fujisync.data.ocr
 
 import android.content.Context
 import android.net.Uri
@@ -6,7 +6,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.ilfforever.fujirecipes.domain.model.FujiFilmSimulation
+import com.ilfforever.fujisync.domain.model.FujiFilmSimulation
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.abs

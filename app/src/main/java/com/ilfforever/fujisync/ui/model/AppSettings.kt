@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.model
+package com.ilfforever.fujisync.ui.model
 
 data class AppSettings(
     val showLibraryImages: Boolean = true,

@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.remote
+package com.ilfforever.fujisync.data.remote
 
 import android.content.Context
 import android.util.Log

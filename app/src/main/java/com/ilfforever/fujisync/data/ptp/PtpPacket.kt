@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.data.ptp
+package com.ilfforever.fujisync.data.ptp
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

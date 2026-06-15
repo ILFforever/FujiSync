@@ -1,10 +1,10 @@
-package com.ilfforever.fujirecipes.data.local
+package com.ilfforever.fujisync.data.local
 
 import android.content.ContentResolver
 import android.content.Context
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupStyle
-import com.ilfforever.fujirecipes.ui.model.LibraryGroupUiModel
-import com.ilfforever.fujirecipes.ui.model.LibraryRecipeUiModel
+import com.ilfforever.fujisync.ui.model.LibraryGroupStyle
+import com.ilfforever.fujisync.ui.model.LibraryGroupUiModel
+import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -111,7 +111,7 @@ class LocalStoreTest {
         val zipBytes = ByteArrayOutputStream().use { out ->
             srcStore.backupZip(
                 outputStream = out,
-                settings = com.ilfforever.fujirecipes.ui.model.AppSettings(),
+                settings = com.ilfforever.fujisync.ui.model.AppSettings(),
                 cameraLabels = emptyMap(),
                 cameraModels = emptyMap(),
                 cameraFirmwares = emptyMap(),
@@ -169,7 +169,7 @@ class LocalStoreTest {
         val zipBytes = ByteArrayOutputStream().use { out ->
             srcStore.backupZip(
                 outputStream = out,
-                settings = com.ilfforever.fujirecipes.ui.model.AppSettings(),
+                settings = com.ilfforever.fujisync.ui.model.AppSettings(),
                 cameraLabels = emptyMap(),
                 cameraModels = emptyMap(),
                 cameraFirmwares = emptyMap(),
@@ -218,7 +218,7 @@ class LocalStoreTest {
         val zipBytes = ByteArrayOutputStream().use { out ->
             srcStore.backupZip(
                 outputStream = out,
-                settings = com.ilfforever.fujirecipes.ui.model.AppSettings(),
+                settings = com.ilfforever.fujisync.ui.model.AppSettings(),
                 cameraLabels = emptyMap(),
                 cameraModels = emptyMap(),
                 cameraFirmwares = emptyMap(),
@@ -237,5 +237,43 @@ class LocalStoreTest {
         val fileB = File(rB.referenceImageUris.single().removePrefix("file://"))
         assertEquals(listOf<Byte>(1, 1, 1), fileA.readBytes().toList())
         assertEquals(listOf<Byte>(2, 2, 2), fileB.readBytes().toList())
+    }
+
+    @Test
+    fun `saveLibrary and loadLibrary round trip sourceUrl and sourceLabel`() = runTest {
+        val store = store()
+        val recipe = LibraryRecipeUiModel(
+            id = "lib-fxw",
+            name = "Classic Chrome 400",
+            sim = "Classic Chrome",
+            pills = emptyList(),
+            saved = "Jun 15",
+            sourceUrl = "https://fujixweekly.com/classic-chrome-400",
+            sourceLabel = "Fuji X Weekly",
+        )
+
+        store.saveLibrary(recipes = listOf(recipe), groups = emptyList(), styles = emptyMap())
+
+        val loaded = store.loadLibrary()!!.recipes.single()
+        assertEquals("https://fujixweekly.com/classic-chrome-400", loaded.sourceUrl)
+        assertEquals("Fuji X Weekly", loaded.sourceLabel)
+    }
+
+    @Test
+    fun `saveLibrary and loadLibrary recipe with no source attribution has null fields`() = runTest {
+        val store = store()
+        val recipe = LibraryRecipeUiModel(
+            id = "lib-cam",
+            name = "Velvia Street",
+            sim = "Velvia",
+            pills = emptyList(),
+            saved = "Jun 15",
+        )
+
+        store.saveLibrary(recipes = listOf(recipe), groups = emptyList(), styles = emptyMap())
+
+        val loaded = store.loadLibrary()!!.recipes.single()
+        assertNull(loaded.sourceUrl)
+        assertNull(loaded.sourceLabel)
     }
 }

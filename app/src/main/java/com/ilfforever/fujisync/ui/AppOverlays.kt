@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui
+package com.ilfforever.fujisync.ui
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
@@ -28,30 +28,33 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.ui.camera.CameraCardUiModel
-import com.ilfforever.fujirecipes.ui.camera.CameraImageTunerScreen
-import com.ilfforever.fujirecipes.ui.components.DeleteConfirmDialog
-import com.ilfforever.fujirecipes.ui.components.DuplicateDialog
-import com.ilfforever.fujirecipes.ui.detail.RecipeDetailScreen
-import com.ilfforever.fujirecipes.ui.dev.DrPriorityBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.DrPriorityBenchViewModel
-import com.ilfforever.fujirecipes.ui.dev.ExifBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.FxwSearchBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.HapticBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.NameBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.NameBenchViewModel
-import com.ilfforever.fujirecipes.ui.dev.PtpLogScreen
-import com.ilfforever.fujirecipes.ui.dev.ReadSlotsBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.ReadSlotsBenchViewModel
-import com.ilfforever.fujirecipes.ui.dev.WriteDelayBenchScreen
-import com.ilfforever.fujirecipes.ui.dev.WriteDelayBenchViewModel
-import com.ilfforever.fujirecipes.ui.editor.RecipeEditorScreen
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
-import com.ilfforever.fujirecipes.ui.qr.QrScannerScreen
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
+import com.ilfforever.fujisync.BuildConfig
+import com.ilfforever.fujisync.ui.camera.CameraCardUiModel
+import com.ilfforever.fujisync.ui.camera.CameraImageTunerScreen
+import com.ilfforever.fujisync.ui.components.DeleteConfirmDialog
+import com.ilfforever.fujisync.ui.components.DuplicateDialog
+import com.ilfforever.fujisync.ui.detail.RecipeDetailScreen
+import com.ilfforever.fujisync.ui.dev.DrPriorityBenchScreen
+import com.ilfforever.fujisync.ui.dev.DrPriorityBenchViewModel
+import com.ilfforever.fujisync.ui.dev.ExifBenchScreen
+import com.ilfforever.fujisync.ui.dev.FxwSearchBenchScreen
+import com.ilfforever.fujisync.ui.dev.HapticBenchScreen
+import com.ilfforever.fujisync.ui.dev.NameBenchScreen
+import com.ilfforever.fujisync.ui.dev.NameBenchViewModel
+import com.ilfforever.fujisync.ui.dev.PtpLogScreen
+import com.ilfforever.fujisync.ui.dev.ReadSlotsBenchScreen
+import com.ilfforever.fujisync.ui.dev.ReadSlotsBenchViewModel
+import com.ilfforever.fujisync.ui.dev.UsbReadWriteBenchScreen
+import com.ilfforever.fujisync.ui.dev.UsbReadWriteBenchViewModel
+import com.ilfforever.fujisync.ui.dev.WriteDelayBenchScreen
+import com.ilfforever.fujisync.ui.dev.WriteDelayBenchViewModel
+import com.ilfforever.fujisync.ui.editor.RecipeEditorScreen
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.qr.QrScannerScreen
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelLow
 
 @Composable
 internal fun BoxScope.AppOverlays(
@@ -60,6 +63,7 @@ internal fun BoxScope.AppOverlays(
     cameraDetail: Pair<Int, CameraCardUiModel>?,
     showExifBench: Boolean,
     showFxwSearchBench: Boolean,
+    showUsbReadWriteBench: Boolean,
     showWriteDelayBench: Boolean,
     showNameBench: Boolean,
     showReadSlotsBench: Boolean,
@@ -97,6 +101,7 @@ internal fun BoxScope.AppOverlays(
     onDuplicateDismiss: () -> Unit,
     onExifBenchClose: () -> Unit,
     onFxwSearchBenchClose: () -> Unit,
+    onUsbReadWriteBenchClose: () -> Unit,
     onWriteDelayBenchClose: () -> Unit,
     onNameBenchClose: () -> Unit,
     onReadSlotsBenchClose: () -> Unit,
@@ -131,6 +136,7 @@ internal fun BoxScope.AppOverlays(
     onSmartRefCreateNew: () -> Unit,
 ) {
     val context = LocalContext.current
+    val usbReadWriteBenchVm: UsbReadWriteBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val writeDelayBenchVm: WriteDelayBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val nameBenchVm: NameBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val readSlotsBenchVm: ReadSlotsBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
@@ -177,7 +183,7 @@ internal fun BoxScope.AppOverlays(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 16.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(com.ilfforever.fujirecipes.ui.theme.PanelHigh)
+                .background(com.ilfforever.fujisync.ui.theme.PanelHigh)
                 .border(1.dp, Gold, RoundedCornerShape(12.dp))
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -186,10 +192,10 @@ internal fun BoxScope.AppOverlays(
             Text(text = "✓", color = Gold, fontSize = 16.sp)
             Text(
                 text = msg,
-                fontFamily = com.ilfforever.fujirecipes.ui.theme.SansFamily,
+                fontFamily = com.ilfforever.fujisync.ui.theme.SansFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
-                color = com.ilfforever.fujirecipes.ui.theme.TextPrimary,
+                color = com.ilfforever.fujisync.ui.theme.TextPrimary,
             )
         }
     }
@@ -209,6 +215,12 @@ internal fun BoxScope.AppOverlays(
     if (showFxwSearchBench) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
             FxwSearchBenchScreen(onClose = onFxwSearchBenchClose)
+        }
+    }
+
+    if (showUsbReadWriteBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            UsbReadWriteBenchScreen(viewModel = usbReadWriteBenchVm, onClose = onUsbReadWriteBenchClose)
         }
     }
 
@@ -298,7 +310,7 @@ internal fun BoxScope.AppOverlays(
                slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            com.ilfforever.fujirecipes.ui.ScanTileGuide(onClose = onScanTileGuideClose)
+            com.ilfforever.fujisync.ui.ScanTileGuide(onClose = onScanTileGuideClose)
         }
     }
 
@@ -336,7 +348,7 @@ internal fun BoxScope.AppOverlays(
             message = error,
             onDismiss = onOcrImportErrorDismiss,
             onRetry = onOcrImportRetry,
-            onShareRawDump = if (rawText != null) {
+            onShareRawDump = if (BuildConfig.DEBUG && rawText != null) {
                 {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -481,7 +493,7 @@ internal fun BoxScope.AppOverlays(
 
     if (showReadingOverlay) {
         Box(modifier = Modifier.fillMaxSize()) {
-            com.ilfforever.fujirecipes.ui.profile.SlotReadingAnimationMockup(
+            com.ilfforever.fujisync.ui.profile.SlotReadingAnimationMockup(
                 currentSlotIndex = state.camera.readingSlotIndex,
                 loadedSlots = state.camera.slots,
                 isDone = !state.camera.readingSlots,

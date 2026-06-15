@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.capture
+package com.ilfforever.fujisync.capture
 
 import android.app.Activity
 import android.content.Intent

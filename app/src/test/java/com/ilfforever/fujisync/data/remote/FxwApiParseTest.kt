@@ -1,6 +1,6 @@
-package com.ilfforever.fujirecipes.data.remote
+package com.ilfforever.fujisync.data.remote
 
-import com.ilfforever.fujirecipes.data.remote.detectXTransGen
+import com.ilfforever.fujisync.data.remote.detectXTransGen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

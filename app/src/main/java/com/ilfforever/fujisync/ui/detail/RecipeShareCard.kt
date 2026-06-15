@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.detail
+package com.ilfforever.fujisync.ui.detail
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -10,7 +10,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
-import com.ilfforever.fujirecipes.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.RecipeUiModel
 
 private const val CARD_W = 1080
 private const val PAD = 72

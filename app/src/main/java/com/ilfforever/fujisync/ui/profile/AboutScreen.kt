@@ -1,4 +1,4 @@
-package com.ilfforever.fujirecipes.ui.profile
+package com.ilfforever.fujisync.ui.profile
 
 import android.content.Intent
 import android.net.Uri
@@ -39,18 +39,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ilfforever.fujirecipes.BuildConfig
-import com.ilfforever.fujirecipes.ui.UpdateUiState
-import com.ilfforever.fujirecipes.ui.components.Wordmark
-import com.ilfforever.fujirecipes.ui.theme.Bg
-import com.ilfforever.fujirecipes.ui.theme.Border
-import com.ilfforever.fujirecipes.ui.theme.Gold
-import com.ilfforever.fujirecipes.ui.theme.MonoFamily
-import com.ilfforever.fujirecipes.ui.theme.PanelLow
-import com.ilfforever.fujirecipes.ui.theme.SansFamily
-import com.ilfforever.fujirecipes.ui.theme.TextDim
-import com.ilfforever.fujirecipes.ui.theme.TextMuted
-import com.ilfforever.fujirecipes.ui.theme.TextPrimary
+import com.ilfforever.fujisync.BuildConfig
+import com.ilfforever.fujisync.ui.UpdateUiState
+import com.ilfforever.fujisync.ui.components.Wordmark
+import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.theme.Border
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.PanelLow
+import com.ilfforever.fujisync.ui.theme.SansFamily
+import com.ilfforever.fujisync.ui.theme.TextDim
+import com.ilfforever.fujisync.ui.theme.TextMuted
+import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 private const val DEVELOPER = "ILFforever"
 private const val REPO_URL = "https://github.com/ILFforever/FujiSync"
