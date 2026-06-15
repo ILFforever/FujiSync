@@ -608,6 +608,7 @@ class LocalStore(context: Context) {
         val cameraModels: Map<String, String>,
         val cameraFirmwares: Map<String, String>,
         val library: LibraryData,
+        val slotBackupSets: List<SlotBackupSet> = emptyList(),
     )
 
     // ── Zip backup (JSON + reference images) ──────────────────────────
@@ -619,6 +620,7 @@ class LocalStore(context: Context) {
         cameraModels: Map<String, String>,
         cameraFirmwares: Map<String, String>,
         libraryData: LibraryData,
+        slotBackupSets: List<SlotBackupSet> = emptyList(),
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> },
     ) = mutex.withLock {
         // Collect every referenced image that exists on disk and assign each a
@@ -653,6 +655,7 @@ class LocalStore(context: Context) {
                 put("groups", groupsToJson(libraryData.groups))
                 put("styles", stylesToJson(libraryData.styles))
             })
+            if (slotBackupSets.isNotEmpty()) put("slotBackupSets", slotBackupSetsToJson(slotBackupSets))
             put("referenceImages", manifest)
         }.toString(2)
 
@@ -746,6 +749,7 @@ class LocalStore(context: Context) {
                 groups = library.optJSONArray("groups")?.let(::groupsFromJson) ?: emptyList(),
                 styles = library.optJSONObject("styles")?.let(::stylesFromJson) ?: emptyMap(),
             ),
+            slotBackupSets = root.optJSONArray("slotBackupSets")?.let(::slotBackupSetsFromJson) ?: emptyList(),
         )
     }
 

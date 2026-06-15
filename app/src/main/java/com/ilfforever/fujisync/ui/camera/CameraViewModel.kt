@@ -665,6 +665,8 @@ class CameraViewModel @Inject constructor(
 
     // ── Persistence ───────────────────────────────────────────────────
 
+    fun reloadPersistedData() = loadSlotBackups()
+
     private fun loadSlotBackups() {
         viewModelScope.launch {
             val backupSets = withContext(ioDispatcher) { localStore.loadSlotBackupSets() }

@@ -253,6 +253,7 @@ class MainActivity : ComponentActivity() {
                     MainViewModelEvent.LaunchBackupImport -> backupImportPicker.launch(arrayOf("application/json", "text/*", "*/*"))
                     MainViewModelEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("image/*"))
                     MainViewModelEvent.LaunchSmartRefPicker -> smartRefPicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.BackupImported -> cameraVm.reloadPersistedData()
                 }
             }
         }

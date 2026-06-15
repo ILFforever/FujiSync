@@ -50,6 +50,7 @@ sealed class MainViewModelEvent {
     object LaunchBackupImport : MainViewModelEvent()
     object LaunchShutterCheckPicker : MainViewModelEvent()
     object LaunchSmartRefPicker : MainViewModelEvent()
+    object BackupImported : MainViewModelEvent()
 }
 
 enum class BackupImportMode { Merge, Replace }
@@ -503,6 +504,7 @@ class MainViewModel @Inject constructor(
                 runCatching {
                     val state = _uiState.value
                     val libraryData = libraryHolder.exportData()
+                    val slotBackupSets = localStore.loadSlotBackupSets()
                     appContext.contentResolver.openOutputStream(uri)?.use { output ->
                         localStore.backupZip(
                             outputStream = output,
@@ -511,6 +513,7 @@ class MainViewModel @Inject constructor(
                             cameraModels = state.camera.cameraModels,
                             cameraFirmwares = state.camera.cameraFirmwares,
                             libraryData = libraryData,
+                            slotBackupSets = slotBackupSets,
                             onProgress = { current, total ->
                                 _uiState.update {
                                     it.copy(backup = it.backup.copy(
@@ -601,11 +604,29 @@ class MainViewModel @Inject constructor(
                         )
                     }
                     val importedState = _uiState.value
+                    val savedMode = pendingBackupImportMode
                     viewModelScope.launch(Dispatchers.IO) {
                         localStore.saveSettings(importedState.settings)
-                        localStore.saveCameraLabels(importedState.camera.cameraLabels)
-                        localStore.saveCameraModels(importedState.camera.cameraModels)
-                        localStore.saveCameraFirmwares(importedState.camera.cameraFirmwares)
+                        if (savedMode == BackupImportMode.Merge) {
+                            val existing = localStore.loadCameraLabels()
+                            localStore.saveCameraLabels(existing + backup.cameraLabels)
+                            val existingModels = localStore.loadCameraModels()
+                            localStore.saveCameraModels(existingModels + backup.cameraModels)
+                            val existingFirmwares = localStore.loadCameraFirmwares()
+                            localStore.saveCameraFirmwares(existingFirmwares + backup.cameraFirmwares)
+                        } else {
+                            localStore.saveCameraLabels(backup.cameraLabels)
+                            localStore.saveCameraModels(backup.cameraModels)
+                            localStore.saveCameraFirmwares(backup.cameraFirmwares)
+                        }
+                        if (backup.slotBackupSets.isNotEmpty()) {
+                            val existing = if (savedMode == BackupImportMode.Merge) localStore.loadSlotBackupSets() else emptyList()
+                            val merged = existing + backup.slotBackupSets.filter { incoming ->
+                                existing.none { it.meta.id == incoming.meta.id }
+                            }
+                            merged.forEach { localStore.saveSlotBackupSet(it.meta, it.slots) }
+                        }
+                        _events.emit(MainViewModelEvent.BackupImported)
                     }
                 }
                 .onFailure { error ->
