@@ -9,7 +9,7 @@ This is a free, open-source pet project. Fork it, contribute, suggest features. 
 ---
 
 <!-- SCREENSHOT: hero banner or app preview gif, suggested size 1280x640 -->
-![App Preview](docs/screenshots/hero.png)
+![App Preview](docs/screenshots/slot_board.jpg)
 
 ---
 

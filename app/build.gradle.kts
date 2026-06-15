@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "com.paeki.fujirecipes"
+    namespace = "com.ilfforever.fujirecipes"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.paeki.fujirecipes"
+        applicationId = "com.ilfforever.fujirecipes"
         minSdk = 26
         targetSdk = 36
         versionCode = 2
