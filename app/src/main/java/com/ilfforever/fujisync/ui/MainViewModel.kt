@@ -505,13 +505,16 @@ class MainViewModel @Inject constructor(
                     val state = _uiState.value
                     val libraryData = libraryHolder.exportData()
                     val slotBackupSets = localStore.loadSlotBackupSets()
+                    val cameraLabels = localStore.loadCameraLabels()
+                    val cameraModels = localStore.loadCameraModels()
+                    val cameraFirmwares = localStore.loadCameraFirmwares()
                     appContext.contentResolver.openOutputStream(uri)?.use { output ->
                         localStore.backupZip(
                             outputStream = output,
                             settings = state.settings,
-                            cameraLabels = state.camera.cameraLabels,
-                            cameraModels = state.camera.cameraModels,
-                            cameraFirmwares = state.camera.cameraFirmwares,
+                            cameraLabels = cameraLabels,
+                            cameraModels = cameraModels,
+                            cameraFirmwares = cameraFirmwares,
                             libraryData = libraryData,
                             slotBackupSets = slotBackupSets,
                             onProgress = { current, total ->
