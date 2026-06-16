@@ -517,6 +517,27 @@ class CameraViewModel @Inject constructor(
         }
     }
 
+    fun handleComposeSet(label: String, slots: List<RecipeUiModel>) {
+        val savedAt = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
+        val meta = SlotBackupMeta(
+            label = label.trim().ifBlank { "Custom · $savedAt" },
+            savedAt = savedAt,
+            id = "slot-backup-${UUID.randomUUID()}",
+        )
+        viewModelScope.launch(ioDispatcher) {
+            localStore.saveSlotBackupSet(meta, slots)
+            val sets = localStore.loadSlotBackupSets()
+            _state.update {
+                it.copy(
+                    hasSlotBackup = sets.isNotEmpty(),
+                    slotBackupMeta = meta,
+                    slotBackupSlots = slots,
+                    slotBackupSets = sets,
+                )
+            }
+        }
+    }
+
     fun handleDeleteSlotBackup() {
         val selectedId = _state.value.slotBackupMeta?.id ?: return
         viewModelScope.launch(ioDispatcher) {

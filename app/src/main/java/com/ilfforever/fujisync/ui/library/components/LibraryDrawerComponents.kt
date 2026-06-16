@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -54,9 +55,13 @@ import com.ilfforever.fujisync.ui.components.IconEdit
 import com.ilfforever.fujisync.ui.components.IconImage
 import com.ilfforever.fujisync.ui.components.IconQrCode
 import com.ilfforever.fujisync.ui.components.IconScan
+import com.ilfforever.fujisync.ui.components.IconSort
 import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
 import com.ilfforever.fujisync.ui.haptics.FujiHaptics
+import com.ilfforever.fujisync.ui.theme.Gold
+import com.ilfforever.fujisync.ui.theme.Metal
 import com.ilfforever.fujisync.ui.theme.MonoFamily
+import com.ilfforever.fujisync.ui.theme.Steel
 import com.ilfforever.fujisync.ui.theme.SansFamily
 import com.ilfforever.fujisync.ui.theme.TextDim
 import com.ilfforever.fujisync.ui.theme.TextMuted
@@ -72,6 +77,7 @@ internal fun AddRecipeDrawer(
     onImportFromScreenshot: () -> Unit,
     onImportFromQr: () -> Unit,
     onScanTileGuide: () -> Unit,
+    onComposeSet: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
@@ -133,8 +139,7 @@ internal fun AddRecipeDrawer(
                             },
                             onDragCancel = { dragOffset = 0f },
                         ) { _, amount -> dragOffset = (dragOffset + amount).coerceAtLeast(0f) }
-                    }
-                    .navigationBarsPadding(),
+                    },
             ) {
                 Box(
                     modifier = Modifier
@@ -163,15 +168,24 @@ internal fun AddRecipeDrawer(
                     )
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("New recipe", "Build a clean preset from scratch", icon = IconEdit, onClick = onCreateRecipe)
+                DrawerOptionRow("New recipe", "Build a clean preset from scratch", icon = IconEdit, iconTint = Gold, onClick = onCreateRecipe)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("From JPEG", "Read EXIF from a camera photo", icon = IconCamera, onClick = onImportFromPhoto)
+                DrawerOptionRow("From JPEG", "Read EXIF from a camera photo", icon = IconCamera, iconTint = Gold, onClick = onImportFromPhoto)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("From screenshot", "Extract settings from recipe image", icon = IconImage, onClick = onImportFromScreenshot)
+                DrawerOptionRow("From screenshot", "Extract settings from recipe image", icon = IconImage, iconTint = Gold, onClick = onImportFromScreenshot)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("QR code", "Import a shared FujiSync recipe", icon = IconQrCode, onClick = onImportFromQr)
+                DrawerOptionRow("QR code", "Import a shared FujiSync recipe", icon = IconQrCode, iconTint = Gold, onClick = onImportFromQr)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
-                DrawerOptionRow("Scan tile", "Capture from app recipe tile", icon = IconScan, onClick = onScanTileGuide)
+                DrawerOptionRow("Scan tile", "Capture from app recipe tile", icon = IconScan, iconTint = Gold, onClick = onScanTileGuide)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LibrarySheetBorder))
+                DrawerOptionRow(
+                    label = "Compose camera set",
+                    subtitle = "Assign library recipes to C1–C7 slots",
+                    icon = IconSort,
+                    iconTint = Metal,
+                    onClick = onComposeSet,
+                )
+                Spacer(Modifier.height(8.dp))
             }
         }
     }
@@ -183,6 +197,7 @@ internal fun DrawerOptionRow(
     label: String,
     subtitle: String,
     icon: ImageVector? = null,
+    iconTint: Color? = null,
     enabled: Boolean = true,
     onClick: () -> Unit = {},
 ) {
@@ -198,7 +213,7 @@ internal fun DrawerOptionRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (enabled) TextMuted else TextDim,
+                tint = iconTint ?: if (enabled) TextMuted else TextDim,
                 modifier = Modifier.size(18.dp),
             )
         }

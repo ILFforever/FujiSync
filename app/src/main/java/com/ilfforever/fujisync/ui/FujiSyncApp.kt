@@ -120,6 +120,7 @@ fun FujiSyncApp(
     onSmartRefConfirmAndContinue: () -> Unit = {},
     onSmartRefDismissAndContinue: () -> Unit = {},
     onSmartRefCreateNew: () -> Unit = {},
+    onComposeSet: (String, List<RecipeUiModel>) -> Unit = { _, _ -> },
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showFxwSearchBench by remember { mutableStateOf(false) }
@@ -132,6 +133,7 @@ fun FujiSyncApp(
     var showPtpLog by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
+    var showComposeSetSheet by remember { mutableStateOf(false) }
     var cameraSheetRevealProgress by rememberSaveable { mutableStateOf(0f) }
     SideEffect { FujiHaptics.enabled = state.settings.hapticsEnabled }
 
@@ -320,6 +322,7 @@ fun FujiSyncApp(
                         onImportFromScreenshot = { showImportFromScreenshotGuide = true },
                         onImportFromQr = { showQrScanner = true },
                         onScanTileGuide = { showScanTileGuide = true },
+                        onComposeSet = { showComposeSetSheet = true },
                     )
                     AppTab.Discover -> DiscoverScreen()
                     AppTab.Profile -> ProfileScreen(
@@ -529,6 +532,14 @@ fun FujiSyncApp(
                     )
                 }
             }
+        }
+
+        if (showComposeSetSheet) {
+            com.ilfforever.fujisync.ui.camera.ComposeSetSheet(
+                libraryRecipes = state.library.recipes,
+                onDismiss = { showComposeSetSheet = false },
+                onSave = { label, slots -> onComposeSet(label, slots) },
+            )
         }
     }
 }

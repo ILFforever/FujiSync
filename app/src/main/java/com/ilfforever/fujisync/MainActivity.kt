@@ -185,6 +185,7 @@ class MainActivity : ComponentActivity() {
                     onDuplicateDismiss = viewModel::handleDuplicateDismiss,
                     onExploreDemo = cameraVm::exploreDemo,
                     onBackupSlots = { label -> cameraVm.handleBackupSlots(label) },
+                    onComposeSet = { label, slots -> cameraVm.handleComposeSet(label, slots) },
                     onRestoreSlots = cameraVm::handleRestoreSlots,
                     onDeleteSlotBackup = cameraVm::handleDeleteSlotBackup,
                     onRenameSlotBackup = cameraVm::handleRenameSlotBackup,

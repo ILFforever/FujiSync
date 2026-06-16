@@ -103,6 +103,7 @@ fun LibraryScreen(
     onImportFromScreenshot: () -> Unit = {},
     onImportFromQr: () -> Unit = {},
     onScanTileGuide: () -> Unit = {},
+    onComposeSet: () -> Unit = {},
 ) {
     val vm: LibraryViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val state by vm.screenState.collectAsState()
@@ -610,6 +611,7 @@ fun LibraryScreen(
                     onImportFromScreenshot = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onImportFromScreenshot() },
                     onImportFromQr = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onImportFromQr() },
                     onScanTileGuide = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onScanTileGuide() },
+                    onComposeSet = { haptic(FujiHapticEffect.Selection); showAddDrawer = false; onComposeSet() },
                     onDismiss = { showAddDrawer = false },
                 )
         }

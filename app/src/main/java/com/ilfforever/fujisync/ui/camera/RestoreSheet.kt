@@ -124,11 +124,16 @@ fun RestoreSheet(
     }
 
     fun restore() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
         phase = RestorePhase.Working
         onConfirm()
         // sheet stays open — loading overlay takes over, then reading animation
     }
-    fun confirmDelete() { onDelete(); dismissWithMotion() }
+    fun confirmDelete() {
+        FujiHaptics.perform(context, view, FujiHapticEffect.Confirm)
+        onDelete()
+        dismissWithMotion()
+    }
 
     LaunchedEffect(readingSlotIndex) {
         if (readingSlotIndex >= 0) FujiHaptics.performStepClick(context, view, step = readingSlotIndex, total = 7)
@@ -295,10 +300,16 @@ fun RestoreSheet(
                                             .fillMaxWidth()
                                             .background(if (selected) Gold.copy(alpha = 0.08f) else Color.Transparent)
                                             .clickable {
-                                                onSelectBackup(set.meta.id)
-                                                confirmingDelete = false
-                                                renaming = false
-                                                slotsExpanded = false
+                                                if (selected) {
+                                                    slotsExpanded = !slotsExpanded
+                                                    FujiHaptics.perform(context, view, FujiHapticEffect.SoftSelection)
+                                                } else {
+                                                    onSelectBackup(set.meta.id)
+                                                    confirmingDelete = false
+                                                    renaming = false
+                                                    slotsExpanded = false
+                                                    FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                                                }
                                             }
                                             .padding(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 14.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -326,12 +337,19 @@ fun RestoreSheet(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                                             ) {
-                                                IconButton(IconEdit, tint = TextMuted, onClick = { renaming = true; confirmingDelete = false })
+                                                IconButton(IconEdit, tint = TextMuted, onClick = {
+                                                    FujiHaptics.perform(context, view, FujiHapticEffect.SoftSelection)
+                                                    renaming = true
+                                                    confirmingDelete = false
+                                                })
                                                 Box(
                                                     modifier = Modifier
                                                         .size(32.dp)
                                                         .clip(RoundedCornerShape(8.dp))
-                                                        .clickable { slotsExpanded = !slotsExpanded },
+                                                        .clickable {
+                                                            slotsExpanded = !slotsExpanded
+                                                            FujiHaptics.perform(context, view, FujiHapticEffect.SoftSelection)
+                                                        },
                                                     contentAlignment = Alignment.Center,
                                                 ) {
                                                     Icon(
@@ -343,7 +361,10 @@ fun RestoreSheet(
                                                             .graphicsLayer { rotationZ = chevronAngle },
                                                     )
                                                 }
-                                                IconButton(IconTrash, tint = Color(0xFFD94040), onClick = { confirmingDelete = true })
+                                                IconButton(IconTrash, tint = Color(0xFFD94040), onClick = {
+                                                    FujiHaptics.perform(context, view, FujiHapticEffect.Selection)
+                                                    confirmingDelete = true
+                                                })
                                             }
                                         }
                                     }
@@ -443,7 +464,10 @@ fun RestoreSheet(
                                                     color = TextMuted,
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(999.dp))
-                                                        .clickable { confirmingDelete = false }
+                                                        .clickable {
+                                                            FujiHaptics.perform(context, view, FujiHapticEffect.SoftSelection)
+                                                            confirmingDelete = false
+                                                        }
                                                         .padding(horizontal = 8.dp, vertical = 5.dp),
                                                 )
                                                 Text(
