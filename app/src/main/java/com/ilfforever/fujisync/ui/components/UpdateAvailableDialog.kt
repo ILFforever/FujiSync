@@ -42,6 +42,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -153,16 +156,24 @@ fun UpdateAvailableDialog(
                                 color = Gold.copy(alpha = 0.78f),
                             )
                             Spacer(Modifier.height(6.dp))
+                            val version = update.latestVersion?.takeIf { it.isNotBlank() }
+                            val title = update.releaseName?.takeIf { it.isNotBlank() }
+                                ?: version?.let { "v$it" }
+                                ?: "Update available"
                             Text(
-                                text = update.releaseName?.takeIf { it.isNotBlank() }
-                                    ?: "Version ${update.latestVersion.orEmpty()}",
+                                text = title,
                                 fontFamily = SansFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 22.sp,
                                 letterSpacing = 0.1.sp,
                                 color = TextPrimary,
                             )
-                            update.latestVersion?.let { version ->
+                            // Only show the version sub-line when it adds info the title
+                            // doesn't already convey (release name often equals the tag).
+                            val showVersionSub = version != null &&
+                                !title.equals("v$version", ignoreCase = true) &&
+                                !title.equals(version, ignoreCase = true)
+                            if (showVersionSub) {
                                 Spacer(Modifier.height(4.dp))
                                 Text(
                                     text = "v$version",
@@ -204,16 +215,10 @@ fun UpdateAvailableDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 220.dp)
+                                .heightIn(max = 240.dp)
                                 .verticalScroll(rememberScrollState()),
                         ) {
-                            Text(
-                                text = notes,
-                                fontFamily = SansFamily,
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp,
-                                color = TextMuted,
-                            )
+                            ReleaseNotesMarkdown(notes)
                         }
                     } else {
                         Spacer(Modifier.height(10.dp))
@@ -288,3 +293,145 @@ private fun updateButtonLabel(update: UpdateUiState): String = when {
     update.error != null -> "RETRY UPDATE"
     else -> "UPDATE NOW"
 }
+
+// ── Minimal markdown rendering for GitHub release notes ──────────────────────
+// Supports #/##/### headings, - / * bullets, and **bold** inline spans. This is
+// intentionally tiny (no extra dependency); release notes only use this subset.
+
+private sealed interface MdBlock {
+    data class Heading(val level: Int, val text: String) : MdBlock
+    data class Bullet(val text: AnnotatedString) : MdBlock
+    data class Paragraph(val text: AnnotatedString) : MdBlock
+}
+
+@Composable
+private fun ReleaseNotesMarkdown(raw: String) {
+    val blocks = remember(raw) {
+        parseReleaseNotes(raw).let { list ->
+            // Drop a leading "What's new" heading — the section already has that label.
+            val first = list.firstOrNull()
+            if (first is MdBlock.Heading && first.text.trim().equals("What's new", ignoreCase = true)) {
+                list.drop(1)
+            } else {
+                list
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        blocks.forEachIndexed { index, block ->
+            when (block) {
+                is MdBlock.Heading -> {
+                    if (index != 0) Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = block.text,
+                        fontFamily = SansFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = when (block.level) {
+                            1 -> 15.sp
+                            2 -> 14.sp
+                            else -> 12.5.sp
+                        },
+                        lineHeight = 19.sp,
+                        color = TextPrimary,
+                    )
+                    Spacer(Modifier.height(5.dp))
+                }
+
+                is MdBlock.Bullet -> {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "•",
+                            fontFamily = SansFamily,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                            color = Gold.copy(alpha = 0.8f),
+                            modifier = Modifier.width(16.dp),
+                        )
+                        Text(
+                            text = block.text,
+                            fontFamily = SansFamily,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                            color = TextMuted,
+                        )
+                    }
+                    Spacer(Modifier.height(3.dp))
+                }
+
+                is MdBlock.Paragraph -> {
+                    Text(
+                        text = block.text,
+                        fontFamily = SansFamily,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = TextMuted,
+                    )
+                    Spacer(Modifier.height(7.dp))
+                }
+            }
+        }
+    }
+}
+
+private fun parseReleaseNotes(raw: String): List<MdBlock> {
+    val lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    val blocks = mutableListOf<MdBlock>()
+    val paragraph = StringBuilder()
+
+    fun flushParagraph() {
+        val text = paragraph.toString().trim()
+        if (text.isNotEmpty()) blocks += MdBlock.Paragraph(inlineMarkdown(text))
+        paragraph.setLength(0)
+    }
+
+    for (line in lines) {
+        val trimmed = line.trim()
+        when {
+            trimmed.isEmpty() -> flushParagraph()
+
+            trimmed.startsWith("#") -> {
+                flushParagraph()
+                val level = trimmed.takeWhile { it == '#' }.length.coerceIn(1, 3)
+                val text = trimmed.dropWhile { it == '#' }.trim()
+                blocks += MdBlock.Heading(level, stripInlineMarkers(text))
+            }
+
+            trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
+                flushParagraph()
+                blocks += MdBlock.Bullet(inlineMarkdown(trimmed.substring(2).trim()))
+            }
+
+            else -> {
+                if (paragraph.isNotEmpty()) paragraph.append(' ')
+                paragraph.append(trimmed)
+            }
+        }
+    }
+    flushParagraph()
+    return blocks
+}
+
+/** Builds an [AnnotatedString], rendering `**bold**` spans and stripping `` ` `` markers. */
+private fun inlineMarkdown(source: String): AnnotatedString = buildAnnotatedString {
+    val text = source.replace("`", "")
+    var i = 0
+    while (i < text.length) {
+        if (i + 1 < text.length && text[i] == '*' && text[i + 1] == '*') {
+            val end = text.indexOf("**", startIndex = i + 2)
+            if (end != -1) {
+                pushStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = TextPrimary))
+                append(text.substring(i + 2, end))
+                pop()
+                i = end + 2
+                continue
+            }
+        }
+        append(text[i])
+        i++
+    }
+}
+
+/** Removes inline markers from plain heading text. */
+private fun stripInlineMarkers(text: String): String =
+    text.replace("**", "").replace("`", "")
