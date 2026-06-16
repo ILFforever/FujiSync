@@ -81,7 +81,7 @@ If you own a Fujifilm X-series camera and you:
 |---|---|
 | **Phone** | Android 8.0 (API 26) or newer |
 | **Camera** | Fujifilm X-series with custom recipe slots (C1–C7) |
-| **Cable** | USB-C OTG cable or adapter |
+| **Cable** | USB-C to C cable or adapter |
 | **Camera mode** | USB Setting > USB RAW Conv. / Backup Restore |
 
 ---
@@ -102,6 +102,27 @@ The app communicates with the camera over the Fujifilm PTP protocol via USB. Mos
 ## Download
 
 Grab the latest APK from [Releases](../../releases).
+
+---
+
+## Support
+
+FujiSync is free and always will be. If it saves you time, a coffee is always appreciated.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ilfforever-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ilfforever)
+
+<details>
+<summary>💳 สนับสนุนกันผ่าน PromptPay ได้นะครับ (คนไทย)</summary>
+
+<br>
+
+ถ้าใครใช้แอพนี้เเล้วชอบหรืออยากสนับสนุนให้พัฒนาต่อ โอนเงินมาช่วยซัพพอร์ตเล็กน้อยก็จะเป็นกำลังใจให้ผมได้ทำต่อไปครับ 😊
+
+<img src="docs/promptpay_qr.jpg" width="300" alt="PromptPay QR Code">
+
+สแกนตรงนี้ได้เลย ขอบคุณมากๆครับ 🙏
+
+</details>
 
 ---
 
@@ -214,27 +235,6 @@ This software is provided "as is", without warranty of any kind. Use at your own
 ## License
 
 Released under the [MIT License](LICENSE). Free to use, modify, and distribute.
-
----
-
-## Support
-
-FujiSync is free and open-source. If it saves you time, a coffee goes a long way.
-
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ilfforever-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ilfforever)
-
-<details>
-<summary>💳 โอน PromptPay ได้เลยครับ (คนไทย)</summary>
-
-<br>
-
-ถ้าใครใช้แอพนี้เเล้วชอบหรืออยากสนับสนุนให้พัฒนาต่อ โอนเงินมาช่วยซัพพอร์ตเล็กน้อยก็จะเป็นกำลังใจให้ผมได้ทำต่อไปครับ 😊
-
-<img src="docs/promptpay_qr.jpg" width="300" alt="PromptPay QR Code">
-
-สแกนตรงนี้ได้เลย ขอบคุณมากๆครับ 🙏
-
-</details>
 
 ---
 
