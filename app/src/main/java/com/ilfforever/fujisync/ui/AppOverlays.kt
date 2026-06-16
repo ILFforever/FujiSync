@@ -88,6 +88,7 @@ internal fun BoxScope.AppOverlays(
     onImportFromPhoto: () -> Unit,
     onAddEditorReferenceImage: () -> Unit,
     onRemoveEditorReferenceImage: (String) -> Unit,
+    onReorderEditorReferenceImages: (Int, Int) -> Unit,
     onSaveRecipeDraft: (RecipeUiModel) -> Unit,
     requestEditorClose: () -> Unit,
     onEditorDirtyChange: (Boolean) -> Unit,
@@ -134,6 +135,8 @@ internal fun BoxScope.AppOverlays(
     onSmartRefConfirmAndContinue: () -> Unit,
     onSmartRefDismissAndContinue: () -> Unit,
     onSmartRefCreateNew: () -> Unit,
+    onInstallUpdate: () -> Unit,
+    onDismissUpdateDialog: () -> Unit,
 ) {
     val context = LocalContext.current
     val usbReadWriteBenchVm: UsbReadWriteBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
@@ -444,6 +447,7 @@ internal fun BoxScope.AppOverlays(
             onDirtyChange = onEditorDirtyChange,
             onAddReferenceImage = onAddEditorReferenceImage,
             onRemoveReferenceImage = onRemoveEditorReferenceImage,
+            onReorderReferenceImages = onReorderEditorReferenceImages,
             onSave = onSaveRecipeDraft,
         )
     }
@@ -517,6 +521,14 @@ internal fun BoxScope.AppOverlays(
             onSaveAsNew = onDuplicateSaveAsNew,
             onUpdateExisting = { onDuplicateUpdateExisting(dialog.topMatch.libraryRecipe.id) },
             onDismiss = onDuplicateDismiss,
+        )
+    }
+
+    if (state.update.showUpdateDialog) {
+        com.ilfforever.fujisync.ui.components.UpdateAvailableDialog(
+            update = state.update,
+            onUpdate = onInstallUpdate,
+            onDismiss = onDismissUpdateDialog,
         )
     }
 }

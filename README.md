@@ -101,8 +101,6 @@ The app communicates with the camera over the Fujifilm PTP protocol via USB. Mos
 
 ## Download
 
-[![Download APK](https://img.shields.io/github/v/release/ILFforever/FujiSync?label=Download%20APK&logo=android&color=3DDC84)](https://github.com/ILFforever/FujiSync/releases/latest)
-
 Grab the latest APK from [Releases](../../releases).
 
 ---

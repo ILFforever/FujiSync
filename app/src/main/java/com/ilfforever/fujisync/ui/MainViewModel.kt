@@ -84,6 +84,7 @@ class MainViewModel @Inject constructor(
     val events: SharedFlow<MainViewModelEvent> = _events.asSharedFlow()
     private var latestRelease: AppUpdateRelease? = null
     private var downloadedUpdateUri: Uri? = null
+    private var startupUpdateCheckDone = false
     private var pendingBackupImportMode: BackupImportMode = BackupImportMode.Merge
 
     private var pendingReferenceTarget: ReferenceImageTarget? = null
@@ -92,6 +93,7 @@ class MainViewModel @Inject constructor(
     init {
         loadPersistedState()
         observeLibraryState()
+        checkForUpdatesOnStart()
     }
 
     private fun observeLibraryState() {
@@ -265,6 +267,14 @@ class MainViewModel @Inject constructor(
 
     fun handleRemoveEditorReferenceImage(uriString: String) {
         _uiState.update { state -> state.copy(editorReferenceImageUris = state.editorReferenceImageUris - uriString) }
+    }
+
+    fun handleReorderEditorReferenceImages(fromIndex: Int, toIndex: Int) {
+        _uiState.update { state ->
+            val m = state.editorReferenceImageUris.toMutableList()
+            if (fromIndex in m.indices && toIndex in m.indices) m.add(toIndex, m.removeAt(fromIndex))
+            state.copy(editorReferenceImageUris = m)
+        }
     }
 
     fun applyReferenceImages(uris: List<Uri>) {
@@ -650,6 +660,45 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(backup = it.backup.copy(message = null, error = null)) }
     }
 
+    /**
+     * Silent update check run once per process at startup. Unlike [handleCheckForUpdates] it
+     * never surfaces an "up to date" status or an error (a failed network call on launch should
+     * be invisible); when a newer release is found it raises the startup update modal.
+     */
+    private fun checkForUpdatesOnStart() {
+        if (startupUpdateCheckDone) return
+        startupUpdateCheckDone = true
+        if (_uiState.value.update.checking || _uiState.value.update.downloading) return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { releaseUpdater.fetchLatestRelease() }
+            result.onSuccess { release ->
+                latestRelease = release
+                downloadedUpdateUri = null
+                if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, release.versionName)) return@onSuccess
+                _uiState.update {
+                    it.copy(
+                        update = it.update.copy(
+                            latestVersion = release.versionName,
+                            releaseName = release.releaseName,
+                            releaseNotes = release.body,
+                            assetName = release.assetName,
+                            updateAvailable = true,
+                            downloaded = false,
+                            showUpdateDialog = true,
+                            message = "Update ${release.versionName} is available.",
+                            error = null,
+                        )
+                    )
+                }
+            }
+            // Failures are intentionally swallowed: the startup check stays silent.
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _uiState.update { it.copy(update = it.update.copy(showUpdateDialog = false)) }
+    }
+
     fun handleCheckForUpdates() {
         if (_uiState.value.update.checking || _uiState.value.update.downloading) return
         _uiState.update {
@@ -675,6 +724,7 @@ class MainViewModel @Inject constructor(
                                 checking = false,
                                 latestVersion = release.versionName,
                                 releaseName = release.releaseName,
+                                releaseNotes = release.body,
                                 assetName = release.assetName,
                                 updateAvailable = newer,
                                 downloaded = false,

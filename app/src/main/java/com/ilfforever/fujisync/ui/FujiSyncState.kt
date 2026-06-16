@@ -116,10 +116,13 @@ data class UpdateUiState(
     val downloading: Boolean = false,
     val latestVersion: String? = null,
     val releaseName: String? = null,
+    val releaseNotes: String? = null,
     val assetName: String? = null,
     val updateAvailable: Boolean = false,
     val downloaded: Boolean = false,
     val installPermissionRequired: Boolean = false,
+    /** Drives the startup "update available" modal. */
+    val showUpdateDialog: Boolean = false,
     val message: String? = null,
     val error: String? = null,
 )

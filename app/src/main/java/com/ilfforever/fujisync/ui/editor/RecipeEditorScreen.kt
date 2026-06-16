@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +33,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -42,8 +46,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,6 +100,7 @@ import com.ilfforever.fujisync.ui.theme.TextMuted
 import com.ilfforever.fujisync.ui.theme.TextPrimary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 private val monoSims = setOf(
     "Monochrome",
@@ -117,6 +129,7 @@ fun RecipeEditorScreen(
     onDirtyChange: (Boolean) -> Unit,
     onAddReferenceImage: () -> Unit,
     onRemoveReferenceImage: (String) -> Unit,
+    onReorderReferenceImages: (Int, Int) -> Unit = { _, _ -> },
     onSave: (RecipeUiModel) -> Unit,
 ) {
     val seed = initialRecipe ?: defaultRecipe()
@@ -308,6 +321,7 @@ fun RecipeEditorScreen(
                             maxReferenceImages = maxReferenceImages,
                             onAddReferenceImage = onAddReferenceImage,
                             onRemoveReferenceImage = onRemoveReferenceImage,
+                            onReorderReferenceImages = onReorderReferenceImages,
                         )
                     }
 
@@ -502,8 +516,10 @@ private fun EditorReferenceImages(
     maxReferenceImages: Int,
     onAddReferenceImage: () -> Unit,
     onRemoveReferenceImage: (String) -> Unit,
+    onReorderReferenceImages: (Int, Int) -> Unit,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val bitmaps by produceState(
         initialValue = referenceImageUris.map { it to (null as ImageBitmap?) },
         referenceImageUris,
@@ -516,6 +532,28 @@ private fun EditorReferenceImages(
         }
     }
     val hasImages = bitmaps.any { it.second != null }
+    val bitmapMap = remember(bitmaps) { bitmaps.toMap() }
+
+    var localOrder by remember(referenceImageUris) { mutableStateOf(referenceImageUris) }
+    var draggingUri by remember { mutableStateOf<String?>(null) }
+    var dragStartIndex by remember { mutableStateOf<Int?>(null) }
+    var currentDragIdx by remember { mutableStateOf<Int?>(null) }
+    var dragOriginalOrder by remember { mutableStateOf(referenceImageUris) }
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    val imageScrollState = rememberScrollState()
+    var imageRowWidthPx by remember { mutableIntStateOf(0) }
+    var edgeScrollDir by remember { mutableIntStateOf(0) }
+    val edgeZonePx = with(LocalDensity.current) { 64.dp.toPx() }
+    LaunchedEffect(edgeScrollDir, draggingUri) {
+        while (draggingUri != null && edgeScrollDir != 0) {
+            val delta = edgeScrollDir * 10f
+            val before = imageScrollState.value
+            imageScrollState.scrollBy(delta)
+            val actual = (imageScrollState.value - before).toFloat()
+            if (actual != 0f) dragOffsetX += actual
+            delay(16)
+        }
+    }
 
     Spacer(Modifier.height(14.dp))
     Column(
@@ -564,38 +602,120 @@ private fun EditorReferenceImages(
 
         if (hasImages) {
             Spacer(Modifier.height(10.dp))
+            val itemWidthPx = with(LocalDensity.current) { 104.dp.toPx() }
+            val itemGapPx = with(LocalDensity.current) { 8.dp.toPx() }
+            val itemStridePx = itemWidthPx + itemGapPx
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .horizontalScroll(imageScrollState)
+                    .onSizeChanged { imageRowWidthPx = it.width },
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                bitmaps.forEach { (uriString, bitmap) ->
-                    bitmap ?: return@forEach
-                    Box(modifier = Modifier.size(width = 104.dp, height = 78.dp)) {
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Bg),
-                        )
+                localOrder.forEachIndexed { index, uriString ->
+                    val bitmap = bitmapMap[uriString] ?: return@forEachIndexed
+                    val isDragging = draggingUri == uriString
+                    val dragTargetIdx = if (draggingUri != null && dragStartIndex != null) {
+                        (dragStartIndex!! + (dragOffsetX / itemStridePx).roundToInt())
+                            .coerceIn(0, localOrder.lastIndex)
+                    } else -1
+                    val visualOffsetX = when {
+                        isDragging -> dragOffsetX
+                        draggingUri == null || dragStartIndex == null -> 0f
+                        dragStartIndex!! < dragTargetIdx && index in (dragStartIndex!! + 1)..dragTargetIdx -> -itemStridePx
+                        dragStartIndex!! > dragTargetIdx && index in dragTargetIdx until dragStartIndex!! -> itemStridePx
+                        else -> 0f
+                    }
+                    key(uriString) {
                         Box(
                             modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(5.dp)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.68f))
-                                .clickable { onRemoveReferenceImage(uriString) },
-                            contentAlignment = Alignment.Center,
+                                .size(width = 104.dp, height = 78.dp)
+                                .graphicsLayer {
+                                    translationX = visualOffsetX
+                                    if (isDragging) {
+                                        scaleX = 1.07f; scaleY = 1.07f; shadowElevation = 16f
+                                    }
+                                }
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(
+                                    width = if (isDragging) 1.5.dp else 0.dp,
+                                    color = if (isDragging) Gold.copy(alpha = 0.7f) else Color.Transparent,
+                                    shape = RoundedCornerShape(10.dp),
+                                )
+                                .then(
+                                    if (referenceImageUris.size > 1) {
+                                        Modifier.pointerInput(uriString) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { _ ->
+                                                    FujiHaptics.perform(context, view, FujiHapticEffect.DragStart)
+                                                    draggingUri = uriString
+                                                    dragStartIndex = index
+                                                    currentDragIdx = index
+                                                    dragOriginalOrder = localOrder
+                                                    dragOffsetX = 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffsetX += dragAmount.x
+                                                    val newTarget = (index + (dragOffsetX / itemStridePx).roundToInt())
+                                                        .coerceIn(0, localOrder.lastIndex)
+                                                    if (newTarget != currentDragIdx) {
+                                                        FujiHaptics.perform(context, view, FujiHapticEffect.SoftConfirm)
+                                                        currentDragIdx = newTarget
+                                                    }
+                                                    val itemScreenX = (dragStartIndex ?: index) * itemStridePx + dragOffsetX - imageScrollState.value
+                                                    edgeScrollDir = when {
+                                                        itemScreenX < edgeZonePx -> -1
+                                                        itemScreenX > imageRowWidthPx - edgeZonePx -> 1
+                                                        else -> 0
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    edgeScrollDir = 0
+                                                    val start = dragStartIndex
+                                                    val end = currentDragIdx
+                                                    if (start != null && end != null && start != end) {
+                                                        FujiHaptics.perform(context, view, FujiHapticEffect.DragEnd)
+                                                        val m = localOrder.toMutableList()
+                                                        m.add(end, m.removeAt(start))
+                                                        localOrder = m
+                                                        onReorderReferenceImages(start, end)
+                                                    }
+                                                    draggingUri = null; dragStartIndex = null; currentDragIdx = null; dragOffsetX = 0f
+                                                },
+                                                onDragCancel = {
+                                                    edgeScrollDir = 0
+                                                    localOrder = dragOriginalOrder
+                                                    draggingUri = null; dragStartIndex = null; currentDragIdx = null; dragOffsetX = 0f
+                                                },
+                                            )
+                                        }
+                                    } else Modifier
+                                ),
                         ) {
-                            Icon(
-                                IconClose,
-                                contentDescription = "Remove image",
-                                tint = Color.White,
-                                modifier = Modifier.size(10.dp),
-                            )
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Bg),
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(5.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.68f))
+                                    .clickable { onRemoveReferenceImage(uriString) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(IconClose, contentDescription = "Remove image", tint = Color.White, modifier = Modifier.size(10.dp))
+                            }
                         }
                     }
                 }

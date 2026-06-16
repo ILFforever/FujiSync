@@ -62,6 +62,7 @@ fun FujiSyncApp(
     onReorderReferenceImages: (RecipeUiModel, Int, Int) -> Unit = { _, _, _ -> },
     onAddEditorReferenceImage: () -> Unit,
     onRemoveEditorReferenceImage: (String) -> Unit,
+    onReorderEditorReferenceImages: (Int, Int) -> Unit = { _, _ -> },
     onDeleteLibraryRecipes: (Set<String>) -> Unit,
     onCloneLibraryRecipe: (RecipeUiModel) -> Unit,
     onAddLibraryGroupImage: (String) -> Unit,
@@ -108,6 +109,7 @@ fun FujiSyncApp(
     onSetPropertyWriteDelay: (Long) -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
+    onDismissUpdateDialog: () -> Unit = {},
     onExportBackup: () -> Unit = {},
     onImportBackupMerge: () -> Unit = {},
     onImportBackupReplace: () -> Unit = {},
@@ -400,6 +402,7 @@ fun FujiSyncApp(
                     onImportFromPhoto = onImportFromPhoto,
                     onAddEditorReferenceImage = onAddEditorReferenceImage,
                     onRemoveEditorReferenceImage = onRemoveEditorReferenceImage,
+                    onReorderEditorReferenceImages = onReorderEditorReferenceImages,
                     onSaveRecipeDraft = onSaveRecipeDraft,
                     requestEditorClose = ::requestEditorClose,
                     onEditorDirtyChange = { editorDirty = it },
@@ -453,6 +456,8 @@ fun FujiSyncApp(
                     onSmartRefConfirmAndContinue = onSmartRefConfirmAndContinue,
                     onSmartRefDismissAndContinue = onSmartRefDismissAndContinue,
                     onSmartRefCreateNew = onSmartRefCreateNew,
+                    onInstallUpdate = onInstallUpdate,
+                    onDismissUpdateDialog = onDismissUpdateDialog,
                 )
             }
 
