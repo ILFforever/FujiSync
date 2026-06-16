@@ -193,6 +193,7 @@ internal fun RenameSheet(
                         value = label,
                         onValueChange = { label = it },
                         singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                         textStyle = TextStyle(
                             fontFamily = SansFamily,
                             fontWeight = FontWeight.SemiBold,

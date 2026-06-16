@@ -60,7 +60,7 @@ internal fun EditorTextField(
         onValueChange = onValueChange,
         singleLine = singleLine,
         textStyle = textStyle,
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(Gold),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
         modifier = modifier
             .fillMaxWidth()
             .then(if (minHeight > 0.dp) Modifier.heightIn(min = minHeight) else Modifier),

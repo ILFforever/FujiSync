@@ -600,6 +600,15 @@ private fun EditorReferenceImages(
                     }
                 }
             }
+            if (referenceImageUris.size > 1) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Hold and drag to rearrange",
+                    fontFamily = SansFamily,
+                    fontSize = 11.sp,
+                    color = TextDim,
+                )
+            }
         }
     }
 }

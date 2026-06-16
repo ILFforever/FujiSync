@@ -100,6 +100,7 @@ internal fun LibrarySearchField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
             textStyle = TextStyle(
                 fontFamily = SansFamily,
                 fontWeight = FontWeight.SemiBold,
@@ -669,6 +670,7 @@ internal fun BulkGroupDialog(
                     value = customGroupDraft,
                     onValueChange = { customGroupDraft = it },
                     singleLine = true,
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                     textStyle = TextStyle(
                         fontFamily = SansFamily,
                         fontWeight = FontWeight.SemiBold,
@@ -833,6 +835,7 @@ internal fun GroupAssignmentRow(
                             value = customGroupDraft,
                             onValueChange = onCustomGroupDraftChange,
                             singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                             textStyle = TextStyle(
                                 fontFamily = SansFamily,
                                 fontWeight = FontWeight.SemiBold,
@@ -958,6 +961,7 @@ internal fun SheetNameRow(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
             textStyle = TextStyle(
                 fontFamily = SansFamily,
                 fontWeight = FontWeight.Bold,

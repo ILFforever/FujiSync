@@ -373,6 +373,8 @@ class LocalStore(context: Context) {
         put("hapticsEnabled", settings.hapticsEnabled)
         put("favoritesOnTop", settings.favoritesOnTop)
         put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
+        put("maxReferenceImages", settings.maxReferenceImages)
+        put("smartRefSimilarityPct", settings.smartRefSimilarityPct)
     }
 
     private fun settingsFromJson(o: JSONObject): AppSettings =
@@ -383,6 +385,8 @@ class LocalStore(context: Context) {
             hapticsEnabled = o.optBoolean("hapticsEnabled", true),
             favoritesOnTop = o.optBoolean("favoritesOnTop", false),
             propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
+            maxReferenceImages = o.optInt("maxReferenceImages", 20),
+            smartRefSimilarityPct = o.optInt("smartRefSimilarityPct", 65),
         )
 
     private fun stringMapToJson(map: Map<String, String>): JSONObject =

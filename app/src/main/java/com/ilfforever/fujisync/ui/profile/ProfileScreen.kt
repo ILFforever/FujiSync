@@ -675,7 +675,7 @@ private fun MyCamerasScreen(
                         onValueChange = { renameDraft = it },
                         singleLine = true,
                         textStyle = TextStyle(fontFamily = SansFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = TextPrimary),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Gold),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))

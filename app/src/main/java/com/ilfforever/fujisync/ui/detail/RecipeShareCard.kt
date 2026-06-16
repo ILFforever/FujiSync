@@ -249,9 +249,7 @@ fun createRecipeShareCard(recipe: RecipeUiModel, qrBitmap: Bitmap, referenceBitm
         12f, 12f,
         Paint(Paint.ANTI_ALIAS_FLAG).apply { color = C_WHITE },
     )
-    val scaledQr = Bitmap.createScaledBitmap(qrBitmap, QR_SIZE, QR_SIZE, false)
-    canvas.drawBitmap(scaledQr, qrLeft + 16f, qrCardTop + 16f, null)
-    scaledQr.recycle()
+    canvas.drawBitmap(qrBitmap, qrLeft + 16f, qrCardTop + 16f, null)
 
     // Scan text, vertically centered beside QR
     val scanMaxW = qrLeft - PAD - 32f

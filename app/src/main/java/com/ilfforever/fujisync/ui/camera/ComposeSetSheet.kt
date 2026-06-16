@@ -409,6 +409,7 @@ private fun SlotAssignmentContent(
             value = label,
             onValueChange = onLabelChange,
             singleLine = true,
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
             textStyle = TextStyle(
                 fontFamily = SansFamily,
                 fontWeight = FontWeight.SemiBold,
@@ -566,6 +567,7 @@ private fun RecipePickerContent(
             value = searchQuery,
             onValueChange = onSearchChange,
             singleLine = true,
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
             textStyle = TextStyle(
                 fontFamily = SansFamily,
                 fontSize = 14.sp,

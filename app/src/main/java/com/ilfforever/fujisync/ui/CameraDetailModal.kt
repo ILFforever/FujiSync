@@ -208,6 +208,7 @@ internal fun BoxScope.CameraDetailModal(
                             value = draft,
                             onValueChange = { draft = it },
                             singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                             textStyle = TextStyle(
                                 fontFamily = SansFamily,
                                 fontWeight = FontWeight.SemiBold,

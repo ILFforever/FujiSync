@@ -168,7 +168,7 @@ fun SettingsScreen(
             SettingsGroup {
                 SettingsStepperRow(
                     label = "Match sensitivity",
-                    description = "How closely a photo's settings must match a library recipe. Lower = more lenient.",
+                    description = "How closely a photo's settings must match a library recipe. Lower = more lenient. Large libraries can produce false positives — increase this if unrelated recipes are showing up.",
                     value = settings.smartRefSimilarityPct,
                     unit = "%",
                     step = 5,

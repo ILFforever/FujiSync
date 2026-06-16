@@ -247,7 +247,10 @@ internal fun RecipeQrSheet(
 
 internal fun shareRecipeQr(context: Context, recipe: RecipeUiModel, qrBitmap: Bitmap) {
     val referenceBitmap = decodeShareReferenceBitmap(context, recipe.referenceImageUris.firstOrNull())
-    val card = createRecipeShareCard(recipe, qrBitmap, referenceBitmap)
+    // Generate QR at card size (280px) so it draws 1:1 on the card with no scaling distortion.
+    val cardQr = RecipeQr.createBitmap(RecipeQr.encode(recipe), 280)
+    val card = createRecipeShareCard(recipe, cardQr, referenceBitmap)
+    cardQr.recycle()
     referenceBitmap?.recycle()
     val dir = File(context.cacheDir, "qr_codes").also { it.mkdirs() }
     val safeName = recipe.name

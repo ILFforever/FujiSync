@@ -223,6 +223,7 @@ fun BackupSheet(
                         onValueChange = { label = it },
                         enabled = !saving,
                         singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                         textStyle = TextStyle(
                             fontFamily = SansFamily,
                             fontWeight = FontWeight.SemiBold,

@@ -283,6 +283,7 @@ private fun DiscoverHeader(
                             value = searchQuery,
                             onValueChange = onSearchQueryChange,
                             singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                             textStyle = TextStyle(fontFamily = SansFamily, fontSize = 15.sp, color = TextPrimary),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(onSearch = { onSearchSubmit() }),
@@ -970,6 +971,7 @@ private fun FxwRecipeDetailScreen(
                         value = saveName,
                         onValueChange = { if (!isSaving) saveName = it },
                         singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(TextPrimary),
                         textStyle = TextStyle(
                             fontFamily = SansFamily,
                             fontWeight = FontWeight.SemiBold,
