@@ -217,4 +217,25 @@ Released under the [MIT License](LICENSE). Free to use, modify, and distribute.
 
 ---
 
+## Support
+
+FujiSync is free and open-source. If it saves you time, a coffee goes a long way.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ilfforever-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ilfforever)
+
+<details>
+<summary>💳 โอน PromptPay ได้เลยครับ (คนไทย)</summary>
+
+<br>
+
+ถ้าใครใช้แอพนี้เเล้วชอบหรืออยากสนับสนุนให้พัฒนาต่อ โอนเงินมาช่วยซัพพอร์ตเล็กน้อยก็จะเป็นกำลังใจให้ผมได้ทำต่อไปครับ 😊
+
+<img src="docs/promptpay_qr.jpg" width="300" alt="PromptPay QR Code">
+
+สแกนตรงนี้ได้เลย ขอบคุณมากๆครับ 🙏
+
+</details>
+
+---
+
 Made with ❤️ by [ILFforever](https://github.com/ILFforever)
