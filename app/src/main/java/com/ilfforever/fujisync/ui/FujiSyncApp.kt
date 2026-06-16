@@ -467,7 +467,8 @@ fun FujiSyncApp(
                 if (!isCharging) chargingBannerDismissed = false
             }
             AnimatedVisibility(
-                visible = state.tab == AppTab.Camera && isCharging && !chargingBannerDismissed,
+                visible = state.tab == AppTab.Camera && isCharging && !chargingBannerDismissed &&
+                    !state.update.showUpdateDialog,
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it },
             ) {
