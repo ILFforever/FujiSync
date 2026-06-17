@@ -23,10 +23,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ilfforever.fujisync.ui.components.IconClose
+import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
+import com.ilfforever.fujisync.ui.haptics.FujiHaptics
 import com.ilfforever.fujisync.ui.theme.Gold
 import com.ilfforever.fujisync.ui.theme.PanelLow
 import com.ilfforever.fujisync.ui.theme.SansFamily
@@ -62,6 +65,8 @@ private fun Context.isCharging(): Boolean {
 
 @Composable
 internal fun ChargingWarningBanner(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -98,7 +103,10 @@ internal fun ChargingWarningBanner(onDismiss: () -> Unit) {
             modifier = Modifier
                 .size(16.dp)
                 .clip(CircleShape)
-                .clickable(onClick = onDismiss)
+                .clickable {
+                    FujiHaptics.perform(context, view, FujiHapticEffect.SheetDismiss)
+                    onDismiss()
+                }
                 .padding(1.dp),
         )
     }

@@ -50,6 +50,8 @@ import java.util.UUID
 
 sealed class CameraEvent {
     data class RequestUsbPermission(val device: UsbDevice) : CameraEvent()
+    /** One-shot signal that a connect/scan attempt failed. Drives the warning haptic. */
+    object ScanFailed : CameraEvent()
 }
 
 @HiltViewModel
@@ -118,6 +120,7 @@ class CameraViewModel @Inject constructor(
                         scanError = appContext.getString(R.string.error_camera_not_found),
                     )
                 }
+                _events.tryEmit(CameraEvent.ScanFailed)
                 return
             }
             if (!usbManager.hasPermission(ptpDevice.device)) {
@@ -144,6 +147,7 @@ class CameraViewModel @Inject constructor(
                     CameraUsbMode.Ptp -> appContext.getString(R.string.error_no_camera_found)
                 }
                 _state.update { it.copy(scanning = false, scanError = message) }
+                _events.tryEmit(CameraEvent.ScanFailed)
                 return@launch
             }
             if (!usbManager.hasPermission(ptpDevice.device)) {
@@ -161,6 +165,7 @@ class CameraViewModel @Inject constructor(
         } else {
             _state.update { it.copy(scanning = false, scanError = appContext.getString(R.string.error_usb_permission_denied)) }
             _writeBusy.value = false
+            _events.tryEmit(CameraEvent.ScanFailed)
         }
     }
 
@@ -206,6 +211,7 @@ class CameraViewModel @Inject constructor(
                 }
                 is FujiPtpProbeResult.NotReady -> {
                     _state.update { it.copy(connected = false, scanning = false, scanError = result.reason) }
+                    _events.tryEmit(CameraEvent.ScanFailed)
                 }
             }
         }

@@ -132,17 +132,19 @@ class LibraryStateHolder @Inject constructor(
 
     fun handleDuplicateUpdateExisting(libraryId: String) {
         val dialog = _state.value.duplicateDialog ?: return
-        val existing = _state.value.recipes.firstOrNull { it.id == libraryId }
-        val existingGroupIds = existing?.groupIds.orEmpty()
-        val updated = dialog.incomingRecipe
-            .toLibraryRecipe(dialog.source)
-            .copy(
-                id = libraryId,
-                groupIds = existingGroupIds,
-                sourceCameraName = dialog.source?.cameraName ?: existing?.sourceCameraName,
-                sourceCameraModel = dialog.source?.cameraModel ?: existing?.sourceCameraModel,
-                sourceUsbId = dialog.source?.usbId ?: existing?.sourceUsbId,
-            )
+        val existing = _state.value.recipes.firstOrNull { it.id == libraryId } ?: return
+        val incoming = dialog.incomingRecipe
+        val updated = existing.copy(
+            name = incoming.name,
+            sim = incoming.sim,
+            pills = incoming.pills,
+            effects = incoming.effects,
+            tone = incoming.tone,
+            wb = incoming.wb,
+            sourceCameraName = dialog.source?.cameraName ?: existing.sourceCameraName,
+            sourceCameraModel = dialog.source?.cameraModel ?: existing.sourceCameraModel,
+            sourceUsbId = dialog.source?.usbId ?: existing.sourceUsbId,
+        )
         _state.update {
             it.copy(
                 duplicateDialog = null,
@@ -628,7 +630,7 @@ class LibraryStateHolder @Inject constructor(
     }
 
     private fun RecipeUiModel.isDuplicateSettings(existing: LibraryRecipeUiModel): Boolean =
-        sim == existing.sim && effects == existing.effects && tone == existing.tone && wb == existing.wb
+        sim == existing.sim && effects == existing.effects && tone.withoutClarity() == existing.tone.withoutClarity() && wb == existing.wb
 
     private fun RecipeUiModel.isSameName(existing: LibraryRecipeUiModel): Boolean {
         val a = LibraryRecipeName.sanitizeForMatching(name)
@@ -645,8 +647,8 @@ class LibraryStateHolder @Inject constructor(
 
     private fun RecipeUiModel.isSimilarSettings(existing: LibraryRecipeUiModel, threshold: Float = 0.65f): Boolean {
         if (sim != existing.sim) return false
-        val myAll = effects + tone + wb
-        val theirAll = existing.effects + existing.tone + existing.wb
+        val myAll = effects + tone.withoutClarity() + wb
+        val theirAll = existing.effects + existing.tone.withoutClarity() + existing.wb
         val uniqueKeys = (myAll.keys + theirAll.keys).toSet()
         if (uniqueKeys.isEmpty()) return false
         val matchCount = uniqueKeys.count { key -> myAll[key] != null && myAll[key] == theirAll[key] }
@@ -660,6 +662,8 @@ class LibraryStateHolder @Inject constructor(
         if (union == 0) return 1f
         return wordsA.intersect(wordsB).size.toFloat() / union
     }
+
+    private fun Map<String, String>.withoutClarity() = filterKeys { it != "Clarity" }
 
     // ── Mapping helpers ───────────────────────────────────────────────
 

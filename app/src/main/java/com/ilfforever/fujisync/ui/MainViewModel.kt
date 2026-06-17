@@ -823,6 +823,11 @@ class MainViewModel @Inject constructor(
     fun handleCloneLibraryRecipe(recipe: RecipeUiModel) {
         val clone = libraryHolder.cloneRecipe(recipe) ?: return
         openLibraryItem(clone)
+        viewModelScope.launch {
+            _uiState.update { it.copy(toastMessage = "Cloned \"${recipe.name}\"") }
+            delay(UiTimings.TOAST_DISMISS_MS)
+            _uiState.update { it.copy(toastMessage = null) }
+        }
     }
 
     fun handleLoadSampleLibrary() = libraryHolder.loadSampleLibrary()

@@ -80,11 +80,6 @@ fun ConnectGuide(
     onSimulateConnect: () -> Unit,
 ) {
     var troubleshootOpen by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val view = LocalView.current
-    LaunchedEffect(scanError) {
-        if (scanError != null) FujiHaptics.perform(context, view, FujiHapticEffect.WarningPause)
-    }
     val steps = listOf(
         ConnectStepUi("01", "Set USB mode", "Connection Setting → USB Mode → USB RAW CONV."),
         ConnectStepUi("02", "Connect directly", "Use a USB-C data cable from phone to camera."),

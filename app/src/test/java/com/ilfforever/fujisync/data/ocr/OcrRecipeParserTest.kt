@@ -1197,6 +1197,42 @@ class OcrRecipeParserTest {
         )
     }
 
+    @Test
+    fun `parse OCR with Shadovw typo and 0FF instead of OFF`() {
+        assertParsed(
+            raw = """
+                Film Simulation: CLASSIC Neg.
+                White Balance: AUTO
+                Red: +2
+                Blue: -5
+                Dynamic Range: DR100
+                Grain Effect-Roughness: 0FF
+                Colour Chrome Effect: Strong
+                Colour Chrome Fx Blue: 0FF
+                Colour: +4
+                Sharpness: -2
+                Highlight Tone: +1.5
+                Shadovw Tone: -1.0
+                High ISO noise reduction: -4
+                Clarity: 0
+            """.trimIndent(),
+            sim = "Classic Neg",
+            dr = "DR100%",
+            grain = "Off",
+            cc = "Strong",
+            ccBlue = "Off",
+            wb = "Auto",
+            wbR = "+2",
+            wbB = "-5",
+            hl = "+1.5",
+            sh = "-1",
+            color = "+4",
+            sharp = "-2",
+            nr = "-4",
+            clarity = "0",
+        )
+    }
+
     private fun assertParsed(
         raw: String,
         sim: String,

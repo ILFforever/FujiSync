@@ -33,6 +33,8 @@ import com.ilfforever.fujisync.ui.MainViewModelEvent
 import com.ilfforever.fujisync.ui.SplashScreen
 import com.ilfforever.fujisync.ui.camera.CameraEvent
 import com.ilfforever.fujisync.ui.camera.CameraViewModel
+import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
+import com.ilfforever.fujisync.ui.haptics.FujiHaptics
 import com.ilfforever.fujisync.ui.profile.ImportEvent
 import com.ilfforever.fujisync.ui.profile.ImportViewModel
 import com.ilfforever.fujisync.ui.theme.FujiRecipesTheme
@@ -245,17 +247,17 @@ class MainActivity : ComponentActivity() {
             viewModel.events.collect { event ->
                 when (event) {
                     is MainViewModelEvent.RequestUsbPermission -> requestUsbPermission(event.device)
-                    MainViewModelEvent.LaunchReferenceImagePicker -> referenceImagePicker.launch(arrayOf("image/*"))
-                    MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(arrayOf("image/*"))
-                    MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(arrayOf("image/*"))
-                    MainViewModelEvent.LaunchOcrImagePicker  -> ocrImagePicker.launch(arrayOf("image/*"))
-                    MainViewModelEvent.LaunchQrImagePicker -> qrImagePicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchReferenceImagePicker -> referenceImagePicker.launch(arrayOf("*/*"))
+                    MainViewModelEvent.LaunchGroupImagePicker -> groupImagePicker.launch(arrayOf("*/*"))
+                    MainViewModelEvent.LaunchExifImagePicker -> exifImagePicker.launch(arrayOf("*/*"))
+                    MainViewModelEvent.LaunchOcrImagePicker  -> ocrImagePicker.launch(arrayOf("*/*"))
+                    MainViewModelEvent.LaunchQrImagePicker -> qrImagePicker.launch(arrayOf("*/*"))
                     is MainViewModelEvent.InstallApk -> openApkInstaller(event.uri)
                     MainViewModelEvent.OpenInstallPermissionSettings -> openInstallPermissionSettings()
                     is MainViewModelEvent.LaunchBackupExport -> backupExportPicker.launch(event.fileName)
                     MainViewModelEvent.LaunchBackupImport -> backupImportPicker.launch(arrayOf("application/json", "text/*", "*/*"))
-                    MainViewModelEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("image/*"))
-                    MainViewModelEvent.LaunchSmartRefPicker -> smartRefPicker.launch(arrayOf("image/*"))
+                    MainViewModelEvent.LaunchShutterCheckPicker -> shutterCheckPicker.launch(arrayOf("*/*"))
+                    MainViewModelEvent.LaunchSmartRefPicker -> smartRefPicker.launch(arrayOf("*/*"))
                     MainViewModelEvent.BackupImported -> cameraVm.reloadPersistedData()
                 }
             }
@@ -264,6 +266,10 @@ class MainActivity : ComponentActivity() {
             cameraVm.events.collect { event ->
                 when (event) {
                     is CameraEvent.RequestUsbPermission -> requestUsbPermission(event.device)
+                    CameraEvent.ScanFailed -> FujiHaptics.perform(
+                        context = this@MainActivity,
+                        effect = FujiHapticEffect.WarningPause,
+                    )
                 }
             }
         }

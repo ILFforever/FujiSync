@@ -94,8 +94,8 @@ The app communicates with the camera over the Fujifilm PTP protocol via USB. Mos
 | Camera | Status |
 |---|---|
 | X-T5 | Confirmed |
-| X-S20 | Confirmed |
-| X100VI | Confirmed |
+| X-H2 | Confirmed |
+| X-Pro3 | Not working |
 | *Other X-series* | Likely works, untested |
 
 ---

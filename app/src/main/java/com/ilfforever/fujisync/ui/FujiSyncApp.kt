@@ -1,12 +1,14 @@
 package com.ilfforever.fujisync.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ilfforever.fujisync.ui.camera.CameraCardUiModel
@@ -247,6 +250,12 @@ fun FujiSyncApp(
     ).BackHandler()
 
     Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+        val isCharging = rememberIsPhoneCharging()
+        var chargingBannerDismissed by remember { mutableStateOf(false) }
+        LaunchedEffect(isCharging) {
+            if (!isCharging) chargingBannerDismissed = false
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
             if (state.tab == AppTab.Camera) {
                 AppHeader(
@@ -459,21 +468,16 @@ fun FujiSyncApp(
                     onInstallUpdate = onInstallUpdate,
                     onDismissUpdateDialog = onDismissUpdateDialog,
                 )
+
+                // Charging banner — overlays the bottom of the content area (above
+                // the tab bar) so the content beneath it is never clipped.
+                ChargingBannerOverlay(
+                    visible = state.tab == AppTab.Camera && isCharging && !chargingBannerDismissed &&
+                        !state.update.showUpdateDialog,
+                    onDismiss = { chargingBannerDismissed = true },
+                )
             }
 
-            val isCharging = rememberIsPhoneCharging()
-            var chargingBannerDismissed by remember { mutableStateOf(false) }
-            LaunchedEffect(isCharging) {
-                if (!isCharging) chargingBannerDismissed = false
-            }
-            AnimatedVisibility(
-                visible = state.tab == AppTab.Camera && isCharging && !chargingBannerDismissed &&
-                    !state.update.showUpdateDialog,
-                enter = slideInVertically { it },
-                exit = slideOutVertically { it },
-            ) {
-                ChargingWarningBanner(onDismiss = { chargingBannerDismissed = true })
-            }
 
             AppTabBar(
                 tab = state.tab,
@@ -547,5 +551,26 @@ fun FujiSyncApp(
                 onSave = { label, slots -> onComposeSet(label, slots) },
             )
         }
+    }
+}
+
+
+/**
+ * Charging banner rendered as a [BoxScope] overlay anchored to the bottom of the
+ * content area. Declaring [BoxScope] as an explicit receiver avoids the implicit
+ * receiver ambiguity between the top-level and `ColumnScope` `AnimatedVisibility`
+ * overloads when this is hosted inside a `Box` nested in a `Column`. Because it
+ * overlays (rather than occupying a layout slot), content beneath it — like the
+ * Troubleshoot button — is never clipped.
+ */
+@Composable
+private fun BoxScope.ChargingBannerOverlay(visible: Boolean, onDismiss: () -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = Modifier.align(Alignment.BottomCenter),
+        enter = slideInVertically { it },
+        exit = slideOutVertically { it } + fadeOut(),
+    ) {
+        ChargingWarningBanner(onDismiss = onDismiss)
     }
 }
