@@ -1,5 +1,6 @@
 package com.ilfforever.fujisync.ui
 
+import com.ilfforever.fujisync.BuildConfig
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -335,7 +336,7 @@ fun FujiSyncApp(
                         onScanTileGuide = { showScanTileGuide = true },
                         onComposeSet = { showComposeSetSheet = true },
                     )
-                    AppTab.Discover -> DiscoverScreen()
+                    AppTab.Discover -> if (BuildConfig.DISCOVER_ENABLED) DiscoverScreen()
                     AppTab.Profile -> ProfileScreen(
                         cameraLabels = state.camera.cameraLabels,
                         cameraModels = state.camera.cameraModels,
@@ -355,7 +356,7 @@ fun FujiSyncApp(
                         onLoadSampleLibrary = onLoadSampleLibrary,
                         onExploreDemo = onExploreDemo,
                         onOpenExifBench = { showExifBench = true },
-                        onOpenFxwSearchBench = { showFxwSearchBench = true },
+                        onOpenFxwSearchBench = if (BuildConfig.DISCOVER_ENABLED) {{ showFxwSearchBench = true }} else {{}},
                         onOpenUsbReadWriteBench = { showUsbReadWriteBench = true },
                         onOpenWriteDelayBench = { showWriteDelayBench = true },
                         onOpenNameBench = { showNameBench = true },

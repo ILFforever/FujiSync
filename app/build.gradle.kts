@@ -21,6 +21,18 @@ android {
         buildConfigField("String", "GITHUB_REPO", "\"ILFforever/FujiSync\"")
     }
 
+    flavorDimensions += "discover"
+    productFlavors {
+        create("full") {
+            dimension = "discover"
+            buildConfigField("Boolean", "DISCOVER_ENABLED", "true")
+        }
+        create("lean") {
+            dimension = "discover"
+            buildConfigField("Boolean", "DISCOVER_ENABLED", "false")
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

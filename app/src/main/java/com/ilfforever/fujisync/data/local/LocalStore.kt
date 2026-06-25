@@ -213,6 +213,7 @@ class LocalStore(context: Context) {
             put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
             put("smartRefSimilarityPct", settings.smartRefSimilarityPct)
             put("maxReferenceImages", settings.maxReferenceImages)
+            put("disclaimerAccepted", settings.disclaimerAccepted)
         }.toString())
     }
 
@@ -230,6 +231,7 @@ class LocalStore(context: Context) {
                 propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
                 smartRefSimilarityPct = o.optInt("smartRefSimilarityPct", 65),
                 maxReferenceImages = o.optInt("maxReferenceImages", 20),
+                disclaimerAccepted = o.optBoolean("disclaimerAccepted", false),
             )
         }.getOrElse { AppSettings() }
     }
@@ -375,6 +377,7 @@ class LocalStore(context: Context) {
         put("propertyWriteDelayMs", settings.propertyWriteDelayMs)
         put("maxReferenceImages", settings.maxReferenceImages)
         put("smartRefSimilarityPct", settings.smartRefSimilarityPct)
+        put("disclaimerAccepted", settings.disclaimerAccepted)
     }
 
     private fun settingsFromJson(o: JSONObject): AppSettings =
@@ -387,6 +390,7 @@ class LocalStore(context: Context) {
             propertyWriteDelayMs = o.optLong("propertyWriteDelayMs", 0L),
             maxReferenceImages = o.optInt("maxReferenceImages", 20),
             smartRefSimilarityPct = o.optInt("smartRefSimilarityPct", 65),
+            disclaimerAccepted = o.optBoolean("disclaimerAccepted", false),
         )
 
     private fun stringMapToJson(map: Map<String, String>): JSONObject =

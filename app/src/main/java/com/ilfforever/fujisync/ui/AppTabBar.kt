@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.BuildConfig
 import com.ilfforever.fujisync.ui.components.IconCamera
 import com.ilfforever.fujisync.ui.components.IconFolder
 import com.ilfforever.fujisync.ui.components.IconProfile
@@ -45,12 +46,12 @@ private data class TabItem(val id: AppTab, val label: String, val icon: ImageVec
 internal fun AppTabBar(tab: AppTab, onTabChange: (AppTab) -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
-    val tabs = listOf(
-        TabItem(AppTab.Camera, "CAMERA", IconCamera),
-        TabItem(AppTab.Library, "LIBRARY", IconFolder),
-        TabItem(AppTab.Discover, "DISCOVER", IconSearch),
-        TabItem(AppTab.Profile, "PROFILE", IconProfile),
-    )
+    val tabs = buildList {
+        add(TabItem(AppTab.Camera, "CAMERA", IconCamera))
+        add(TabItem(AppTab.Library, "LIBRARY", IconFolder))
+        if (BuildConfig.DISCOVER_ENABLED) add(TabItem(AppTab.Discover, "DISCOVER", IconSearch))
+        add(TabItem(AppTab.Profile, "PROFILE", IconProfile))
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()

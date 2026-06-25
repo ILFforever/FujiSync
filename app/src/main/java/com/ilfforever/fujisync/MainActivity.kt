@@ -25,7 +25,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.ilfforever.fujisync.capture.CaptureDiag
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import com.ilfforever.fujisync.capture.OcrCaptureService
+import com.ilfforever.fujisync.ui.DisclaimerScreen
 import com.ilfforever.fujisync.ui.FujiSyncApp
 import com.ilfforever.fujisync.ui.BackupImportMode
 import com.ilfforever.fujisync.ui.MainViewModel
@@ -157,6 +168,7 @@ class MainActivity : ComponentActivity() {
                 if (showSplash) {
                     SplashScreen(onComplete = { showSplash = false })
                 } else {
+                    Box(modifier = Modifier.fillMaxSize()) {
                     FujiSyncApp(
                     state = combinedState,
                     onReconnect = cameraVm::onReconnect,
@@ -237,7 +249,18 @@ class MainActivity : ComponentActivity() {
                     onSmartRefDismissAndContinue = importVm::handleSmartRefDismissAndContinue,
                     onSmartRefCreateNew = importVm::handleSmartRefCreateNew,
                     )
-                } // else
+
+                    AnimatedVisibility(
+                        visible = !combinedState.settings.disclaimerAccepted,
+                        enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                                slideInVertically(tween(360, easing = FastOutSlowInEasing)) { it },
+                        exit = fadeOut(tween(220, easing = FastOutSlowInEasing)) +
+                               slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it },
+                    ) {
+                        DisclaimerScreen(onAccept = viewModel::handleDisclaimerAccepted)
+                    }
+                    } // Box
+                }
             }
         }
     }

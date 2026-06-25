@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.DisclaimerScreen
 import com.ilfforever.fujisync.ui.BackupUiState
 import com.ilfforever.fujisync.ui.UpdateUiState
 import com.ilfforever.fujisync.ui.components.SectionLabel
@@ -106,6 +107,7 @@ fun ProfileScreen(
     var myCamerasOpen by remember { mutableStateOf(false) }
     var backupOpen by remember { mutableStateOf(false) }
     var devToolsOpen by remember { mutableStateOf(false) }
+    var disclaimerOpen by remember { mutableStateOf(false) }
     var supportOpen by remember { mutableStateOf(false) }
 
     overlayStackOf(
@@ -327,8 +329,22 @@ fun ProfileScreen(
                 onOpenPtpLog = onOpenPtpLog,
                 onAddMockCamera = onAddMockCamera,
                 onShowScanLog = onShowScanLog,
+                onShowDisclaimer = { disclaimerOpen = true },
                 propertyWriteDelayMs = settings.propertyWriteDelayMs,
                 onSetPropertyWriteDelay = onSetPropertyWriteDelay,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = disclaimerOpen,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                    slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+            exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                   slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+        ) {
+            DisclaimerScreen(
+                onAccept = { disclaimerOpen = false },
+                actionLabel = "CLOSE",
             )
         }
     }

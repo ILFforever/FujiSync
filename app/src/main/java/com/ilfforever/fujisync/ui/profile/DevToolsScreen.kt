@@ -1,6 +1,7 @@
 package com.ilfforever.fujisync.ui.profile
 
 import androidx.activity.compose.BackHandler
+import com.ilfforever.fujisync.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -69,6 +70,7 @@ fun DevToolsScreen(
     onOpenPtpLog: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
+    onShowDisclaimer: () -> Unit = {},
     propertyWriteDelayMs: Long = 0L,
     onSetPropertyWriteDelay: (Long) -> Unit = {},
 ) {
@@ -133,6 +135,8 @@ fun DevToolsScreen(
                 ProfileNavRow(label = "Add mock camera", onClick = onAddMockCamera, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Scan diagnostic log", onClick = onShowScanLog, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "Show disclaimer modal", onClick = onShowDisclaimer, inCard = true)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -165,8 +169,10 @@ fun DevToolsScreen(
                 ProfileNavRow(label = "Haptic bench", onClick = onOpenHapticBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "EXIF bench", onClick = onOpenExifBench, inCard = true)
-                ProfileDivider()
-                ProfileNavRow(label = "FXW search bench", onClick = onOpenFxwSearchBench, inCard = true)
+                if (BuildConfig.DISCOVER_ENABLED) {
+                    ProfileDivider()
+                    ProfileNavRow(label = "FXW search bench", onClick = onOpenFxwSearchBench, inCard = true)
+                }
                 ProfileDivider()
                 ProfileNavRow(label = "PTP log", onClick = onOpenPtpLog, inCard = true)
             }

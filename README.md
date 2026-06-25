@@ -10,6 +10,8 @@
 
 This is a free, open-source Android app for Fujifilm X-series photographers who manage film simulation presets and want a faster alternative to navigating camera menus by hand. Fork it, contribute, suggest features. All welcome.
 
+> **Warranty notice** — FujiSync is not made or endorsed by FUJIFILM Corporation. Connecting your camera to third-party software may void your Fujifilm manufacturer warranty. Use at your own risk.
+
 ---
 
 <!-- SCREENSHOT: hero banner or app preview gif, suggested size 1280x640 -->
@@ -225,13 +227,18 @@ If a recipe parameter reads wrong or a camera model behaves differently, that's 
 ## Related
 
 - [fujifilm-ptp-recipes](https://github.com/ILFforever/fujifilm-ptp-recipes) — community documentation for the Fujifilm USB/PTP recipe protocol
-- [Fuji X Weekly](https://fujixweekly.com) — the recipe community this app integrates with
 
 ---
 
 ## Disclaimer
 
-This software is provided "as is", without warranty of any kind. Use at your own risk. The author is not affiliated with Fujifilm and accepts no liability for any damage to your camera, loss of data, or any other issues arising from the use of this application. Always back up your camera settings before making changes.
+FujiSync is an independent project and is not made, endorsed, or supported by FUJIFILM Corporation.
+
+**Warranty** — Connecting your camera to third-party software may void your Fujifilm manufacturer warranty. Fujifilm has indicated this applies to USB-based third-party access regardless of whether their SDK is used. You accept full responsibility for any effect on your warranty coverage.
+
+**How it works** — The app communicates over PTP (Picture Transfer Protocol), the same USB connection mode your camera uses for standard backup (`USB RAW Conv. / Backup Restore`). No Fujifilm SDK or licensed library is used.
+
+**Liability** — The author accepts no liability for camera damage, data loss, voided warranties, or any other issues arising from use of this app. Always back up your camera settings before making changes.
 
 ## License
 

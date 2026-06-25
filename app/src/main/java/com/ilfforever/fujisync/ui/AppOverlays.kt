@@ -215,7 +215,7 @@ internal fun BoxScope.AppOverlays(
         }
     }
 
-    if (showFxwSearchBench) {
+    if (BuildConfig.DISCOVER_ENABLED && showFxwSearchBench) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
             FxwSearchBenchScreen(onClose = onFxwSearchBenchClose)
         }

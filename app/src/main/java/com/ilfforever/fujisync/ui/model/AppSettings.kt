@@ -9,4 +9,5 @@ data class AppSettings(
     val propertyWriteDelayMs: Long = 0L,
     val smartRefSimilarityPct: Int = 65,
     val maxReferenceImages: Int = 20,
+    val disclaimerAccepted: Boolean = false,
 )

@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ilfforever.fujisync.BuildConfig
+import com.ilfforever.fujisync.ui.DisclaimerScreen
 import com.ilfforever.fujisync.ui.UpdateUiState
 import com.ilfforever.fujisync.ui.components.Wordmark
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -76,6 +77,7 @@ fun AboutScreen(
     onBack: () -> Unit,
 ) {
     var licenseOpen by remember { mutableStateOf(false) }
+    var disclaimerOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     fun openUrl(url: String) {
@@ -245,6 +247,8 @@ fun AboutScreen(
                         .border(1.dp, Border, RoundedCornerShape(14.dp)),
                 ) {
                     ProfileNavRow(label = "License", onClick = { licenseOpen = true }, inCard = true)
+                    ProfileDivider()
+                    ProfileNavRow(label = "Disclaimer", onClick = { disclaimerOpen = true }, inCard = true)
                 }
 
                 Spacer(Modifier.height(40.dp))
@@ -259,6 +263,19 @@ fun AboutScreen(
                    slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
         ) {
             LicenseScreen(onBack = { licenseOpen = false })
+        }
+
+        AnimatedVisibility(
+            visible = disclaimerOpen,
+            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                    slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+            exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                   slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+        ) {
+            DisclaimerScreen(
+                onAccept = { disclaimerOpen = false },
+                actionLabel = "CLOSE",
+            )
         }
     }
 }

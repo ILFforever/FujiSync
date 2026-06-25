@@ -496,6 +496,11 @@ class MainViewModel @Inject constructor(
         persistSettings()
     }
 
+    fun handleDisclaimerAccepted() {
+        _uiState.update { it.copy(settings = it.settings.copy(disclaimerAccepted = true)) }
+        persistSettings()
+    }
+
     fun handleLaunchBackupExport() {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm", Locale.US))
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchBackupExport("fujisync-backup-$stamp.zip")) }
