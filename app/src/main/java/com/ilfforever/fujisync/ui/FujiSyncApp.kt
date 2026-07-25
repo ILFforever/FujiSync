@@ -46,6 +46,7 @@ import com.ilfforever.fujisync.ui.overlay.OverlayLayer
 import com.ilfforever.fujisync.ui.overlay.overlayStackOf
 import com.ilfforever.fujisync.ui.profile.ProfileScreen
 import com.ilfforever.fujisync.ui.theme.Bg
+import com.ilfforever.fujisync.ui.transfer.TransferScreen
 
 @Composable
 fun FujiSyncApp(
@@ -337,6 +338,15 @@ fun FujiSyncApp(
                         onComposeSet = { showComposeSetSheet = true },
                     )
                     AppTab.Discover -> if (BuildConfig.DISCOVER_ENABLED) DiscoverScreen()
+                    AppTab.Transfer -> TransferScreen(
+                        recipes = state.library.recipes,
+                        onCreateRecipe = onOpenRecipeCreator,
+                        onImportFromPhoto = { showImportFromPhotoGuide = true },
+                        onImportFromScreenshot = { showImportFromScreenshotGuide = true },
+                        onImportFromQr = { showQrScanner = true },
+                        onScanTileGuide = { showScanTileGuide = true },
+                        onComposeSet = { showComposeSetSheet = true },
+                    )
                     AppTab.Profile -> ProfileScreen(
                         cameraLabels = state.camera.cameraLabels,
                         cameraModels = state.camera.cameraModels,

@@ -10,7 +10,7 @@ import com.ilfforever.fujisync.ui.model.SaveAllReport
 import com.ilfforever.fujisync.ui.model.SlotBackupMeta
 import com.ilfforever.fujisync.ui.model.SlotBackupSet
 
-enum class AppTab { Camera, Library, Discover, Profile }
+enum class AppTab { Camera, Library, Discover, Transfer, Profile }
 
 /**
  * Typed representation of the currently active screen. Derived from [FujiSyncUiState];

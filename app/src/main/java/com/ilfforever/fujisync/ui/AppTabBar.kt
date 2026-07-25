@@ -31,6 +31,7 @@ import com.ilfforever.fujisync.ui.components.IconCamera
 import com.ilfforever.fujisync.ui.components.IconFolder
 import com.ilfforever.fujisync.ui.components.IconProfile
 import com.ilfforever.fujisync.ui.components.IconSearch
+import com.ilfforever.fujisync.ui.components.IconTransfer
 import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
 import com.ilfforever.fujisync.ui.haptics.FujiHaptics
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -49,7 +50,11 @@ internal fun AppTabBar(tab: AppTab, onTabChange: (AppTab) -> Unit) {
     val tabs = buildList {
         add(TabItem(AppTab.Camera, "CAMERA", IconCamera))
         add(TabItem(AppTab.Library, "LIBRARY", IconFolder))
-        if (BuildConfig.DISCOVER_ENABLED) add(TabItem(AppTab.Discover, "DISCOVER", IconSearch))
+        if (BuildConfig.DISCOVER_ENABLED) {
+            add(TabItem(AppTab.Discover, "DISCOVER", IconSearch))
+        } else {
+            add(TabItem(AppTab.Transfer, "TRANSFER", IconTransfer))
+        }
         add(TabItem(AppTab.Profile, "PROFILE", IconProfile))
     }
     Column(
