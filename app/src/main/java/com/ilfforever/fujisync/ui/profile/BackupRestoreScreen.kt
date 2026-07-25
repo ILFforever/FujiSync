@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ilfforever.fujisync.ui.BackupUiState
+import com.ilfforever.fujisync.ui.components.BackChevron
 import com.ilfforever.fujisync.ui.theme.Bg
 import com.ilfforever.fujisync.ui.theme.Border
 import com.ilfforever.fujisync.ui.theme.Gold
@@ -58,16 +59,7 @@ internal fun BackupRestoreScreen(
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "‹",
-                fontFamily = SansFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 24.sp,
-                color = Gold,
-                modifier = Modifier
-                    .clickable(onClick = onBack)
-                    .padding(end = 12.dp, top = 2.dp, bottom = 2.dp),
-            )
+            BackChevron(onClick = onBack)
             Text(
                 text = "BACKUP & RESTORE",
                 fontFamily = SansFamily,

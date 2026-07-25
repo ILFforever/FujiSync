@@ -41,7 +41,7 @@ import com.ilfforever.fujisync.ui.theme.SansFamily
 import com.ilfforever.fujisync.ui.theme.TextDim
 import com.ilfforever.fujisync.ui.theme.TextPrimary
 import com.ilfforever.fujisync.ui.transfer.components.TransferActionRow
-import com.ilfforever.fujisync.ui.transfer.components.TransferCreditNote
+import com.ilfforever.fujisync.ui.transfer.components.TransferCreditModal
 import com.ilfforever.fujisync.ui.transfer.components.TransferDivider
 import com.ilfforever.fujisync.ui.transfer.components.TransferSection
 import com.ilfforever.fujisync.ui.transfer.components.TransferSharePicker
@@ -54,6 +54,8 @@ import com.ilfforever.fujisync.ui.transfer.components.TransferSharePicker
 @Composable
 fun TransferScreen(
     recipes: List<LibraryRecipeUiModel>,
+    creditNoticeSeen: Boolean,
+    onCreditNoticeSeen: () -> Unit,
     onCreateRecipe: () -> Unit,
     onImportFromPhoto: () -> Unit,
     onImportFromScreenshot: () -> Unit,
@@ -179,10 +181,6 @@ fun TransferScreen(
                     )
                 }
 
-                Spacer(Modifier.height(28.dp))
-
-                TransferCreditNote()
-
                 Spacer(Modifier.height(32.dp))
             }
         }
@@ -203,6 +201,10 @@ fun TransferScreen(
                 recipe = recipe,
                 onDismiss = { qrRecipe = null },
             )
+        }
+
+        if (!creditNoticeSeen) {
+            TransferCreditModal(onDismiss = onCreditNoticeSeen)
         }
     }
 }

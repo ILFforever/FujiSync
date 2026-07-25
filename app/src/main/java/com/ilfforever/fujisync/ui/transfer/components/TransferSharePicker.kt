@@ -151,14 +151,6 @@ internal fun TransferSharePicker(
                         fontSize = 13.sp,
                         color = TextDim,
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "If someone else made this recipe, credit them when you send it.",
-                        fontFamily = MonoFamily,
-                        fontSize = 10.sp,
-                        lineHeight = 15.sp,
-                        color = Gold,
-                    )
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
                 LazyColumn(modifier = Modifier.navigationBarsPadding()) {

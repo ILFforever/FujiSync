@@ -10,4 +10,6 @@ data class AppSettings(
     val smartRefSimilarityPct: Int = 65,
     val maxReferenceImages: Int = 20,
     val disclaimerAccepted: Boolean = false,
+    /** Set once the "credit the maker" notice has been shown on the Transfer tab. */
+    val creditNoticeSeen: Boolean = false,
 )

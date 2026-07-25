@@ -105,6 +105,10 @@ val IconChevronRight = icon("ChevronRight") {
     stroke("m9 18 6-6-6-6")
 }
 
+val IconChevronLeft = icon("ChevronLeft") {
+    stroke("m15 18-6-6 6-6")
+}
+
 val IconClose = icon("Close") {
     stroke("M6 6l12 12M18 6L6 18")
 }

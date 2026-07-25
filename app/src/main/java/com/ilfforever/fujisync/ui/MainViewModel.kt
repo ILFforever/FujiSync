@@ -501,6 +501,12 @@ class MainViewModel @Inject constructor(
         persistSettings()
     }
 
+    fun handleCreditNoticeSeen() {
+        if (_uiState.value.settings.creditNoticeSeen) return
+        _uiState.update { it.copy(settings = it.settings.copy(creditNoticeSeen = true)) }
+        persistSettings()
+    }
+
     fun handleLaunchBackupExport() {
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm", Locale.US))
         viewModelScope.launch { _events.emit(MainViewModelEvent.LaunchBackupExport("fujisync-backup-$stamp.zip")) }

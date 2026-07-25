@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.ilfforever.fujisync.R
 import com.ilfforever.fujisync.ui.camera.cameraImageTuning
+import com.ilfforever.fujisync.ui.components.BackChevron
 import com.ilfforever.fujisync.ui.components.DeleteConfirmDialog
 import com.ilfforever.fujisync.ui.components.IconEdit
 import com.ilfforever.fujisync.ui.components.IconMoreVertical
@@ -130,16 +131,9 @@ internal fun MyCamerasScreen(
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "‹",
-                    fontFamily = SansFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp,
-                    color = Gold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onBack)
-                        .padding(end = 12.dp, top = 4.dp, bottom = 4.dp),
+                BackChevron(
+                    onClick = onBack,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)),
                 )
                 Text(
                     text = "MY CAMERAS",

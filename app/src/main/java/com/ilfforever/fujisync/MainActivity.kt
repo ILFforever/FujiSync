@@ -201,6 +201,7 @@ class MainActivity : ComponentActivity() {
                     onExploreDemo = cameraVm::exploreDemo,
                     onBackupSlots = { label -> cameraVm.handleBackupSlots(label) },
                     onComposeSet = { label, slots -> cameraVm.handleComposeSet(label, slots) },
+                    onCreditNoticeSeen = viewModel::handleCreditNoticeSeen,
                     onRestoreSlots = cameraVm::handleRestoreSlots,
                     onDeleteSlotBackup = cameraVm::handleDeleteSlotBackup,
                     onRenameSlotBackup = cameraVm::handleRenameSlotBackup,

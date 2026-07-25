@@ -214,6 +214,7 @@ class LocalStore(context: Context) {
             put("smartRefSimilarityPct", settings.smartRefSimilarityPct)
             put("maxReferenceImages", settings.maxReferenceImages)
             put("disclaimerAccepted", settings.disclaimerAccepted)
+            put("creditNoticeSeen", settings.creditNoticeSeen)
         }.toString())
     }
 
@@ -232,6 +233,7 @@ class LocalStore(context: Context) {
                 smartRefSimilarityPct = o.optInt("smartRefSimilarityPct", 65),
                 maxReferenceImages = o.optInt("maxReferenceImages", 20),
                 disclaimerAccepted = o.optBoolean("disclaimerAccepted", false),
+                creditNoticeSeen = o.optBoolean("creditNoticeSeen", false),
             )
         }.getOrElse { AppSettings() }
     }
@@ -378,6 +380,7 @@ class LocalStore(context: Context) {
         put("maxReferenceImages", settings.maxReferenceImages)
         put("smartRefSimilarityPct", settings.smartRefSimilarityPct)
         put("disclaimerAccepted", settings.disclaimerAccepted)
+        put("creditNoticeSeen", settings.creditNoticeSeen)
     }
 
     private fun settingsFromJson(o: JSONObject): AppSettings =
@@ -391,6 +394,7 @@ class LocalStore(context: Context) {
             maxReferenceImages = o.optInt("maxReferenceImages", 20),
             smartRefSimilarityPct = o.optInt("smartRefSimilarityPct", 65),
             disclaimerAccepted = o.optBoolean("disclaimerAccepted", false),
+            creditNoticeSeen = o.optBoolean("creditNoticeSeen", false),
         )
 
     private fun stringMapToJson(map: Map<String, String>): JSONObject =

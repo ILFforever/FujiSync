@@ -128,6 +128,7 @@ fun FujiSyncApp(
     onSmartRefDismissAndContinue: () -> Unit = {},
     onSmartRefCreateNew: () -> Unit = {},
     onComposeSet: (String, List<RecipeUiModel>) -> Unit = { _, _ -> },
+    onCreditNoticeSeen: () -> Unit = {},
 ) {
     var showExifBench by remember { mutableStateOf(false) }
     var showFxwSearchBench by remember { mutableStateOf(false) }
@@ -340,6 +341,8 @@ fun FujiSyncApp(
                     AppTab.Discover -> if (BuildConfig.DISCOVER_ENABLED) DiscoverScreen()
                     AppTab.Transfer -> TransferScreen(
                         recipes = state.library.recipes,
+                        creditNoticeSeen = state.settings.creditNoticeSeen,
+                        onCreditNoticeSeen = onCreditNoticeSeen,
                         onCreateRecipe = onOpenRecipeCreator,
                         onImportFromPhoto = { showImportFromPhotoGuide = true },
                         onImportFromScreenshot = { showImportFromScreenshotGuide = true },
