@@ -144,7 +144,8 @@ fun AboutScreen(
 
                 Spacer(Modifier.height(24.dp))
 
-                // Updates section
+                // Updates section — omitted on Play, which owns updates itself.
+                if (BuildConfig.UPDATER_ENABLED) {
                 Text(
                     text = "UPDATES",
                     fontFamily = MonoFamily,
@@ -198,6 +199,7 @@ fun AboutScreen(
                 }
 
                 Spacer(Modifier.height(24.dp))
+                }
 
                 // Links section
                 Text(

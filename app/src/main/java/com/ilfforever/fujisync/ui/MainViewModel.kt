@@ -677,6 +677,8 @@ class MainViewModel @Inject constructor(
      * be invisible); when a newer release is found it raises the startup update modal.
      */
     private fun checkForUpdatesOnStart() {
+        // Play builds are updated by Play itself; never reach out to GitHub Releases.
+        if (!BuildConfig.UPDATER_ENABLED) return
         if (startupUpdateCheckDone) return
         startupUpdateCheckDone = true
         if (_uiState.value.update.checking || _uiState.value.update.downloading) return

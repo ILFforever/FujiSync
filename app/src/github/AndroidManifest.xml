@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sideload-only permission. The github flavor downloads APKs from GitHub Releases and hands
+  them to the package installer, which requires REQUEST_INSTALL_PACKAGES. Google Play treats
+  in-app self-updating as a Device and Network Abuse violation, so this must never merge into
+  a play-flavor build — keep it in this source set, not src/main.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+</manifest>

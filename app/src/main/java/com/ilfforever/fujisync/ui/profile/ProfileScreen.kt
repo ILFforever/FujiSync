@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.BuildConfig
 import com.ilfforever.fujisync.ui.DisclaimerScreen
 import com.ilfforever.fujisync.ui.BackupUiState
 import com.ilfforever.fujisync.ui.UpdateUiState
@@ -198,26 +199,35 @@ fun ProfileScreen(
                 Spacer(Modifier.height(24.dp))
 
                 // ── Dev ────────────────────────────────────────────────────
-                SectionLabel(text = "Dev")
-                Spacer(Modifier.height(8.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(PanelLow)
-                        .border(1.dp, Border, RoundedCornerShape(14.dp)),
-                ) {
-                    ProfileNavRow(
-                        label = "Developer tools",
-                        onClick = { haptic(); devToolsOpen = true },
-                        inCard = true,
-                    )
-                    ProfileDivider()
-                    ProfileNavRow(
-                        label = "Support the developer",
-                        onClick = { haptic(); supportOpen = true },
-                        inCard = true,
-                    )
+                // Play builds hide developer tooling and drop the Buy Me a Coffee link, which
+                // empties this section entirely — so the whole block is omitted rather than
+                // leaving a labelled empty card.
+                if (BuildConfig.DEV_TOOLS_ENABLED || BuildConfig.SUPPORT_LINK_ENABLED) {
+                    SectionLabel(text = if (BuildConfig.DEV_TOOLS_ENABLED) "Dev" else "Support")
+                    Spacer(Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(PanelLow)
+                            .border(1.dp, Border, RoundedCornerShape(14.dp)),
+                    ) {
+                        if (BuildConfig.DEV_TOOLS_ENABLED) {
+                            ProfileNavRow(
+                                label = "Developer tools",
+                                onClick = { haptic(); devToolsOpen = true },
+                                inCard = true,
+                            )
+                            if (BuildConfig.SUPPORT_LINK_ENABLED) ProfileDivider()
+                        }
+                        if (BuildConfig.SUPPORT_LINK_ENABLED) {
+                            ProfileNavRow(
+                                label = "Support the developer",
+                                onClick = { haptic(); supportOpen = true },
+                                inCard = true,
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(40.dp))
@@ -296,14 +306,18 @@ fun ProfileScreen(
             )
         }
 
-        AnimatedVisibility(
-            visible = supportOpen,
-            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
-                    slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
-            exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
-                   slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
-        ) {
-            SupportScreen(onBack = { supportOpen = false })
+        // Gated so R8 can prove SupportScreen unreachable in play builds and drop the
+        // Buy Me a Coffee URL from the binary entirely — not just from the UI.
+        if (BuildConfig.SUPPORT_LINK_ENABLED) {
+            AnimatedVisibility(
+                visible = supportOpen,
+                enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                        slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it },
+                exit = fadeOut(tween(200, easing = FastOutSlowInEasing)) +
+                       slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+            ) {
+                SupportScreen(onBack = { supportOpen = false })
+            }
         }
 
         AnimatedVisibility(

@@ -21,7 +21,7 @@ android {
         buildConfigField("String", "GITHUB_REPO", "\"ILFforever/FujiSync\"")
     }
 
-    flavorDimensions += "discover"
+    flavorDimensions += listOf("discover", "store")
     productFlavors {
         create("full") {
             dimension = "discover"
@@ -30,6 +30,26 @@ android {
         create("lean") {
             dimension = "discover"
             buildConfigField("Boolean", "DISCOVER_ENABLED", "false")
+        }
+
+        // Sideloaded from GitHub Releases: self-updates and exposes developer tooling.
+        create("github") {
+            dimension = "store"
+            buildConfigField("Boolean", "UPDATER_ENABLED", "true")
+            buildConfigField("Boolean", "DEV_TOOLS_ENABLED", "true")
+            buildConfigField("Boolean", "SUPPORT_LINK_ENABLED", "true")
+        }
+        // Google Play: Play owns updates, and dev tooling is hidden. The in-app APK
+        // downloader plus REQUEST_INSTALL_PACKAGES violates Play's Device and Network
+        // Abuse policy, so it is compiled out and the permission lives in src/github.
+        // SUPPORT_LINK_ENABLED is off because the support screen opens Buy Me a Coffee.
+        // Play expects payment flows to go through Play Billing, so the external donation
+        // link is dropped rather than risk a policy strike.
+        create("play") {
+            dimension = "store"
+            buildConfigField("Boolean", "UPDATER_ENABLED", "false")
+            buildConfigField("Boolean", "DEV_TOOLS_ENABLED", "false")
+            buildConfigField("Boolean", "SUPPORT_LINK_ENABLED", "false")
         }
     }
 

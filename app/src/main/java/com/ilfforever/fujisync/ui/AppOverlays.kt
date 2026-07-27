@@ -524,7 +524,7 @@ internal fun BoxScope.AppOverlays(
         )
     }
 
-    if (state.update.showUpdateDialog) {
+    if (BuildConfig.UPDATER_ENABLED && state.update.showUpdateDialog) {
         com.ilfforever.fujisync.ui.components.UpdateAvailableDialog(
             update = state.update,
             onUpdate = onInstallUpdate,

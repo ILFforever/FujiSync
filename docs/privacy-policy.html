@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FujiSync — Privacy Policy</title>
+<style>
+  :root {
+    --bg: #0D0D0D;
+    --panel: #161413;
+    --border: rgba(255,255,255,0.08);
+    --gold: #C99A4E;
+    --text: #F5F1EC;
+    --muted: #8A847E;
+    --dim: #5B5650;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 20px 96px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 10px;
+  }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .updated { color: var(--dim); font-size: 13px; margin-bottom: 40px; }
+  h2 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.6px;
+    color: var(--muted); margin: 40px 0 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  p { color: var(--muted); margin: 0 0 16px; }
+  strong { color: var(--text); font-weight: 600; }
+  ul { color: var(--muted); padding-left: 20px; margin: 0 0 16px; }
+  li { margin-bottom: 10px; }
+  a { color: var(--gold); text-decoration: none; border-bottom: 1px solid rgba(201,154,78,0.35); }
+  a:hover { border-bottom-color: var(--gold); }
+  .callout {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin: 0 0 16px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .lede { color: var(--text); font-size: 17px; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  td { color: var(--muted); }
+  td:first-child { color: var(--text); white-space: nowrap; }
+  .scroll { overflow-x: auto; }
+  footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">FujiSync</div>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: 27 July 2026</p>
+
+  <div class="callout">
+    <p class="lede"><strong>FujiSync does not collect, transmit, or store your personal data on any server.</strong> There are no accounts, no analytics, no advertising, and no backend. Everything the app creates stays on your device.</p>
+  </div>
+
+  <h2>Who this covers</h2>
+  <p>FujiSync is a free, independent Android application developed by ILFforever for managing Fujifilm X-series film-simulation recipes over USB-C. This policy explains what the app does with data on your device.</p>
+  <p>FujiSync is not made, endorsed, licensed, or supported by FUJIFILM Corporation.</p>
+
+  <h2>Data we collect</h2>
+  <p><strong>None.</strong> The developer receives no data from the app. FujiSync contains no analytics SDK, no crash-reporting service, no advertising identifiers, and no telemetry of any kind. No information is sent to the developer or to any third party for processing.</p>
+
+  <h2>Data stored on your device</h2>
+  <p>The app writes the following to its private storage area, readable only by FujiSync:</p>
+  <ul>
+    <li><strong>Recipes and groups</strong> you create, import, or read from your camera.</li>
+    <li><strong>Reference images</strong> you attach to recipes, copied into the app's private folder.</li>
+    <li><strong>Camera slot backups</strong> and composed slot sets.</li>
+    <li><strong>App settings</strong> and preferences, including which one-time notices you have dismissed.</li>
+    <li><strong>Camera identifiers</strong> — the model name, firmware version, and serial number reported by a connected camera, used to label your cameras in the app.</li>
+  </ul>
+  <p>This data never leaves your device unless you deliberately export it. Uninstalling FujiSync deletes all of it.</p>
+
+  <h2>Sharing and export</h2>
+  <p>You control all sharing. When you generate a QR code, share a recipe card, or export a backup file, the app hands that content to whichever app or destination you choose. FujiSync does not upload it anywhere.</p>
+
+  <h2>Permissions</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>Permission</th><th>Why it is needed</th></tr>
+    <tr><td>USB Host</td><td>Communicates with your Fujifilm camera over USB-C using PTP to read and write recipe slots. Required for the app's core function.</td></tr>
+    <tr><td>Camera</td><td>Scans QR codes to import recipes shared by other users. The camera preview is processed live on-device and no photo is recorded or saved.</td></tr>
+    <tr><td>Photos / media access</td><td>Only for files you explicitly pick. The app reads EXIF metadata from a JPEG you select to recover the settings used to take it, and copies images you choose as recipe references.</td></tr>
+    <tr><td>Screen capture<br>(media projection)</td><td>Used only when you start the "Scan tile" action. It captures a single frame of your screen so that recipe values can be read from it by text recognition. The captured frame is processed on-device and is not stored after parsing or transmitted anywhere.</td></tr>
+    <tr><td>Vibration</td><td>Haptic feedback. Can be disabled in Settings.</td></tr>
+    <tr><td>Internet</td><td>Declared for the components described in "Network access" below. In the Google Play build the app itself makes no network requests.</td></tr>
+  </table>
+  </div>
+
+  <h2>Network access</h2>
+  <p><strong>Google Play version.</strong> The app makes no network requests of its own. It does not contact the developer, and no data about you or your camera is transmitted.</p>
+  <p><strong>Version distributed via GitHub Releases.</strong> This build additionally checks GitHub for a newer release and can download an update package. That request goes to GitHub's public API and sends no personal data — only the standard information any HTTPS request includes, such as your IP address, which is handled by GitHub under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. This update mechanism is not present in the Google Play version.</p>
+  <p>All network connections the app makes are encrypted; cleartext traffic is disabled.</p>
+
+  <h2>Third-party components</h2>
+  <p>FujiSync uses <strong>Google ML Kit text recognition</strong>, delivered through Google Play Services, to read recipe values from an image. Recognition runs on-device. Google Play Services may download or update the recognition model on your device; that is handled by Google Play Services rather than by FujiSync, and is covered by <a href="https://policies.google.com/privacy">Google's Privacy Policy</a>. Image content is not sent to Google by FujiSync.</p>
+  <p>The app contains no other third-party services that receive data.</p>
+
+  <h2>Children</h2>
+  <p>FujiSync is a photography utility intended for general audiences and is not directed at children under 13. It collects no personal information from anyone, including children.</p>
+
+  <h2>Your rights</h2>
+  <p>Because no data is collected or held by the developer, there is nothing to request, correct, or delete on our side. All data lives on your device and is fully under your control — you can delete individual recipes in the app, or remove everything by uninstalling FujiSync.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the updated version will be posted at this address with a revised date above. Material changes affecting how data is handled will also be noted in the app's release notes.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy can be sent to <a href="mailto:hammymukura@gmail.com">hammymukura@gmail.com</a>, or raised on the <a href="https://github.com/ILFforever/FujiSync">project's GitHub repository</a>.</p>
+
+  <footer>
+    FujiSync is an independent, community-built tool. FUJIFILM and X-series are trademarks of FUJIFILM Corporation, used here only to describe compatibility. FUJIFILM Corporation bears no responsibility for this application.
+  </footer>
+
+</div>
+</body>
+</html>
