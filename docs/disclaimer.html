@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FujiSync — Disclaimer &amp; Warranty Notice</title>
+<style>
+  :root {
+    --bg: #0D0D0D;
+    --panel: #161413;
+    --border: rgba(255,255,255,0.08);
+    --gold: #C99A4E;
+    --warn: #D94040;
+    --text: #F5F1EC;
+    --muted: #8A847E;
+    --dim: #5B5650;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 20px 96px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 10px;
+  }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .updated { color: var(--dim); font-size: 13px; margin-bottom: 40px; }
+  h2 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.6px;
+    color: var(--muted); margin: 40px 0 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  p { color: var(--muted); margin: 0 0 16px; }
+  strong { color: var(--text); font-weight: 600; }
+  ul { color: var(--muted); padding-left: 20px; margin: 0 0 16px; }
+  li { margin-bottom: 10px; }
+  a { color: var(--gold); text-decoration: none; border-bottom: 1px solid rgba(201,154,78,0.35); }
+  a:hover { border-bottom-color: var(--gold); }
+  .callout {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin: 0 0 16px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .alert {
+    background: rgba(217,64,64,0.07); border: 1px solid rgba(217,64,64,0.35);
+    border-radius: 14px; padding: 20px 22px; margin: 0 0 28px;
+  }
+  .alert .label {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--warn); margin-bottom: 10px; font-weight: 600;
+  }
+  .alert p { color: var(--text); margin-bottom: 0; }
+  footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">FujiSync</div>
+  <h1>Disclaimer &amp; Warranty Notice</h1>
+  <p class="updated">Last updated: 27 July 2026</p>
+
+  <div class="alert">
+    <div class="label">Read before connecting a camera</div>
+    <p>Connecting your camera to FujiSync may void your Fujifilm manufacturer warranty. If your camera is under warranty and you are not willing to accept that risk, do not connect it.</p>
+  </div>
+
+  <h2>No affiliation</h2>
+  <p>FujiSync is an independent, community-built tool. It is <strong>not</strong> made, endorsed, licensed, or supported by FUJIFILM Corporation or any of its affiliates. FUJIFILM Corporation bears no responsibility for this application. FUJIFILM and X-series are trademarks of FUJIFILM Corporation, used here only to describe compatibility.</p>
+
+  <h2>Warranty risk</h2>
+  <p>Fujifilm has indicated that connecting a camera to non-licensed third-party software may void the manufacturer warranty, and that this applies to <strong>all</strong> third-party USB camera access — including PTP-based connections such as the one FujiSync uses. Fujifilm licenses camera connectivity only to a small number of large software vendors.</p>
+  <p>This information is reported second-hand and is published here so that you can make an informed decision. It is not a statement by Fujifilm, and FujiSync cannot verify how it is applied in practice or in your country. If warranty coverage matters to you, confirm the position with Fujifilm or your retailer before connecting.</p>
+
+  <h2>Your choice</h2>
+  <p>FujiSync shows this warning when you first open the app, and it remains available from Profile → About → Disclaimer. By connecting a camera you confirm that you understand the risk described above and accept it. If you are not willing to accept it, the app's library, editor, and recipe-sharing features work perfectly well without ever connecting a camera.</p>
+  <p>If warranty coverage matters to you, consider using FujiSync only with a body that is already out of warranty.</p>
+
+  <h2>No liability</h2>
+  <p>FujiSync is provided <strong>"as is"</strong>, without warranty of any kind, express or implied. The developer is not liable for any damage to your camera, loss of recipes or data, voided warranties, failed writes, incorrect settings, refused service, or any other direct or indirect loss arising from use of this application. You assume all risk.</p>
+  <p>Always back up your camera settings before making changes.</p>
+
+  <h2>How it works</h2>
+  <p>FujiSync communicates with your camera over PTP (Picture Transfer Protocol) via USB-C OTG — the same mode your camera uses for its own backup and restore function (<em>USB RAW CONV. / BACKUP RESTORE</em>). No Fujifilm SDK or licensed library is used, and no attempt is made to present the app as licensed software.</p>
+
+  <h2>Recipe credit</h2>
+  <p>Film-simulation recipes are the creative work of the people who develop them. If you import, share, or publish a recipe you did not create, keep the creator's name and a link to the original attached to it. Do not redistribute another creator's recipes as your own, and honour any creator who asks that their work not be shared.</p>
+
+  <h2>Questions</h2>
+  <p>Contact <a href="mailto:hammymukura@gmail.com">hammymukura@gmail.com</a> or open an issue on the <a href="https://github.com/ILFforever/FujiSync">project's GitHub repository</a>. See also the <a href="privacy-policy.html">Privacy Policy</a>.</p>
+
+  <footer>
+    FujiSync is free software provided by an independent developer. Nothing on this page constitutes legal advice or a statement on behalf of FUJIFILM Corporation.
+  </footer>
+
+</div>
+</body>
+</html>
