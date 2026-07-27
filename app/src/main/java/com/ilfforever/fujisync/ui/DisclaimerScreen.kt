@@ -115,15 +115,6 @@ fun DisclaimerScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            DisclaimerCard(title = "Credit Recipe Creators") {
-                "Recipes are someone's work. When you import, share, or publish a recipe that " +
-                "you did not create, keep the creator's name and a link to the original on it. " +
-                "Never redistribute another creator's recipes as your own, and honour any " +
-                "creator who asks that their work not be shared."
-            }
-
-            Spacer(Modifier.height(12.dp))
-
             DisclaimerCard(title = "How It Works") {
                 "This app communicates with your camera over PTP (Picture Transfer Protocol) " +
                 "via USB-C OTG — the same mode your camera uses for standard backup " +
