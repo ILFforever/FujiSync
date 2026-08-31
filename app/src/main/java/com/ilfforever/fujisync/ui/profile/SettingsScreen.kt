@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.ui.components.BackChevron
 import com.ilfforever.fujisync.ui.components.SectionLabel
 import com.ilfforever.fujisync.ui.model.AppSettings
@@ -65,7 +67,8 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .tabletContentWidth(WideContentWidth),
     ) {
         // Header
         Row(

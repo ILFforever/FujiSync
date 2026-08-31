@@ -28,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.ui.components.Wordmark
 import com.ilfforever.fujisync.ui.theme.Bg
 import com.ilfforever.fujisync.ui.theme.Border
@@ -64,7 +66,8 @@ fun DisclaimerScreen(
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .tabletContentWidth(WideContentWidth),
     ) {
         Column(
             modifier = Modifier

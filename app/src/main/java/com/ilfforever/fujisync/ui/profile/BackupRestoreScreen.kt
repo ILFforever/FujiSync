@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.ui.BackupUiState
 import com.ilfforever.fujisync.ui.components.BackChevron
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -51,7 +53,8 @@ internal fun BackupRestoreScreen(
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .tabletContentWidth(WideContentWidth),
     ) {
         Row(
             modifier = Modifier

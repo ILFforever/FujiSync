@@ -400,7 +400,7 @@ fun RecipeEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            StepperControl("", null, isoMin ?: 0, 0, 12800, step = 100, valueText = isoMin?.toString() ?: "—", modifier = Modifier.weight(1f)) { isoMin = it.takeIf { v -> v > 0 } }
+                            IsoStepperControl(value = isoMin, modifier = Modifier.weight(1f)) { isoMin = it }
                             Text(
                                 text = when {
                                     isoMin != null && isoMax == null -> ">"
@@ -412,7 +412,7 @@ fun RecipeEditorScreen(
                                 color = TextDim,
                                 modifier = Modifier.padding(start = 8.dp),
                             )
-                            StepperControl("", null, isoMax ?: 0, 0, 12800, step = 100, valueText = isoMax?.toString() ?: "—", modifier = Modifier.weight(1f)) { isoMax = it.takeIf { v -> v > 0 } }
+                            IsoStepperControl(value = isoMax, modifier = Modifier.weight(1f)) { isoMax = it }
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
                         OptionalFieldHeader(label = "Exposure Compensation", icon = IconExposureComp, isSet = exposureCompMin != null || exposureCompMax != null) { exposureCompMin = null; exposureCompMax = null }
@@ -421,7 +421,7 @@ fun RecipeEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            HalfStepControl("", null, exposureCompMin ?: 0f, -5f, 5f, modifier = Modifier.weight(1f)) { exposureCompMin = it }
+                            ThirdStepControl(exposureCompMin ?: 0f, -5f, 5f, modifier = Modifier.weight(1f)) { exposureCompMin = it }
                             Text(
                                 text = when {
                                     exposureCompMin != null && exposureCompMax == null -> ">"
@@ -433,7 +433,7 @@ fun RecipeEditorScreen(
                                 color = TextDim,
                                 modifier = Modifier.padding(start = 8.dp),
                             )
-                            HalfStepControl("", null, exposureCompMax ?: 0f, -5f, 5f, modifier = Modifier.weight(1f)) { exposureCompMax = it }
+                            ThirdStepControl(exposureCompMax ?: 0f, -5f, 5f, modifier = Modifier.weight(1f)) { exposureCompMax = it }
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Border))
                         OptionalFieldHeader(label = "Supported Sensors", icon = IconCamera, isSet = sensorGens.isNotEmpty()) { sensorGens = emptyList() }

@@ -65,7 +65,7 @@ import com.ilfforever.fujisync.ui.theme.TextPrimary
 
 // ── Wordmark ─────────────────────────────────────────────────────
 @Composable
-fun Wordmark() {
+fun Wordmark(compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Gold square with cutout centre + filled dot (3-layer stack)
         Box(modifier = Modifier.size(14.dp)) {
@@ -92,22 +92,25 @@ fun Wordmark() {
                     .background(Gold),
             )
         }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = "FUJISYNC",
-            fontFamily = MonoFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            letterSpacing = 1.1.sp,
-            color = TextPrimary,
-        )
-        Text(
-            text = ".",
-            fontFamily = MonoFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            color = Gold,
-        )
+        // The nav rail is only 96dp wide, so it shows the mark alone.
+        if (!compact) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "FUJISYNC",
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                letterSpacing = 1.1.sp,
+                color = TextPrimary,
+            )
+            Text(
+                text = ".",
+                fontFamily = MonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = Gold,
+            )
+        }
     }
 }
 

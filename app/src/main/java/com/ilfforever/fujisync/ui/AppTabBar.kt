@@ -41,22 +41,11 @@ import com.ilfforever.fujisync.ui.theme.MonoFamily
 import com.ilfforever.fujisync.ui.theme.TextMuted
 
 // ── Tab bar ───────────────────────────────────────────────────────
-private data class TabItem(val id: AppTab, val label: String, val icon: ImageVector)
-
 @Composable
 internal fun AppTabBar(tab: AppTab, onTabChange: (AppTab) -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
-    val tabs = buildList {
-        add(TabItem(AppTab.Camera, "CAMERA", IconCamera))
-        add(TabItem(AppTab.Library, "LIBRARY", IconFolder))
-        if (BuildConfig.DISCOVER_ENABLED) {
-            add(TabItem(AppTab.Discover, "DISCOVER", IconSearch))
-        } else {
-            add(TabItem(AppTab.Transfer, "TRANSFER", IconTransfer))
-        }
-        add(TabItem(AppTab.Profile, "PROFILE", IconProfile))
-    }
+    val tabs = appTabs()
     Column(
         modifier = Modifier
             .fillMaxWidth()

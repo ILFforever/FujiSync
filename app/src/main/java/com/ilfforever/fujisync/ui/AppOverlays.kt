@@ -137,6 +137,8 @@ internal fun BoxScope.AppOverlays(
     onSmartRefCreateNew: () -> Unit,
     onInstallUpdate: () -> Unit,
     onDismissUpdateDialog: () -> Unit,
+    /** Left inset for the recipe detail, so it lands in the right pane on tablets. */
+    detailPaneStart: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val usbReadWriteBenchVm: UsbReadWriteBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
@@ -145,7 +147,9 @@ internal fun BoxScope.AppOverlays(
     val readSlotsBenchVm: ReadSlotsBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val drPriorityBenchVm: DrPriorityBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // In Library two-pane mode the detail is inset past the list column so the two sit
+    // side by side, rather than the detail covering the whole content area.
+    Box(modifier = Modifier.fillMaxSize().padding(start = detailPaneStart)) {
         RecipeDetailScreen(
             recipe = state.detailRecipe,
             connected = state.camera.connected,
@@ -453,7 +457,7 @@ internal fun BoxScope.AppOverlays(
     }
 
     val ocrRawText = state.ocrRawText
-    if (ocrRawText != null && (state.creatingRecipe || state.editorRecipe != null)) {
+    if (BuildConfig.DEBUG && ocrRawText != null && (state.creatingRecipe || state.editorRecipe != null)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

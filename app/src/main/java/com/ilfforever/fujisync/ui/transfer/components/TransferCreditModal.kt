@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -100,6 +101,7 @@ internal fun TransferCreditModal(onDismiss: () -> Unit) {
             Column(
                 modifier = Modifier
                     .padding(horizontal = 28.dp)
+                    .widthIn(max = 420.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(PanelLow)
                     .border(1.dp, Border, RoundedCornerShape(20.dp))

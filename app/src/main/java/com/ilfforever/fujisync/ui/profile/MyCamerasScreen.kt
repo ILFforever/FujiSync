@@ -69,6 +69,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.R
 import com.ilfforever.fujisync.ui.camera.cameraImageTuning
 import com.ilfforever.fujisync.ui.components.BackChevron
@@ -123,7 +125,8 @@ internal fun MyCamerasScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .tabletContentWidth(WideContentWidth),
         ) {
             Row(
                 modifier = Modifier

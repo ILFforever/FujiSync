@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.BuildConfig
 import com.ilfforever.fujisync.ui.DisclaimerScreen
 import com.ilfforever.fujisync.ui.UpdateUiState
@@ -91,7 +93,8 @@ fun AboutScreen(
                 .fillMaxSize()
                 .background(Bg)
                 .statusBarsPadding()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .tabletContentWidth(WideContentWidth),
         ) {
             Row(
                 modifier = Modifier
@@ -281,7 +284,8 @@ private fun LicenseScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+                .tabletContentWidth(WideContentWidth),
     ) {
         Row(
             modifier = Modifier

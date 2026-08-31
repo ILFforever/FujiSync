@@ -77,6 +77,7 @@ import com.ilfforever.fujisync.ui.components.recipePropertyRows
 import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
 import com.ilfforever.fujisync.ui.haptics.FujiHaptics
 import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.formatExposureComp
 import com.ilfforever.fujisync.ui.model.sourceCameraDisplayName
 import com.ilfforever.fujisync.ui.theme.Bg
 import com.ilfforever.fujisync.ui.theme.Border
@@ -548,11 +549,6 @@ private fun ShootingSettingsSection(recipe: RecipeUiModel) {
     val hasSensor = recipe.sensorGens.isNotEmpty()
     if (!hasIso && !hasExposure && !hasSensor) return
 
-    fun fmtEv(v: Float): String {
-        val n = if (v % 1f == 0f) v.toInt().toString() else v.toString()
-        return if (v > 0) "+$n" else n
-    }
-
     val rows = buildList {
         if (hasIso) {
             val min = recipe.isoMin
@@ -570,10 +566,10 @@ private fun ShootingSettingsSection(recipe: RecipeUiModel) {
             val min = recipe.exposureCompMin
             val max = recipe.exposureCompMax
             val value = when {
-                min != null && max != null && min == max -> fmtEv(min)
-                min != null && max != null -> "${fmtEv(min)} – ${fmtEv(max)}"
-                min != null -> "≥ ${fmtEv(min)}"
-                max != null -> "≤ ${fmtEv(max)}"
+                min != null && max != null && min == max -> formatExposureComp(min)
+                min != null && max != null -> "${formatExposureComp(min)} – ${formatExposureComp(max)}"
+                min != null -> "≥ ${formatExposureComp(min)}"
+                max != null -> "≤ ${formatExposureComp(max)}"
                 else -> "—"
             }
             add("Exposure Comp" to value)

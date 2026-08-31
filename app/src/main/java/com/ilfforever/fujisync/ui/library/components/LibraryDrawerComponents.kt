@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.sheetWidth
 import com.ilfforever.fujisync.ui.components.IconCamera
 import com.ilfforever.fujisync.ui.components.IconEdit
 import com.ilfforever.fujisync.ui.components.IconImage
@@ -126,6 +127,7 @@ internal fun AddRecipeDrawer(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .sheetWidth()
                     .offset { IntOffset(0, dragOffset.roundToInt().coerceAtLeast(0)) }
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(LibrarySheetBg)

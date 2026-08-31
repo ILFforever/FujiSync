@@ -1,6 +1,8 @@
 package com.ilfforever.fujisync.ui.profile
 
 import androidx.activity.compose.BackHandler
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,7 +83,8 @@ fun DevToolsScreen(
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .tabletContentWidth(WideContentWidth),
     ) {
         Row(
             modifier = Modifier
