@@ -147,6 +147,7 @@ fun FujiSyncApp(
     var showDrPriorityBench by remember { mutableStateOf(false) }
     var showHapticBench by remember { mutableStateOf(false) }
     var showPtpLog by remember { mutableStateOf(false) }
+    var showNewPathsProbe by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
     var showComposeSetSheet by remember { mutableStateOf(false) }
@@ -252,6 +253,7 @@ fun FujiSyncApp(
         OverlayLayer(showDrPriorityBench) { showDrPriorityBench = false },
         OverlayLayer(showHapticBench) { showHapticBench = false },
         OverlayLayer(showPtpLog) { showPtpLog = false },
+        OverlayLayer(showNewPathsProbe) { showNewPathsProbe = false },
         OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
@@ -432,6 +434,7 @@ fun FujiSyncApp(
                         onOpenDrPriorityBench = { showDrPriorityBench = true },
                         onOpenHapticBench = { showHapticBench = true },
                         onOpenPtpLog = { showPtpLog = true },
+                        onOpenNewPathsProbe = { showNewPathsProbe = true },
                         onAddMockCamera = onAddMockCamera,
                         onShowScanLog = onLoadCaptureLog,
                         onSetPropertyWriteDelay = onSetPropertyWriteDelay,
@@ -464,6 +467,7 @@ fun FujiSyncApp(
                     showDrPriorityBench = showDrPriorityBench,
                     showHapticBench = showHapticBench,
                     showPtpLog = showPtpLog,
+                    showNewPathsProbe = showNewPathsProbe,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -502,6 +506,7 @@ fun FujiSyncApp(
                     onDrPriorityBenchClose = { showDrPriorityBench = false },
                     onHapticBenchClose = { showHapticBench = false },
                     onPtpLogClose = { showPtpLog = false },
+                    onNewPathsProbeClose = { showNewPathsProbe = false },
                     ptpLogText = rearrangeDebugLog,
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,

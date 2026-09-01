@@ -70,6 +70,7 @@ fun DevToolsScreen(
     onOpenUsbReadWriteBench: () -> Unit,
     onOpenHapticBench: () -> Unit,
     onOpenPtpLog: () -> Unit,
+    onOpenNewPathsProbe: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
     onShowDisclaimer: () -> Unit = {},
@@ -160,6 +161,8 @@ fun DevToolsScreen(
                     .border(1.dp, Border, RoundedCornerShape(14.dp)),
             ) {
                 ProfileNavRow(label = "USB read/write bench", onClick = onOpenUsbReadWriteBench, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "New paths probe (0xD235 etc.)", onClick = onOpenNewPathsProbe, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Name bench", onClick = onOpenNameBench, inCard = true)
                 ProfileDivider()

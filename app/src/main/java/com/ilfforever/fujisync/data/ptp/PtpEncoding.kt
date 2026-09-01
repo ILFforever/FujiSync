@@ -17,6 +17,19 @@ fun encodePtpString(value: String): ByteArray {
     return buffer.array()
 }
 
+/** PTP string format: 1 byte char count (incl. null terminator) + that many UTF-16LE code units. */
+fun decodePtpString(payload: ByteArray): String? {
+    if (payload.isEmpty()) return null
+    val count = payload[0].toInt() and 0xFF
+    if (count == 0) return ""
+    val needed = 1 + count * Short.SIZE_BYTES
+    if (payload.size < needed) return null
+    val chars = CharArray(count - 1)
+    val buffer = ByteBuffer.wrap(payload, 1, count * Short.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN)
+    for (i in 0 until count - 1) chars[i] = buffer.short.toInt().toChar()
+    return String(chars)
+}
+
 fun decodeInt16Le(payload: ByteArray): Int? {
     if (payload.size < Short.SIZE_BYTES) return null
     return ByteBuffer.wrap(payload)
