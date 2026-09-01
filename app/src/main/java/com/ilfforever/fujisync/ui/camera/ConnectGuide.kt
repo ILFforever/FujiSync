@@ -88,12 +88,11 @@ fun ConnectGuide(
         ConnectStepUi("03", "Approve access", "Accept the Android USB prompt when it appears."),
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().tabletContentWidth(ReadableWidth)) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .tabletContentWidth(ReadableWidth)
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(28.dp))

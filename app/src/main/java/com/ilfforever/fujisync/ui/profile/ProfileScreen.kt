@@ -122,7 +122,7 @@ fun ProfileScreen(
         OverlayLayer(supportOpen) { supportOpen = false },
     ).OverlayBackHandler()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().tabletContentWidth(WideContentWidth)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -130,8 +130,7 @@ fun ProfileScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
-                .tabletContentWidth(WideContentWidth),
+                .verticalScroll(rememberScrollState()),
         ) {
             Row(
                 modifier = Modifier
