@@ -34,20 +34,6 @@ import com.ilfforever.fujisync.ui.camera.CameraImageTunerScreen
 import com.ilfforever.fujisync.ui.components.DeleteConfirmDialog
 import com.ilfforever.fujisync.ui.components.DuplicateDialog
 import com.ilfforever.fujisync.ui.detail.RecipeDetailScreen
-import com.ilfforever.fujisync.ui.dev.DrPriorityBenchScreen
-import com.ilfforever.fujisync.ui.dev.DrPriorityBenchViewModel
-import com.ilfforever.fujisync.ui.dev.ExifBenchScreen
-import com.ilfforever.fujisync.ui.dev.FxwSearchBenchScreen
-import com.ilfforever.fujisync.ui.dev.HapticBenchScreen
-import com.ilfforever.fujisync.ui.dev.NameBenchScreen
-import com.ilfforever.fujisync.ui.dev.NameBenchViewModel
-import com.ilfforever.fujisync.ui.dev.PtpLogScreen
-import com.ilfforever.fujisync.ui.dev.ReadSlotsBenchScreen
-import com.ilfforever.fujisync.ui.dev.ReadSlotsBenchViewModel
-import com.ilfforever.fujisync.ui.dev.UsbReadWriteBenchScreen
-import com.ilfforever.fujisync.ui.dev.UsbReadWriteBenchViewModel
-import com.ilfforever.fujisync.ui.dev.WriteDelayBenchScreen
-import com.ilfforever.fujisync.ui.dev.WriteDelayBenchViewModel
 import com.ilfforever.fujisync.ui.editor.RecipeEditorScreen
 import com.ilfforever.fujisync.ui.model.RecipeUiModel
 import com.ilfforever.fujisync.ui.qr.QrScannerScreen
@@ -71,6 +57,8 @@ internal fun BoxScope.AppOverlays(
     showHapticBench: Boolean,
     showPtpLog: Boolean,
     ptpLogText: String,
+    showNewPathsProbe: Boolean,
+    showLiveSettingsBench: Boolean,
     showImportFromPhotoGuide: Boolean,
     showReadingOverlay: Boolean,
     showDiscardEditorDialog: Boolean,
@@ -109,6 +97,8 @@ internal fun BoxScope.AppOverlays(
     onDrPriorityBenchClose: () -> Unit,
     onHapticBenchClose: () -> Unit,
     onPtpLogClose: () -> Unit,
+    onNewPathsProbeClose: () -> Unit,
+    onLiveSettingsBenchClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
     showImportFromScreenshotGuide: Boolean,
     onImportFromScreenshotGuideClose: () -> Unit,
@@ -137,15 +127,14 @@ internal fun BoxScope.AppOverlays(
     onSmartRefCreateNew: () -> Unit,
     onInstallUpdate: () -> Unit,
     onDismissUpdateDialog: () -> Unit,
+    /** Left inset for the recipe detail, so it lands in the right pane on tablets. */
+    detailPaneStart: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val context = LocalContext.current
-    val usbReadWriteBenchVm: UsbReadWriteBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-    val writeDelayBenchVm: WriteDelayBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-    val nameBenchVm: NameBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-    val readSlotsBenchVm: ReadSlotsBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-    val drPriorityBenchVm: DrPriorityBenchViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // In Library two-pane mode the detail is inset past the list column so the two sit
+    // side by side, rather than the detail covering the whole content area.
+    Box(modifier = Modifier.fillMaxSize().padding(start = detailPaneStart)) {
         RecipeDetailScreen(
             recipe = state.detailRecipe,
             connected = state.camera.connected,
@@ -209,59 +198,31 @@ internal fun BoxScope.AppOverlays(
         }
     }
 
-    if (showExifBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            ExifBenchScreen(onClose = onExifBenchClose)
-        }
-    }
-
-    if (BuildConfig.DISCOVER_ENABLED && showFxwSearchBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            FxwSearchBenchScreen(onClose = onFxwSearchBenchClose)
-        }
-    }
-
-    if (showUsbReadWriteBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            UsbReadWriteBenchScreen(viewModel = usbReadWriteBenchVm, onClose = onUsbReadWriteBenchClose)
-        }
-    }
-
-    if (showWriteDelayBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            WriteDelayBenchScreen(viewModel = writeDelayBenchVm, onClose = onWriteDelayBenchClose)
-        }
-    }
-
-    if (showNameBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            NameBenchScreen(viewModel = nameBenchVm, onClose = onNameBenchClose)
-        }
-    }
-
-    if (showReadSlotsBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            ReadSlotsBenchScreen(viewModel = readSlotsBenchVm, onClose = onReadSlotsBenchClose)
-        }
-    }
-
-    if (showDrPriorityBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            DrPriorityBenchScreen(viewModel = drPriorityBenchVm, onClose = onDrPriorityBenchClose)
-        }
-    }
-
-    if (showHapticBench) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            HapticBenchScreen(onClose = onHapticBenchClose)
-        }
-    }
-
-    if (showPtpLog) {
-        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-            PtpLogScreen(log = ptpLogText, onClose = onPtpLogClose)
-        }
-    }
+    AppDevBenchOverlays(
+        showExifBench = showExifBench,
+        showFxwSearchBench = showFxwSearchBench,
+        showUsbReadWriteBench = showUsbReadWriteBench,
+        showWriteDelayBench = showWriteDelayBench,
+        showNameBench = showNameBench,
+        showReadSlotsBench = showReadSlotsBench,
+        showDrPriorityBench = showDrPriorityBench,
+        showHapticBench = showHapticBench,
+        showPtpLog = showPtpLog,
+        ptpLogText = ptpLogText,
+        showNewPathsProbe = showNewPathsProbe,
+        showLiveSettingsBench = showLiveSettingsBench,
+        onExifBenchClose = onExifBenchClose,
+        onFxwSearchBenchClose = onFxwSearchBenchClose,
+        onUsbReadWriteBenchClose = onUsbReadWriteBenchClose,
+        onWriteDelayBenchClose = onWriteDelayBenchClose,
+        onNameBenchClose = onNameBenchClose,
+        onReadSlotsBenchClose = onReadSlotsBenchClose,
+        onDrPriorityBenchClose = onDrPriorityBenchClose,
+        onHapticBenchClose = onHapticBenchClose,
+        onPtpLogClose = onPtpLogClose,
+        onNewPathsProbeClose = onNewPathsProbeClose,
+        onLiveSettingsBenchClose = onLiveSettingsBenchClose,
+    )
 
     AnimatedVisibility(
         visible = showImportFromPhotoGuide,
@@ -453,7 +414,7 @@ internal fun BoxScope.AppOverlays(
     }
 
     val ocrRawText = state.ocrRawText
-    if (ocrRawText != null && (state.creatingRecipe || state.editorRecipe != null)) {
+    if (BuildConfig.DEBUG && ocrRawText != null && (state.creatingRecipe || state.editorRecipe != null)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

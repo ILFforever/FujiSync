@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ilfforever.fujisync.BuildConfig
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.ui.DisclaimerScreen
 import com.ilfforever.fujisync.ui.BackupUiState
 import com.ilfforever.fujisync.ui.UpdateUiState
@@ -83,6 +85,8 @@ fun ProfileScreen(
     onOpenDrPriorityBench: () -> Unit = {},
     onOpenHapticBench: () -> Unit = {},
     onOpenPtpLog: () -> Unit = {},
+    onOpenNewPathsProbe: () -> Unit = {},
+    onOpenLiveSettingsBench: () -> Unit = {},
     onAddMockCamera: () -> Unit = {},
     onShowScanLog: () -> Unit = {},
     onSetPropertyWriteDelay: (Long) -> Unit = {},
@@ -120,7 +124,7 @@ fun ProfileScreen(
         OverlayLayer(supportOpen) { supportOpen = false },
     ).OverlayBackHandler()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().tabletContentWidth(WideContentWidth)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -341,6 +345,8 @@ fun ProfileScreen(
                 onOpenDrPriorityBench = onOpenDrPriorityBench,
                 onOpenHapticBench = onOpenHapticBench,
                 onOpenPtpLog = onOpenPtpLog,
+                onOpenNewPathsProbe = onOpenNewPathsProbe,
+                onOpenLiveSettingsBench = onOpenLiveSettingsBench,
                 onAddMockCamera = onAddMockCamera,
                 onShowScanLog = onShowScanLog,
                 onShowDisclaimer = { disclaimerOpen = true },

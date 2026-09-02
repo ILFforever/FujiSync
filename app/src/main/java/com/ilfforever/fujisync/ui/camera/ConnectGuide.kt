@@ -50,6 +50,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.ReadableWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.ui.components.IconCamera
 import com.ilfforever.fujisync.ui.components.IconPhone
 import com.ilfforever.fujisync.ui.components.IconTool
@@ -86,7 +88,7 @@ fun ConnectGuide(
         ConnectStepUi("03", "Approve access", "Accept the Android USB prompt when it appears."),
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().tabletContentWidth(ReadableWidth)) {
     Column(
         modifier = Modifier
             .fillMaxSize()

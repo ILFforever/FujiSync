@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.sheetWidth
 import com.ilfforever.fujisync.ui.components.IconChevronRight
 import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
 import com.ilfforever.fujisync.ui.haptics.FujiHaptics
@@ -121,6 +122,7 @@ internal fun TransferSharePicker(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.72f)
+                    .sheetWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(PanelLow)
                     .border(1.dp, Border, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))

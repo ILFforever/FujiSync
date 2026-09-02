@@ -32,6 +32,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.R
 import com.ilfforever.fujisync.ui.components.BackChevron
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -55,7 +57,8 @@ fun SupportScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .tabletContentWidth(WideContentWidth),
     ) {
         Row(
             modifier = Modifier

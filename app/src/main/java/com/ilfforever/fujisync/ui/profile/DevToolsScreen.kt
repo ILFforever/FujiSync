@@ -1,6 +1,8 @@
 package com.ilfforever.fujisync.ui.profile
 
 import androidx.activity.compose.BackHandler
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,6 +70,8 @@ fun DevToolsScreen(
     onOpenUsbReadWriteBench: () -> Unit,
     onOpenHapticBench: () -> Unit,
     onOpenPtpLog: () -> Unit,
+    onOpenNewPathsProbe: () -> Unit,
+    onOpenLiveSettingsBench: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
     onShowDisclaimer: () -> Unit = {},
@@ -81,7 +85,8 @@ fun DevToolsScreen(
             .fillMaxSize()
             .background(Bg)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .tabletContentWidth(WideContentWidth),
     ) {
         Row(
             modifier = Modifier
@@ -157,6 +162,10 @@ fun DevToolsScreen(
                     .border(1.dp, Border, RoundedCornerShape(14.dp)),
             ) {
                 ProfileNavRow(label = "USB read/write bench", onClick = onOpenUsbReadWriteBench, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "New paths probe (0xD235 etc.)", onClick = onOpenNewPathsProbe, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "Live / C0 bench (P-A-S-M push)", onClick = onOpenLiveSettingsBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Name bench", onClick = onOpenNameBench, inCard = true)
                 ProfileDivider()

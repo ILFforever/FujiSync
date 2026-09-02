@@ -31,6 +31,10 @@ import com.ilfforever.fujisync.ui.components.IconQrCode
 import com.ilfforever.fujisync.ui.components.IconScan
 import com.ilfforever.fujisync.ui.components.IconSort
 import com.ilfforever.fujisync.ui.components.Wordmark
+import com.ilfforever.fujisync.ui.adaptive.LocalWindowWidthClass
+import com.ilfforever.fujisync.ui.adaptive.ReadableWidth
+import com.ilfforever.fujisync.ui.adaptive.WideContentWidth
+import com.ilfforever.fujisync.ui.adaptive.tabletContentWidth
 import com.ilfforever.fujisync.ui.detail.RecipeQrSheet
 import com.ilfforever.fujisync.ui.model.LibraryRecipeUiModel
 import com.ilfforever.fujisync.ui.model.RecipeUiModel
@@ -66,9 +70,16 @@ fun TransferScreen(
     var showSharePicker by remember { mutableStateOf(false) }
     var qrRecipe by remember { mutableStateOf<RecipeUiModel?>(null) }
     val hasRecipes = recipes.isNotEmpty()
+    val widthClass = LocalWindowWidthClass.current
+    val twoColumn = widthClass.supportsTwoPane
 
     Box(modifier = Modifier.fillMaxSize().background(Bg)) {
-        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .tabletContentWidth(if (twoColumn) WideContentWidth else ReadableWidth),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,78 +117,43 @@ fun TransferScreen(
 
                 Spacer(Modifier.height(26.dp))
 
-                TransferSection(
-                    label = "BRING IN",
-                    caption = "Five ways to add a recipe.",
-                ) {
-                    TransferActionRow(
-                        label = "Create manually",
-                        subtitle = "Build a clean preset from scratch",
-                        icon = IconEdit,
-                        iconTint = Gold,
-                        onClick = onCreateRecipe,
+                // The two sections are independent, so a wide screen shows them abreast
+                // rather than making you scroll past five rows to reach the second.
+                if (twoColumn) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            BringInSection(
+                                onCreateRecipe = onCreateRecipe,
+                                onImportFromScreenshot = onImportFromScreenshot,
+                                onImportFromQr = onImportFromQr,
+                                onImportFromPhoto = onImportFromPhoto,
+                                onScanTileGuide = onScanTileGuide,
+                            )
+                        }
+                        Box(Modifier.weight(1f)) {
+                            SendOutSection(
+                                hasRecipes = hasRecipes,
+                                onShare = { showSharePicker = true },
+                                onComposeSet = onComposeSet,
+                            )
+                        }
+                    }
+                } else {
+                    BringInSection(
+                        onCreateRecipe = onCreateRecipe,
+                        onImportFromScreenshot = onImportFromScreenshot,
+                        onImportFromQr = onImportFromQr,
+                        onImportFromPhoto = onImportFromPhoto,
+                        onScanTileGuide = onScanTileGuide,
                     )
-                    TransferDivider()
-                    TransferActionRow(
-                        label = "Scan screenshot",
-                        subtitle = "Extract settings from a recipe image",
-                        icon = IconImage,
-                        iconTint = Gold,
-                        tag = "OCR",
-                        onClick = onImportFromScreenshot,
-                    )
-                    TransferDivider()
-                    TransferActionRow(
-                        label = "Scan QR code",
-                        subtitle = "Import a shared FujiSync recipe",
-                        icon = IconQrCode,
-                        iconTint = Gold,
-                        onClick = onImportFromQr,
-                    )
-                    TransferDivider()
-                    TransferActionRow(
-                        label = "From JPEG",
-                        subtitle = "Read settings out of a camera photo",
-                        icon = IconCamera,
-                        iconTint = Gold,
-                        tag = "EXIF",
-                        onClick = onImportFromPhoto,
-                    )
-                    TransferDivider()
-                    TransferActionRow(
-                        label = "Scan tile",
-                        subtitle = "Capture from another app's recipe tile",
-                        icon = IconScan,
-                        iconTint = Gold,
-                        onClick = onScanTileGuide,
-                    )
-                }
-
-                Spacer(Modifier.height(28.dp))
-
-                TransferSection(
-                    label = "SEND OUT",
-                    caption = "Hand a recipe to someone, or stage a set for the camera.",
-                ) {
-                    TransferActionRow(
-                        label = "Share a recipe",
-                        subtitle = if (hasRecipes) {
-                            "QR code or share card"
-                        } else {
-                            "Add a recipe to your library first"
-                        },
-                        icon = IconQrCode,
-                        iconTint = Gold,
-                        enabled = hasRecipes,
-                        onClick = { showSharePicker = true },
-                    )
-                    TransferDivider()
-                    TransferActionRow(
-                        label = "Compose camera set",
-                        subtitle = "Arrange C1–C7 and save it — restore from Camera",
-                        icon = IconSort,
-                        iconTint = Metal,
-                        onClick = onComposeSet,
+                    Spacer(Modifier.height(28.dp))
+                    SendOutSection(
+                        hasRecipes = hasRecipes,
+                        onShare = { showSharePicker = true },
+                        onComposeSet = onComposeSet,
                     )
                 }
 
@@ -206,6 +182,95 @@ fun TransferScreen(
         if (!creditNoticeSeen) {
             TransferCreditModal(onDismiss = onCreditNoticeSeen)
         }
+    }
+}
+
+@Composable
+private fun BringInSection(
+    onCreateRecipe: () -> Unit,
+    onImportFromScreenshot: () -> Unit,
+    onImportFromQr: () -> Unit,
+    onImportFromPhoto: () -> Unit,
+    onScanTileGuide: () -> Unit,
+) {
+    TransferSection(
+        label = "BRING IN",
+        caption = "Five ways to add a recipe.",
+    ) {
+        TransferActionRow(
+            label = "Create manually",
+            subtitle = "Build a clean preset from scratch",
+            icon = IconEdit,
+            iconTint = Gold,
+            onClick = onCreateRecipe,
+        )
+        TransferDivider()
+        TransferActionRow(
+            label = "Scan screenshot",
+            subtitle = "Extract settings from a recipe image",
+            icon = IconImage,
+            iconTint = Gold,
+            tag = "OCR",
+            onClick = onImportFromScreenshot,
+        )
+        TransferDivider()
+        TransferActionRow(
+            label = "Scan QR code",
+            subtitle = "Import a shared FujiSync recipe",
+            icon = IconQrCode,
+            iconTint = Gold,
+            onClick = onImportFromQr,
+        )
+        TransferDivider()
+        TransferActionRow(
+            label = "From JPEG",
+            subtitle = "Read settings out of a camera photo",
+            icon = IconCamera,
+            iconTint = Gold,
+            tag = "EXIF",
+            onClick = onImportFromPhoto,
+        )
+        TransferDivider()
+        TransferActionRow(
+            label = "Scan tile",
+            subtitle = "Capture from another app's recipe tile",
+            icon = IconScan,
+            iconTint = Gold,
+            onClick = onScanTileGuide,
+        )
+    }
+}
+
+@Composable
+private fun SendOutSection(
+    hasRecipes: Boolean,
+    onShare: () -> Unit,
+    onComposeSet: () -> Unit,
+) {
+    TransferSection(
+        label = "SEND OUT",
+        caption = "Hand a recipe to someone, or stage a set for the camera.",
+    ) {
+        TransferActionRow(
+            label = "Share a recipe",
+            subtitle = if (hasRecipes) {
+                "QR code or share card"
+            } else {
+                "Add a recipe to your library first"
+            },
+            icon = IconQrCode,
+            iconTint = Gold,
+            enabled = hasRecipes,
+            onClick = onShare,
+        )
+        TransferDivider()
+        TransferActionRow(
+            label = "Compose camera set",
+            subtitle = "Arrange C1–C7 and save it — restore from Camera",
+            icon = IconSort,
+            iconTint = Metal,
+            onClick = onComposeSet,
+        )
     }
 }
 

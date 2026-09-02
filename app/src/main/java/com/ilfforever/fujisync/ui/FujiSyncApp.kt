@@ -11,6 +11,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +48,10 @@ import com.ilfforever.fujisync.ui.model.RecipeUiModel
 import com.ilfforever.fujisync.ui.overlay.BackHandler
 import com.ilfforever.fujisync.ui.overlay.OverlayLayer
 import com.ilfforever.fujisync.ui.overlay.overlayStackOf
+import com.ilfforever.fujisync.ui.adaptive.LibraryPaneWidth
+import com.ilfforever.fujisync.ui.adaptive.LocalWindowWidthClass
+import com.ilfforever.fujisync.ui.adaptive.currentWindowWidthClass
+import com.ilfforever.fujisync.ui.library.components.LibraryDetailPlaceholder
 import com.ilfforever.fujisync.ui.profile.ProfileScreen
 import com.ilfforever.fujisync.ui.theme.Bg
 import com.ilfforever.fujisync.ui.transfer.TransferScreen
@@ -139,6 +147,8 @@ fun FujiSyncApp(
     var showDrPriorityBench by remember { mutableStateOf(false) }
     var showHapticBench by remember { mutableStateOf(false) }
     var showPtpLog by remember { mutableStateOf(false) }
+    var showNewPathsProbe by remember { mutableStateOf(false) }
+    var showLiveSettingsBench by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
     var showComposeSetSheet by remember { mutableStateOf(false) }
@@ -244,6 +254,8 @@ fun FujiSyncApp(
         OverlayLayer(showDrPriorityBench) { showDrPriorityBench = false },
         OverlayLayer(showHapticBench) { showHapticBench = false },
         OverlayLayer(showPtpLog) { showPtpLog = false },
+        OverlayLayer(showNewPathsProbe) { showNewPathsProbe = false },
+        OverlayLayer(showLiveSettingsBench) { showLiveSettingsBench = false },
         OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
@@ -252,6 +264,10 @@ fun FujiSyncApp(
         OverlayLayer(state.library.duplicateDialog != null) { onDuplicateDismiss() },
     ).BackHandler()
 
+    val widthClass = currentWindowWidthClass()
+    val libraryTwoPane = widthClass.supportsTwoPane && state.tab == AppTab.Library
+
+    CompositionLocalProvider(LocalWindowWidthClass provides widthClass) {
     Box(modifier = Modifier.fillMaxSize().background(Bg)) {
         val isCharging = rememberIsPhoneCharging()
         var chargingBannerDismissed by remember { mutableStateOf(false) }
@@ -259,6 +275,25 @@ fun FujiSyncApp(
             if (!isCharging) chargingBannerDismissed = false
         }
 
+        fun handleTabChange(tab: AppTab) {
+            if (showImportFromPhotoGuide) {
+                showImportFromPhotoGuide = false
+                onTabChange(tab)
+            } else if (showImportFromScreenshotGuide) {
+                showImportFromScreenshotGuide = false
+                onTabChange(tab)
+            } else if (editorOpen && tab != state.tab) {
+                requestEditorClose(tab)
+            } else {
+                onTabChange(tab)
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxSize()) {
+        // Tablets get a vertical rail; a bottom bar would fling its targets to the corners.
+        if (widthClass.supportsTwoPane) {
+            AppNavRail(tab = state.tab, onTabChange = ::handleTabChange)
+        }
         Column(modifier = Modifier.fillMaxSize()) {
             if (state.tab == AppTab.Camera) {
                 AppHeader(
@@ -324,20 +359,44 @@ fun FujiSyncApp(
                         )
                         }
                     }
-                    AppTab.Library -> LibraryScreen(
-                        showImages = state.settings.showLibraryImages,
-                        showCardImageCount = state.settings.showCardImageCount,
-                        favoritesOnTop = state.settings.favoritesOnTop,
-                        scrollToTopSignal = state.library.saveConfirmed,
-                        onOpenItem = onOpenLibraryItem,
-                        onCreateRecipe = onOpenRecipeCreator,
-                        onAddGroupImage = onAddLibraryGroupImage,
-                        onImportFromPhoto = { showImportFromPhotoGuide = true },
-                        onImportFromScreenshot = { showImportFromScreenshotGuide = true },
-                        onImportFromQr = { showQrScanner = true },
-                        onScanTileGuide = { showScanTileGuide = true },
-                        onComposeSet = { showComposeSetSheet = true },
-                    )
+                    AppTab.Library -> {
+                        val libraryList: @Composable () -> Unit = {
+                            LibraryScreen(
+                                showImages = state.settings.showLibraryImages,
+                                showCardImageCount = state.settings.showCardImageCount,
+                                favoritesOnTop = state.settings.favoritesOnTop,
+                                scrollToTopSignal = state.library.saveConfirmed,
+                                onOpenItem = onOpenLibraryItem,
+                                onCreateRecipe = onOpenRecipeCreator,
+                                onAddGroupImage = onAddLibraryGroupImage,
+                                onImportFromPhoto = { showImportFromPhotoGuide = true },
+                                onImportFromScreenshot = { showImportFromScreenshotGuide = true },
+                                onImportFromQr = { showQrScanner = true },
+                                onScanTileGuide = { showScanTileGuide = true },
+                                onComposeSet = { showComposeSetSheet = true },
+                            )
+                        }
+                        if (libraryTwoPane) {
+                            // List on the left, detail rendered into the right by AppOverlays.
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.width(LibraryPaneWidth)) { libraryList() }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(1.dp)
+                                        .background(com.ilfforever.fujisync.ui.theme.Border),
+                                )
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (state.detailRecipe == null) LibraryDetailPlaceholder()
+                                }
+                            }
+                        } else {
+                            libraryList()
+                        }
+                    }
                     AppTab.Discover -> if (BuildConfig.DISCOVER_ENABLED) DiscoverScreen()
                     AppTab.Transfer -> TransferScreen(
                         recipes = state.library.recipes,
@@ -377,6 +436,8 @@ fun FujiSyncApp(
                         onOpenDrPriorityBench = { showDrPriorityBench = true },
                         onOpenHapticBench = { showHapticBench = true },
                         onOpenPtpLog = { showPtpLog = true },
+                        onOpenNewPathsProbe = { showNewPathsProbe = true },
+                        onOpenLiveSettingsBench = { showLiveSettingsBench = true },
                         onAddMockCamera = onAddMockCamera,
                         onShowScanLog = onLoadCaptureLog,
                         onSetPropertyWriteDelay = onSetPropertyWriteDelay,
@@ -396,6 +457,7 @@ fun FujiSyncApp(
                 }
 
                 AppOverlays(
+                    detailPaneStart = if (libraryTwoPane) LibraryPaneWidth + 1.dp else 0.dp,
                     state = state,
                     cameraLabel = cameraLabel,
                     cameraDetail = cameraDetail,
@@ -408,6 +470,8 @@ fun FujiSyncApp(
                     showDrPriorityBench = showDrPriorityBench,
                     showHapticBench = showHapticBench,
                     showPtpLog = showPtpLog,
+                    showNewPathsProbe = showNewPathsProbe,
+                    showLiveSettingsBench = showLiveSettingsBench,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -446,6 +510,8 @@ fun FujiSyncApp(
                     onDrPriorityBenchClose = { showDrPriorityBench = false },
                     onHapticBenchClose = { showHapticBench = false },
                     onPtpLogClose = { showPtpLog = false },
+                    onNewPathsProbeClose = { showNewPathsProbe = false },
+                    onLiveSettingsBenchClose = { showLiveSettingsBench = false },
                     ptpLogText = rearrangeDebugLog,
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,
@@ -493,22 +559,10 @@ fun FujiSyncApp(
             }
 
 
-            AppTabBar(
-                tab = state.tab,
-                onTabChange = { tab ->
-                    if (showImportFromPhotoGuide) {
-                        showImportFromPhotoGuide = false
-                        onTabChange(tab)
-                    } else if (showImportFromScreenshotGuide) {
-                        showImportFromScreenshotGuide = false
-                        onTabChange(tab)
-                    } else if (editorOpen && tab != state.tab) {
-                        requestEditorClose(tab)
-                    } else {
-                        onTabChange(tab)
-                    }
-                },
-            )
+            if (!widthClass.supportsTwoPane) {
+                AppTabBar(tab = state.tab, onTabChange = ::handleTabChange)
+            }
+        }
         }
 
         state.captureLog?.let { log ->
@@ -565,6 +619,7 @@ fun FujiSyncApp(
                 onSave = { label, slots -> onComposeSet(label, slots) },
             )
         }
+    }
     }
 }
 
