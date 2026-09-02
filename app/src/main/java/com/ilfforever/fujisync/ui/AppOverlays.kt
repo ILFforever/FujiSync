@@ -58,6 +58,7 @@ internal fun BoxScope.AppOverlays(
     showPtpLog: Boolean,
     ptpLogText: String,
     showNewPathsProbe: Boolean,
+    showLiveSettingsBench: Boolean,
     showImportFromPhotoGuide: Boolean,
     showReadingOverlay: Boolean,
     showDiscardEditorDialog: Boolean,
@@ -97,6 +98,7 @@ internal fun BoxScope.AppOverlays(
     onHapticBenchClose: () -> Unit,
     onPtpLogClose: () -> Unit,
     onNewPathsProbeClose: () -> Unit,
+    onLiveSettingsBenchClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
     showImportFromScreenshotGuide: Boolean,
     onImportFromScreenshotGuideClose: () -> Unit,
@@ -208,6 +210,7 @@ internal fun BoxScope.AppOverlays(
         showPtpLog = showPtpLog,
         ptpLogText = ptpLogText,
         showNewPathsProbe = showNewPathsProbe,
+        showLiveSettingsBench = showLiveSettingsBench,
         onExifBenchClose = onExifBenchClose,
         onFxwSearchBenchClose = onFxwSearchBenchClose,
         onUsbReadWriteBenchClose = onUsbReadWriteBenchClose,
@@ -218,6 +221,7 @@ internal fun BoxScope.AppOverlays(
         onHapticBenchClose = onHapticBenchClose,
         onPtpLogClose = onPtpLogClose,
         onNewPathsProbeClose = onNewPathsProbeClose,
+        onLiveSettingsBenchClose = onLiveSettingsBenchClose,
     )
 
     AnimatedVisibility(

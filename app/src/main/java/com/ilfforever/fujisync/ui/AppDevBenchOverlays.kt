@@ -14,6 +14,8 @@ import com.ilfforever.fujisync.ui.dev.FxwSearchBenchScreen
 import com.ilfforever.fujisync.ui.dev.HapticBenchScreen
 import com.ilfforever.fujisync.ui.dev.NameBenchScreen
 import com.ilfforever.fujisync.ui.dev.NameBenchViewModel
+import com.ilfforever.fujisync.ui.dev.LiveSettingsBenchScreen
+import com.ilfforever.fujisync.ui.dev.LiveSettingsBenchViewModel
 import com.ilfforever.fujisync.ui.dev.NewPathsProbeScreen
 import com.ilfforever.fujisync.ui.dev.NewPathsProbeViewModel
 import com.ilfforever.fujisync.ui.dev.PtpLogScreen
@@ -43,6 +45,7 @@ internal fun AppDevBenchOverlays(
     showPtpLog: Boolean,
     ptpLogText: String,
     showNewPathsProbe: Boolean,
+    showLiveSettingsBench: Boolean,
     onExifBenchClose: () -> Unit,
     onFxwSearchBenchClose: () -> Unit,
     onUsbReadWriteBenchClose: () -> Unit,
@@ -53,6 +56,7 @@ internal fun AppDevBenchOverlays(
     onHapticBenchClose: () -> Unit,
     onPtpLogClose: () -> Unit,
     onNewPathsProbeClose: () -> Unit,
+    onLiveSettingsBenchClose: () -> Unit,
 ) {
     val usbReadWriteBenchVm: UsbReadWriteBenchViewModel = hiltViewModel()
     val writeDelayBenchVm: WriteDelayBenchViewModel = hiltViewModel()
@@ -60,6 +64,7 @@ internal fun AppDevBenchOverlays(
     val readSlotsBenchVm: ReadSlotsBenchViewModel = hiltViewModel()
     val drPriorityBenchVm: DrPriorityBenchViewModel = hiltViewModel()
     val newPathsProbeVm: NewPathsProbeViewModel = hiltViewModel()
+    val liveSettingsVm: LiveSettingsBenchViewModel = hiltViewModel()
 
     if (showExifBench) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
@@ -118,6 +123,12 @@ internal fun AppDevBenchOverlays(
     if (showNewPathsProbe) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
             NewPathsProbeScreen(viewModel = newPathsProbeVm, onClose = onNewPathsProbeClose)
+        }
+    }
+
+    if (showLiveSettingsBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            LiveSettingsBenchScreen(viewModel = liveSettingsVm, onClose = onLiveSettingsBenchClose)
         }
     }
 }

@@ -148,6 +148,7 @@ fun FujiSyncApp(
     var showHapticBench by remember { mutableStateOf(false) }
     var showPtpLog by remember { mutableStateOf(false) }
     var showNewPathsProbe by remember { mutableStateOf(false) }
+    var showLiveSettingsBench by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
     var showComposeSetSheet by remember { mutableStateOf(false) }
@@ -254,6 +255,7 @@ fun FujiSyncApp(
         OverlayLayer(showHapticBench) { showHapticBench = false },
         OverlayLayer(showPtpLog) { showPtpLog = false },
         OverlayLayer(showNewPathsProbe) { showNewPathsProbe = false },
+        OverlayLayer(showLiveSettingsBench) { showLiveSettingsBench = false },
         OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
@@ -435,6 +437,7 @@ fun FujiSyncApp(
                         onOpenHapticBench = { showHapticBench = true },
                         onOpenPtpLog = { showPtpLog = true },
                         onOpenNewPathsProbe = { showNewPathsProbe = true },
+                        onOpenLiveSettingsBench = { showLiveSettingsBench = true },
                         onAddMockCamera = onAddMockCamera,
                         onShowScanLog = onLoadCaptureLog,
                         onSetPropertyWriteDelay = onSetPropertyWriteDelay,
@@ -468,6 +471,7 @@ fun FujiSyncApp(
                     showHapticBench = showHapticBench,
                     showPtpLog = showPtpLog,
                     showNewPathsProbe = showNewPathsProbe,
+                    showLiveSettingsBench = showLiveSettingsBench,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -507,6 +511,7 @@ fun FujiSyncApp(
                     onHapticBenchClose = { showHapticBench = false },
                     onPtpLogClose = { showPtpLog = false },
                     onNewPathsProbeClose = { showNewPathsProbe = false },
+                    onLiveSettingsBenchClose = { showLiveSettingsBench = false },
                     ptpLogText = rearrangeDebugLog,
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,

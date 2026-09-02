@@ -128,6 +128,34 @@ data class OpenPtpConnection(
         )
     }
 
+    /**
+     * Sends one operation and returns every container the camera replies with, for diagnostics.
+     * Unlike [executeCommand] this makes no assumption about how many containers arrive or in what
+     * order, so it can show what a camera actually does with an operation we suspect we are calling
+     * wrongly. Stops at the first response-type container, or when the camera goes quiet.
+     */
+    fun rawExchange(
+        code: Int,
+        params: List<Int> = emptyList(),
+        timeoutMs: Int = PtpConstants.STANDARD_TIMEOUT_MS,
+        maxContainers: Int = 4,
+    ): List<PtpContainer> {
+        val transactionId = nextTransactionId.getAndIncrement()
+        send(buildCommandPacket(code, transactionId, params), timeoutMs)
+
+        val received = mutableListOf<PtpContainer>()
+        repeat(maxContainers) {
+            val container = try {
+                receiveContainer(timeoutMs)
+            } catch (_: Exception) {
+                return received
+            }
+            received.add(container)
+            if (container.type == PtpConstants.CONTAINER_RESPONSE) return received
+        }
+        return received
+    }
+
     override fun close() {
         connection.releaseInterface(ptpInterface)
         connection.close()

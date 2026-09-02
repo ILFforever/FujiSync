@@ -9,9 +9,12 @@ data class PtpDeviceInfo(
     val deviceVersion: String,
     val serialNumber: String,
     val supportedDeviceProperties: List<Int>,
+    val supportedOperations: List<Int> = emptyList(),
 ) {
     val supportsFujiRecipeSlots: Boolean
         get() = PtpConstants.FUJI_SLOT_SELECTOR in supportedDeviceProperties
+
+    fun supportsOperation(opcode: Int): Boolean = opcode in supportedOperations
 }
 
 fun parseDeviceInfo(payload: ByteArray): PtpDeviceInfo {
@@ -23,7 +26,7 @@ fun parseDeviceInfo(payload: ByteArray): PtpDeviceInfo {
     reader.skip(8)
     reader.skipPtpString()
     reader.skip(2)
-    reader.skipUInt16Array()
+    val supportedOperations = reader.readUInt16Array()
     reader.skipUInt16Array()
     val supportedProperties = reader.readUInt16Array()
     reader.skipUInt16Array()
@@ -43,6 +46,7 @@ fun parseDeviceInfo(payload: ByteArray): PtpDeviceInfo {
         deviceVersion = deviceVersion,
         serialNumber = serialNumber,
         supportedDeviceProperties = supportedProperties,
+        supportedOperations = supportedOperations,
     )
 }
 

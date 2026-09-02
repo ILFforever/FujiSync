@@ -71,6 +71,7 @@ fun DevToolsScreen(
     onOpenHapticBench: () -> Unit,
     onOpenPtpLog: () -> Unit,
     onOpenNewPathsProbe: () -> Unit,
+    onOpenLiveSettingsBench: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
     onShowDisclaimer: () -> Unit = {},
@@ -163,6 +164,8 @@ fun DevToolsScreen(
                 ProfileNavRow(label = "USB read/write bench", onClick = onOpenUsbReadWriteBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "New paths probe (0xD235 etc.)", onClick = onOpenNewPathsProbe, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "Live / C0 bench (P-A-S-M push)", onClick = onOpenLiveSettingsBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Name bench", onClick = onOpenNameBench, inCard = true)
                 ProfileDivider()
