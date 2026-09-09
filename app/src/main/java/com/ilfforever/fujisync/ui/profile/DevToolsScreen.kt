@@ -70,8 +70,11 @@ fun DevToolsScreen(
     onOpenUsbReadWriteBench: () -> Unit,
     onOpenHapticBench: () -> Unit,
     onOpenPtpLog: () -> Unit,
+    onOpenAppLog: () -> Unit = {},
     onOpenNewPathsProbe: () -> Unit,
     onOpenLiveSettingsBench: () -> Unit,
+    onOpenCapabilityBench: () -> Unit,
+    onOpenMonoToneBench: () -> Unit,
     onAddMockCamera: () -> Unit,
     onShowScanLog: () -> Unit,
     onShowDisclaimer: () -> Unit = {},
@@ -166,6 +169,8 @@ fun DevToolsScreen(
                 ProfileNavRow(label = "New paths probe (0xD235 etc.)", onClick = onOpenNewPathsProbe, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Live / C0 bench (P-A-S-M push)", onClick = onOpenLiveSettingsBench, inCard = true)
+                ProfileNavRow(label = "Capability bench (no camera needed)", onClick = onOpenCapabilityBench, inCard = true)
+                ProfileNavRow(label = "Mono tone bench (0xD193 / 0xD194)", onClick = onOpenMonoToneBench, inCard = true)
                 ProfileDivider()
                 ProfileNavRow(label = "Name bench", onClick = onOpenNameBench, inCard = true)
                 ProfileDivider()
@@ -184,6 +189,8 @@ fun DevToolsScreen(
                 }
                 ProfileDivider()
                 ProfileNavRow(label = "PTP log", onClick = onOpenPtpLog, inCard = true)
+                ProfileDivider()
+                ProfileNavRow(label = "Debug log (this app, no adb needed)", onClick = onOpenAppLog, inCard = true)
             }
 
             Spacer(Modifier.height(24.dp))

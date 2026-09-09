@@ -40,6 +40,8 @@ import com.ilfforever.fujisync.ui.theme.TextPrimary
 fun PtpLogScreen(
     log: String,
     onClose: () -> Unit,
+    title: String = "PTP LOG",
+    emptyHint: String = "(no log entries yet — trigger a rearrange/restore/write)",
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
@@ -67,7 +69,7 @@ fun PtpLogScreen(
                 Icon(IconClose, contentDescription = "Back", tint = TextPrimary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "PTP LOG",
+                    text = title,
                     fontFamily = SansFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
@@ -97,8 +99,7 @@ fun PtpLogScreen(
         }
 
         Text(
-            text = if (log.isEmpty()) "(no log entries yet — trigger a rearrange/restore/write)"
-            else log,
+            text = log.ifEmpty { emptyHint },
             fontFamily = MonoFamily,
             fontSize = 10.sp,
             lineHeight = 15.sp,

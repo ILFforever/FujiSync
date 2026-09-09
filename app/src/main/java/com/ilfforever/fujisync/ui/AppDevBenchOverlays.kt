@@ -14,10 +14,15 @@ import com.ilfforever.fujisync.ui.dev.FxwSearchBenchScreen
 import com.ilfforever.fujisync.ui.dev.HapticBenchScreen
 import com.ilfforever.fujisync.ui.dev.NameBenchScreen
 import com.ilfforever.fujisync.ui.dev.NameBenchViewModel
+import com.ilfforever.fujisync.ui.dev.CapabilityBenchScreen
+import com.ilfforever.fujisync.ui.dev.MonoToneBenchScreen
+import com.ilfforever.fujisync.ui.dev.MonoToneBenchViewModel
+import com.ilfforever.fujisync.ui.dev.CapabilityBenchViewModel
 import com.ilfforever.fujisync.ui.dev.LiveSettingsBenchScreen
 import com.ilfforever.fujisync.ui.dev.LiveSettingsBenchViewModel
 import com.ilfforever.fujisync.ui.dev.NewPathsProbeScreen
 import com.ilfforever.fujisync.ui.dev.NewPathsProbeViewModel
+import com.ilfforever.fujisync.ui.dev.AppLogScreen
 import com.ilfforever.fujisync.ui.dev.PtpLogScreen
 import com.ilfforever.fujisync.ui.dev.ReadSlotsBenchScreen
 import com.ilfforever.fujisync.ui.dev.ReadSlotsBenchViewModel
@@ -44,8 +49,11 @@ internal fun AppDevBenchOverlays(
     showHapticBench: Boolean,
     showPtpLog: Boolean,
     ptpLogText: String,
+    showAppLog: Boolean,
     showNewPathsProbe: Boolean,
     showLiveSettingsBench: Boolean,
+    showCapabilityBench: Boolean,
+    showMonoToneBench: Boolean,
     onExifBenchClose: () -> Unit,
     onFxwSearchBenchClose: () -> Unit,
     onUsbReadWriteBenchClose: () -> Unit,
@@ -55,8 +63,11 @@ internal fun AppDevBenchOverlays(
     onDrPriorityBenchClose: () -> Unit,
     onHapticBenchClose: () -> Unit,
     onPtpLogClose: () -> Unit,
+    onAppLogClose: () -> Unit,
     onNewPathsProbeClose: () -> Unit,
     onLiveSettingsBenchClose: () -> Unit,
+    onCapabilityBenchClose: () -> Unit,
+    onMonoToneBenchClose: () -> Unit,
 ) {
     val usbReadWriteBenchVm: UsbReadWriteBenchViewModel = hiltViewModel()
     val writeDelayBenchVm: WriteDelayBenchViewModel = hiltViewModel()
@@ -65,6 +76,8 @@ internal fun AppDevBenchOverlays(
     val drPriorityBenchVm: DrPriorityBenchViewModel = hiltViewModel()
     val newPathsProbeVm: NewPathsProbeViewModel = hiltViewModel()
     val liveSettingsVm: LiveSettingsBenchViewModel = hiltViewModel()
+    val capabilityVm: CapabilityBenchViewModel = hiltViewModel()
+    val monoToneVm: MonoToneBenchViewModel = hiltViewModel()
 
     if (showExifBench) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
@@ -120,6 +133,12 @@ internal fun AppDevBenchOverlays(
         }
     }
 
+    if (showAppLog) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            AppLogScreen(onClose = onAppLogClose)
+        }
+    }
+
     if (showNewPathsProbe) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
             NewPathsProbeScreen(viewModel = newPathsProbeVm, onClose = onNewPathsProbeClose)
@@ -129,6 +148,18 @@ internal fun AppDevBenchOverlays(
     if (showLiveSettingsBench) {
         Box(modifier = Modifier.fillMaxSize().background(Bg)) {
             LiveSettingsBenchScreen(viewModel = liveSettingsVm, onClose = onLiveSettingsBenchClose)
+        }
+    }
+
+    if (showCapabilityBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            CapabilityBenchScreen(viewModel = capabilityVm, onClose = onCapabilityBenchClose)
+        }
+    }
+
+    if (showMonoToneBench) {
+        Box(modifier = Modifier.fillMaxSize().background(Bg)) {
+            MonoToneBenchScreen(viewModel = monoToneVm, onClose = onMonoToneBenchClose)
         }
     }
 }
