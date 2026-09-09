@@ -41,6 +41,21 @@ fun decodeInt16Le(payload: ByteArray): Int? {
 fun decodeUInt16Le(payload: ByteArray): Int? =
     decodeInt16Le(payload)?.and(0xFFFF)
 
+/**
+ * Reads a little-endian uint32 as a [Long]. Returned unsigned because PTP container lengths are
+ * compared against limits, and a length near 2^31 read as a negative Int would pass a range check
+ * it should fail.
+ */
+fun readUInt32Le(bytes: ByteArray, offset: Int = 0): Long {
+    require(offset >= 0 && offset + 4 <= bytes.size) {
+        "Cannot read a uint32 at offset $offset of a ${bytes.size}-byte array."
+    }
+    return (bytes[offset].toLong() and 0xFF) or
+        ((bytes[offset + 1].toLong() and 0xFF) shl 8) or
+        ((bytes[offset + 2].toLong() and 0xFF) shl 16) or
+        ((bytes[offset + 3].toLong() and 0xFF) shl 24)
+}
+
 fun hexDump(bytes: ByteArray, maxBytes: Int = 32): String {
     if (bytes.isEmpty()) return "<empty>"
     val limit = minOf(maxBytes, bytes.size)

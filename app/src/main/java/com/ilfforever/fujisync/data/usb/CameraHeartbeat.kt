@@ -65,7 +65,7 @@ class CameraHeartbeat(
         if (!usbManager.hasPermission(device)) return null
 
         return connectionFactory.open(device)?.use { connection ->
-            if (!connection.openSession()) return null
+            if (!connection.openSessionWhenReady().isOpen) return null
             try {
                 val cam = FujiRecipeCamera(connection)
                 val results = mutableListOf<RecipePreset>()

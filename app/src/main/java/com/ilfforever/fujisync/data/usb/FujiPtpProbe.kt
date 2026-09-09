@@ -62,19 +62,14 @@ class FujiPtpProbe(
 
         openConnection.use { connection ->
             val usbConnectionSerial = readUsbConnectionSerial(connection)
-            val opened = connection.openSession()
-            if (!opened) {
-                return FujiPtpProbeResult.NotReady("Camera rejected OpenSession.")
+            val start = connection.openSessionWhenReady()
+            if (!start.isOpen) {
+                return FujiPtpProbeResult.NotReady((start as SessionStartResult.Failed).reason)
             }
 
             try {
-                val deviceInfoTransaction = connection.executeCommand(PtpConstants.GET_DEVICE_INFO)
-                val payload = deviceInfoTransaction.data?.payload
+                val payload = connection.readDeviceInfoPayload()
                     ?: return FujiPtpProbeResult.NotReady("Camera did not return DeviceInfo.")
-
-                if (!deviceInfoTransaction.isOk) {
-                    return FujiPtpProbeResult.NotReady("Camera returned an error for DeviceInfo.")
-                }
 
                 // Logged before parsing so a parse failure still leaves the raw bytes in logcat —
                 // otherwise a malformed/unexpected payload throws before anything is ever recorded.

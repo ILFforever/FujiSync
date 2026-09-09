@@ -17,7 +17,32 @@ object PtpConstants {
     const val SET_DEVICE_PROP_VALUE = 0x1016
 
     const val RESPONSE_OK = 0x2001
+    const val RESPONSE_SESSION_NOT_OPEN = 0x2003
+    const val RESPONSE_DEVICE_BUSY = 0x2019
     const val RESPONSE_SESSION_ALREADY_OPEN = 0x201E
+
+    /**
+     * Still Image class device reset — USB Still Image Capture Device definition §5.2.4, a class
+     * request on the interface. Tells the camera to drop whatever transaction state it is holding,
+     * which is the only way back from a desync short of unplugging the cable.
+     */
+    const val STILL_IMAGE_RESET_REQUEST_TYPE = 0x21
+    const val STILL_IMAGE_RESET_REQUEST = 0x66
+    const val STILL_IMAGE_RESET_TIMEOUT_MS = 1_000
+
+    /**
+     * A camera that has just enumerated will refuse OpenSession for a moment, and one that has just
+     * been reset needs longer still. Polling costs nothing when the body is ready on the first try.
+     */
+    const val OPEN_SESSION_ATTEMPTS = 10
+    const val OPEN_SESSION_POLL_MS = 200L
+    const val POST_RESET_DELAY_MS = 500L
+
+    /** GetDeviceInfo is the first real payload we ask for, and the one bodies most often fumble. */
+    const val DEVICE_INFO_ATTEMPTS = 5
+    const val DEVICE_INFO_RETRY_BASE_DELAY_MS = 200L
+
+    const val CLOSE_SESSION_TIMEOUT_MS = 1_000
 
     const val FUJI_SLOT_SELECTOR = 0xD18C
     const val FUJI_PRESET_NAME = 0xD18D

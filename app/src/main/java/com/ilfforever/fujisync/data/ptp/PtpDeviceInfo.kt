@@ -105,10 +105,16 @@ private class PtpPayloadReader(payload: ByteArray) {
             throw PtpProtocolException("PTP string declares $count chars but only ${buffer.remaining()} bytes remain.")
         }
 
+        // Stops at the first NUL rather than assuming the last code unit is one. The declared count
+        // includes the terminator on every camera seen so far, but a body that omits it would
+        // otherwise lose the last character of its model name.
+        // Every declared code unit is consumed even after the terminator, because DeviceInfo packs
+        // four strings back to back and stopping early would start the next one mid-character.
         val builder = StringBuilder(count)
-        repeat(count) { index ->
+        var terminated = false
+        repeat(count) {
             val codeUnit = buffer.short.toInt() and 0xFFFF
-            if (index < count - 1 && codeUnit != 0) builder.append(codeUnit.toChar())
+            if (codeUnit == 0) terminated = true else if (!terminated) builder.append(codeUnit.toChar())
         }
         return builder.toString()
     }

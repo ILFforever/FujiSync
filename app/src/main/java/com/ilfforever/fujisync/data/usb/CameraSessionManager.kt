@@ -35,7 +35,8 @@ class CameraSessionManager @Inject constructor(
                 val connection = connectionFactory.open(device)
                     ?: error("Unable to open the camera's PTP USB interface.")
                 connection.use {
-                    check(connection.openSession()) { "OpenSession rejected." }
+                    val start = connection.openSessionWhenReady()
+                    check(start.isOpen) { (start as SessionStartResult.Failed).reason }
                     try {
                         block(FujiRecipeCamera(connection, writeDelayMs, capability), connection)
                     } finally {
@@ -59,7 +60,8 @@ class CameraSessionManager @Inject constructor(
                 val connection = connectionFactory.open(device)
                     ?: error("Unable to open the camera's PTP USB interface.")
                 connection.use {
-                    check(connection.openSession()) { "OpenSession rejected." }
+                    val start = connection.openSessionWhenReady()
+                    check(start.isOpen) { (start as SessionStartResult.Failed).reason }
                     try {
                         block(connection)
                     } finally {
