@@ -147,8 +147,11 @@ fun FujiSyncApp(
     var showDrPriorityBench by remember { mutableStateOf(false) }
     var showHapticBench by remember { mutableStateOf(false) }
     var showPtpLog by remember { mutableStateOf(false) }
+    var showAppLog by remember { mutableStateOf(false) }
     var showNewPathsProbe by remember { mutableStateOf(false) }
     var showLiveSettingsBench by remember { mutableStateOf(false) }
+    var showCapabilityBench by remember { mutableStateOf(false) }
+    var showMonoToneBench by remember { mutableStateOf(false) }
     var showScanTileGuide by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
     var showComposeSetSheet by remember { mutableStateOf(false) }
@@ -256,6 +259,8 @@ fun FujiSyncApp(
         OverlayLayer(showPtpLog) { showPtpLog = false },
         OverlayLayer(showNewPathsProbe) { showNewPathsProbe = false },
         OverlayLayer(showLiveSettingsBench) { showLiveSettingsBench = false },
+        OverlayLayer(showCapabilityBench) { showCapabilityBench = false },
+        OverlayLayer(showMonoToneBench) { showMonoToneBench = false },
         OverlayLayer(showScanTileGuide) { showScanTileGuide = false },
         OverlayLayer(state.camera.showImageTuner) { onCloseCameraImageTuner() },
         OverlayLayer(showReadingOverlay) { showReadingOverlay = false },
@@ -292,7 +297,10 @@ fun FujiSyncApp(
         Row(modifier = Modifier.fillMaxSize()) {
         // Tablets get a vertical rail; a bottom bar would fling its targets to the corners.
         if (widthClass.supportsTwoPane) {
-            AppNavRail(tab = state.tab, onTabChange = ::handleTabChange)
+            // Lambda literal, not `::handleTabChange` — the compiler memoizes the former
+            // against its captures, so the rail can skip; a callable reference is a fresh
+            // object every recomposition.
+            AppNavRail(tab = state.tab, onTabChange = { handleTabChange(it) })
         }
         Column(modifier = Modifier.fillMaxSize()) {
             if (state.tab == AppTab.Camera) {
@@ -360,12 +368,20 @@ fun FujiSyncApp(
                         }
                     }
                     AppTab.Library -> {
+                        // Read these outside the lambda. FujiSyncUiState is unstable, so a
+                        // lambda capturing `state` is re-memoized on every emission and its
+                        // group invalidates — which stops LibraryScreen (all-stable params)
+                        // from skipping. Hoisted, the lambda captures only Booleans.
+                        val showImages = state.settings.showLibraryImages
+                        val showCardImageCount = state.settings.showCardImageCount
+                        val favoritesOnTop = state.settings.favoritesOnTop
+                        val scrollToTopSignal = state.library.saveConfirmed
                         val libraryList: @Composable () -> Unit = {
                             LibraryScreen(
-                                showImages = state.settings.showLibraryImages,
-                                showCardImageCount = state.settings.showCardImageCount,
-                                favoritesOnTop = state.settings.favoritesOnTop,
-                                scrollToTopSignal = state.library.saveConfirmed,
+                                showImages = showImages,
+                                showCardImageCount = showCardImageCount,
+                                favoritesOnTop = favoritesOnTop,
+                                scrollToTopSignal = scrollToTopSignal,
                                 onOpenItem = onOpenLibraryItem,
                                 onCreateRecipe = onOpenRecipeCreator,
                                 onAddGroupImage = onAddLibraryGroupImage,
@@ -436,8 +452,11 @@ fun FujiSyncApp(
                         onOpenDrPriorityBench = { showDrPriorityBench = true },
                         onOpenHapticBench = { showHapticBench = true },
                         onOpenPtpLog = { showPtpLog = true },
+                        onOpenAppLog = { showAppLog = true },
                         onOpenNewPathsProbe = { showNewPathsProbe = true },
                         onOpenLiveSettingsBench = { showLiveSettingsBench = true },
+                        onOpenCapabilityBench = { showCapabilityBench = true },
+                        onOpenMonoToneBench = { showMonoToneBench = true },
                         onAddMockCamera = onAddMockCamera,
                         onShowScanLog = onLoadCaptureLog,
                         onSetPropertyWriteDelay = onSetPropertyWriteDelay,
@@ -470,8 +489,11 @@ fun FujiSyncApp(
                     showDrPriorityBench = showDrPriorityBench,
                     showHapticBench = showHapticBench,
                     showPtpLog = showPtpLog,
+                    showAppLog = showAppLog,
                     showNewPathsProbe = showNewPathsProbe,
                     showLiveSettingsBench = showLiveSettingsBench,
+                    showCapabilityBench = showCapabilityBench,
+                    showMonoToneBench = showMonoToneBench,
                     showImportFromPhotoGuide = showImportFromPhotoGuide,
                     showReadingOverlay = showReadingOverlay,
                     showDiscardEditorDialog = showDiscardEditorDialog,
@@ -510,8 +532,11 @@ fun FujiSyncApp(
                     onDrPriorityBenchClose = { showDrPriorityBench = false },
                     onHapticBenchClose = { showHapticBench = false },
                     onPtpLogClose = { showPtpLog = false },
+                    onAppLogClose = { showAppLog = false },
                     onNewPathsProbeClose = { showNewPathsProbe = false },
                     onLiveSettingsBenchClose = { showLiveSettingsBench = false },
+                    onCapabilityBenchClose = { showCapabilityBench = false },
+                    onMonoToneBenchClose = { showMonoToneBench = false },
                     ptpLogText = rearrangeDebugLog,
                     onImportFromPhotoGuideClose = { showImportFromPhotoGuide = false },
                     showImportFromScreenshotGuide = showImportFromScreenshotGuide,
@@ -560,7 +585,7 @@ fun FujiSyncApp(
 
 
             if (!widthClass.supportsTwoPane) {
-                AppTabBar(tab = state.tab, onTabChange = ::handleTabChange)
+                AppTabBar(tab = state.tab, onTabChange = { handleTabChange(it) })
             }
         }
         }

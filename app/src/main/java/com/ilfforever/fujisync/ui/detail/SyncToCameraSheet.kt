@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -40,10 +39,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.data.capability.CameraCapability
+import com.ilfforever.fujisync.ui.components.CompatibilityNotice
 import com.ilfforever.fujisync.ui.components.DeleteConfirmDialog
 import com.ilfforever.fujisync.ui.components.IconCheck
 import com.ilfforever.fujisync.ui.components.PrimaryCTA
+import com.ilfforever.fujisync.ui.model.CompatibilitySummary
 import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.blockingFilmSimulation
+import com.ilfforever.fujisync.ui.model.compatibilitySummary
 import com.ilfforever.fujisync.ui.theme.Border
 import com.ilfforever.fujisync.ui.theme.Gold
 import com.ilfforever.fujisync.ui.theme.MonoFamily
@@ -61,9 +65,24 @@ internal fun SyncToCameraSheet(
     writeBusy: Boolean,
     onDismiss: () -> Unit,
     onWriteToSlot: (String) -> Unit,
+    /** The recipe being written, and what the attached body accepts. Together they drive the
+     *  compatibility notice; both default to "nothing known", which shows no notice at all. */
+    recipe: RecipeUiModel? = null,
+    capability: CameraCapability = CameraCapability.Unknown,
+    cameraFirmware: String = "",
+    cameraBattery: String = "",
 ) {
     val slotNames = listOf("C1", "C2", "C3", "C4", "C5", "C6", "C7")
     val slotMap = cameraSlots.associateBy { it.slot }
+    val summary = remember(recipe, capability, cameraModel) {
+        recipe?.let { compatibilitySummary(it, capability, cameraModel) } ?: CompatibilitySummary.Empty
+    }
+    // The detail screen's button should stop anyone reaching this sheet with a simulation the body
+    // cannot take, so this is a second latch rather than the primary gate: if some other route ever
+    // opens the sheet, the write still cannot start.
+    val blockedSim = remember(recipe, capability) {
+        recipe?.let { blockingFilmSimulation(it, capability) }
+    }
     var selectedSlot by remember { mutableStateOf("C1") }
     var sheetVisible by remember { mutableStateOf(false) }
     var confirmingWrite by remember { mutableStateOf(false) }
@@ -129,30 +148,12 @@ internal fun SyncToCameraSheet(
                             color = TextPrimary,
                         )
                     }
+                    // The sheet only reaches this branch when a camera is attached, so a
+                    // "connected" badge here could never say anything else. This slot carries the
+                    // two facts that do change and that matter immediately before a write: a write
+                    // interrupted by a flat battery leaves a half-applied slot.
                     if (connected) {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(Gold.copy(alpha = 0.12f))
-                                .border(1.dp, Gold.copy(alpha = 0.4f), RoundedCornerShape(999.dp))
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(Gold),
-                            )
-                            Text(
-                                text = "CONNECTED",
-                                fontFamily = MonoFamily,
-                                fontSize = 9.sp,
-                                letterSpacing = 1.2.sp,
-                                color = Gold,
-                            )
-                        }
+                        CameraVitals(firmware = cameraFirmware, battery = cameraBattery)
                     }
                 }
 
@@ -258,16 +259,27 @@ internal fun SyncToCameraSheet(
                         }
                     }
                     Spacer(Modifier.height(12.dp))
+                    if (!summary.isEmpty) {
+                        CompatibilityNotice(
+                            summary = summary,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                     ) {
                         PrimaryCTA(
-                            label = if (writeBusy) "Writing…" else "Write to $selectedSlot",
+                            label = when {
+                                writeBusy -> "Writing…"
+                                blockedSim != null -> "Film Sim Not Supported"
+                                else -> "Write to $selectedSlot"
+                            },
                             onClick = { confirmingWrite = true },
                             busy = writeBusy,
-                            enabled = !writeBusy,
+                            enabled = !writeBusy && blockedSim == null,
                         )
                     }
                     Spacer(Modifier.height(12.dp))
@@ -288,3 +300,42 @@ internal fun SyncToCameraSheet(
         )
     }
 }
+
+/**
+ * Firmware and battery, right-aligned in the sheet header.
+ *
+ * Battery earns the accent only when it is low enough to matter: a write interrupted part-way
+ * leaves a slot holding half of one recipe and half of another, and reports as a success.
+ */
+@Composable
+private fun CameraVitals(firmware: String, battery: String) {
+    val fw = firmware.trim().takeIf { it.isNotBlank() && it != "—" }
+    val level = battery.trim().takeIf { it.isNotBlank() && it != "—" }
+    if (fw == null && level == null) return
+
+    val percent = level?.removeSuffix("%")?.toIntOrNull()
+    val lowBattery = percent != null && percent <= LOW_BATTERY_PERCENT
+
+    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (fw != null) {
+            Text(
+                text = "FW $fw",
+                fontFamily = MonoFamily,
+                fontSize = 10.sp,
+                letterSpacing = 1.1.sp,
+                color = TextMuted,
+            )
+        }
+        if (level != null) {
+            Text(
+                text = level,
+                fontFamily = MonoFamily,
+                fontSize = 10.sp,
+                letterSpacing = 1.1.sp,
+                color = if (lowBattery) Gold else TextMuted,
+            )
+        }
+    }
+}
+
+private const val LOW_BATTERY_PERCENT = 20

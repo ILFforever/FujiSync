@@ -2,6 +2,8 @@ package com.ilfforever.fujisync.data.usb
 
 import android.hardware.usb.UsbDevice
 import android.util.Log
+import com.ilfforever.fujisync.data.capability.CameraCapability
+import com.ilfforever.fujisync.data.capability.XrfcCapabilityTable
 import com.ilfforever.fujisync.data.ptp.PtpConstants
 import com.ilfforever.fujisync.data.ptp.PtpDeviceInfo
 import com.ilfforever.fujisync.data.ptp.hexDump
@@ -18,6 +20,8 @@ sealed interface FujiPtpProbeResult {
         val propertyDumps: List<PtpPropertyDump>,
         val candidateDumps: List<PtpPropertyDump>,
         val batteryPercent: Int?,
+        val identity: CameraIdentity = CameraIdentity.Unknown,
+        val capability: CameraCapability = CameraCapability.Unknown,
     ) : FujiPtpProbeResult {
         val bestSerial: String
             get() = usbConnectionSerial.orCleanBlank()
@@ -45,6 +49,11 @@ data class PtpPropertyDump(
 
 class FujiPtpProbe(
     private val connectionFactory: UsbPtpConnection,
+    /**
+     * Fuji's per-body capability table. Optional so benches and tests can probe without it; when
+     * absent, capability falls back to whatever the camera reports about itself.
+     */
+    private val capabilityTable: XrfcCapabilityTable? = null,
 ) {
     fun probe(device: UsbDevice): FujiPtpProbeResult {
         val usbDeviceSerial = readUsbDeviceSerial(device)
@@ -66,6 +75,10 @@ class FujiPtpProbe(
                 if (!deviceInfoTransaction.isOk) {
                     return FujiPtpProbeResult.NotReady("Camera returned an error for DeviceInfo.")
                 }
+
+                // Logged before parsing so a parse failure still leaves the raw bytes in logcat —
+                // otherwise a malformed/unexpected payload throws before anything is ever recorded.
+                Log.d(TAG, "PTP DeviceInfo raw payload (${payload.size} bytes): ${hexDump(payload, maxBytes = 512)}")
 
                 val deviceInfo = parseDeviceInfo(payload)
                 Log.d(
@@ -89,6 +102,20 @@ class FujiPtpProbe(
                 )
 
                 return if (deviceInfo.supportsFujiRecipeSlots) {
+                    // Identity and capability are read here rather than in their own session: the
+                    // connection is already open and the camera has already been asked to
+                    // enumerate itself, so this costs two property reads on a path that is
+                    // performed once per connect.
+                    val (identity, capability) = capabilityTable
+                        ?.let { table ->
+                            runCatching { probeCameraCapability(connection, deviceInfo, table) }
+                                .getOrElse { error ->
+                                    Log.w(TAG, "Capability probe failed; continuing without it.", error)
+                                    CameraIdentity.Unknown to CameraCapability.Unknown
+                                }
+                        }
+                        ?: (CameraIdentity.Unknown to CameraCapability.Unknown)
+
                     FujiPtpProbeResult.Ready(
                         deviceInfo = deviceInfo,
                         usbDeviceSerial = usbDeviceSerial,
@@ -96,6 +123,8 @@ class FujiPtpProbe(
                         propertyDumps = propertyDumps,
                         candidateDumps = candidateDumps,
                         batteryPercent = batteryPercent,
+                        identity = identity,
+                        capability = capability,
                     )
                 } else {
                     FujiPtpProbeResult.NotReady(

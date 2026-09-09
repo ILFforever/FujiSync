@@ -2,6 +2,7 @@ package com.ilfforever.fujisync.di
 
 import android.content.Context
 import android.hardware.usb.UsbManager
+import com.ilfforever.fujisync.data.capability.XrfcCapabilityTable
 import com.ilfforever.fujisync.data.local.LocalStore
 import com.ilfforever.fujisync.BuildConfig
 import com.ilfforever.fujisync.data.update.GitHubReleaseUpdater
@@ -49,6 +50,11 @@ object AppModule {
     @Singleton
     fun provideLocalStore(@ApplicationContext context: Context): LocalStore =
         LocalStore(context)
+
+    @Provides
+    @Singleton
+    fun provideCapabilityTable(@ApplicationContext context: Context): XrfcCapabilityTable =
+        XrfcCapabilityTable(context)
 
     @Provides
     @Singleton

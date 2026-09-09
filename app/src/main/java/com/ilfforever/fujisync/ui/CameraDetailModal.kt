@@ -52,7 +52,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.data.capability.CameraCapability
 import com.ilfforever.fujisync.ui.camera.CameraCardUiModel
+import com.ilfforever.fujisync.ui.components.CameraCapabilityCard
+import com.ilfforever.fujisync.ui.model.capabilityProfile
 import com.ilfforever.fujisync.ui.theme.Gold
 import com.ilfforever.fujisync.ui.theme.MonoFamily
 import com.ilfforever.fujisync.ui.theme.SansFamily
@@ -68,6 +71,7 @@ internal fun BoxScope.CameraDetailModal(
     name: String,
     onRename: (String) -> Unit,
     onClose: () -> Unit,
+    capability: CameraCapability = CameraCapability.Unknown,
 ) {
     val motionEnabled = ValueAnimator.areAnimatorsEnabled()
     val scope = rememberCoroutineScope()
@@ -286,6 +290,13 @@ internal fun BoxScope.CameraDetailModal(
                 CameraStatRow("Battery", camera.battery, divider = true)
                 CameraStatRow("USB ID", camera.usbId.ifBlank { "—" }, divider = false, valueMonospace = true)
             }
+
+            CameraCapabilityCard(
+                profile = capabilityProfile(capability),
+                modifier = Modifier.padding(horizontal = 22.dp).padding(bottom = 20.dp),
+                background = CameraModalControlBg,
+                borderColor = CameraModalBorder,
+            )
 
             Text(
                 text = "To disconnect, unplug the USB cable.",

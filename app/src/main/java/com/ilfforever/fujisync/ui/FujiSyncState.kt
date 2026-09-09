@@ -1,5 +1,7 @@
 package com.ilfforever.fujisync.ui
 
+import com.ilfforever.fujisync.data.capability.CameraCapability
+import com.ilfforever.fujisync.data.usb.CameraIdentity
 import com.ilfforever.fujisync.ui.model.AppSettings
 import com.ilfforever.fujisync.ui.model.DuplicateDialogState
 import com.ilfforever.fujisync.ui.model.LibraryGroupStyle
@@ -61,6 +63,18 @@ data class CameraUiState(
     val cameraFirmwares: Map<String, String> = emptyMap(),
     val showImageTuner: Boolean = false,
     val writeDelayMs: Long = 0L,
+    /**
+     * What the connected body accepts. [CameraCapability.Unknown] whenever no camera is attached,
+     * which gates nothing — the editor and write path stay fully open without a camera.
+     */
+    val capability: CameraCapability = CameraCapability.Unknown,
+    /** Raw identity strings from `0xD186`/`0xD187`, for the camera detail sheet and dev tools. */
+    val identity: CameraIdentity = CameraIdentity.Unknown,
+    /**
+     * Last-known Fuji capability key (`X-H2_0200`) per camera serial. Recorded when a camera is
+     * seen; it is what a screen would need to describe a body that is not currently plugged in.
+     */
+    val cameraDeviceKeys: Map<String, String> = emptyMap(),
 )
 
 data class LibraryUiState(

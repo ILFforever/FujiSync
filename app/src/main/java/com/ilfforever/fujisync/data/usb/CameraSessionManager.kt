@@ -2,6 +2,7 @@ package com.ilfforever.fujisync.data.usb
 
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import com.ilfforever.fujisync.data.capability.CameraCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -25,6 +26,8 @@ class CameraSessionManager @Inject constructor(
     suspend fun <T> withSession(
         device: UsbDevice,
         writeDelayMs: Long = 0L,
+        /** What the attached body accepts; defaults to gating nothing. */
+        capability: CameraCapability = CameraCapability.Unknown,
         block: suspend (camera: FujiRecipeCamera, connection: OpenPtpConnection) -> T,
     ): Result<T> = heartbeat.usbMutex.withLock {
         withContext(Dispatchers.IO) {
@@ -34,7 +37,7 @@ class CameraSessionManager @Inject constructor(
                 connection.use {
                     check(connection.openSession()) { "OpenSession rejected." }
                     try {
-                        block(FujiRecipeCamera(connection, writeDelayMs), connection)
+                        block(FujiRecipeCamera(connection, writeDelayMs, capability), connection)
                     } finally {
                         runCatching { connection.closeSession() }
                     }

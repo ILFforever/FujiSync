@@ -327,6 +327,24 @@ class LocalStore(context: Context) {
         }.getOrElse { emptyMap() }
     }
 
+    /**
+     * Fuji capability keys (`X-H2_0200`) per camera serial. Kept so the editor can still warn about
+     * an unsupported setting for a camera that is not currently plugged in. Distinct from the
+     * display firmware above: the key carries a firmware *generation*, not the menu version string.
+     */
+    suspend fun saveCameraDeviceKeys(keys: Map<String, String>) = mutex.withLock {
+        write("camera_device_keys.json", stringMapToJson(keys).toString())
+    }
+
+    suspend fun loadCameraDeviceKeys(): Map<String, String> = mutex.withLock {
+        val file = File(dir, "camera_device_keys.json")
+        if (!file.exists()) return@withLock emptyMap()
+        runCatching {
+            val obj = JSONObject(file.readText())
+            mutableMapOf<String, String>().also { m -> obj.keys().forEach { k -> m[k] = obj.getString(k) } }
+        }.getOrElse { emptyMap() }
+    }
+
     // ── Internal ──────────────────────────────────────────────────────
 
     private fun write(name: String, content: String) {

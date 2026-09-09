@@ -1,7 +1,8 @@
 package com.ilfforever.fujisync.data.usb
 
+import com.ilfforever.fujisync.data.capability.CameraCapability
+import com.ilfforever.fujisync.data.capability.RecipeWritePlanner
 import com.ilfforever.fujisync.data.ptp.CameraPresetName
-import com.ilfforever.fujisync.data.ptp.MONO_SIM_CODES
 import com.ilfforever.fujisync.data.ptp.PtpConstants
 import com.ilfforever.fujisync.data.ptp.decodeInt16Le
 import com.ilfforever.fujisync.data.ptp.decodeUInt16Le
@@ -14,17 +15,14 @@ import com.ilfforever.fujisync.domain.model.FujiPropertyCode
 import com.ilfforever.fujisync.domain.model.RecipePreset
 import kotlinx.coroutines.delay
 
-private val COLOR_ONLY_PROPS = setOf(
-    FujiPropertyCode.ColorChrome,
-    FujiPropertyCode.ColorChromeFxBlue,
-    FujiPropertyCode.Color,
-    FujiPropertyCode.WbShiftRed,
-    FujiPropertyCode.WbShiftBlue,
-)
-
 class FujiRecipeCamera(
     private val connection: OpenPtpConnection,
     private val propertyWriteDelayMs: Long = 0L,
+    /**
+     * What the attached body accepts. Defaults to [CameraCapability.Unknown], which gates nothing —
+     * so a caller that has not probed capability behaves exactly as before.
+     */
+    private val capability: CameraCapability = CameraCapability.Unknown,
 ) {
     suspend fun readPreset(slot: CameraSlot): RecipePreset {
         check(selectSlot(slot)) { "Failed to select slot ${slot.label}" }
@@ -91,9 +89,12 @@ class FujiRecipeCamera(
     }
 
     suspend fun writePreset(preset: RecipePreset): WriteResult {
-        var success = 0
-        var failed  = 0
-        var skipped = 0
+        // Refused before anything is sent — not even the slot selector. A blocked recipe must leave
+        // the slot exactly as it was, because a half-written preset reads as a successful one.
+        val plan = RecipeWritePlanner.plan(preset, capability)
+        plan.block?.let { block ->
+            return WriteResult(0, 0, 0, listOf(PropertyWriteOutcome.blocked(block)), blocked = true)
+        }
 
         // Select target slot
         if (!selectSlot(preset.slot)) return WriteResult(0, 1, 0)
@@ -102,43 +103,30 @@ class FujiRecipeCamera(
         // Refresh camera state before pushing (per §9.6)
         connection.executeCommand(code = PtpConstants.GET_DEVICE_INFO)
 
-        // Suppression flags
-        val filmSimValue = preset.properties[FujiPropertyCode.FilmSimulation]
-        val isMono      = filmSimValue != null && filmSimValue in MONO_SIM_CODES
-        val isColorTemp = preset.properties[FujiPropertyCode.WhiteBalance] == 0x8007
-        val dRangePriority = preset.properties[FujiPropertyCode.DRangePriority] ?: 0
+        val outcomes = mutableListOf<PropertyWriteOutcome>()
 
-        // FilmSimulation must be written first so the camera accepts subsequent prop ranges
-        val ordered = buildList {
-            preset.properties[FujiPropertyCode.FilmSimulation]
-                ?.let { add(FujiPropertyCode.FilmSimulation to it) }
-            preset.properties
-                .filter { (k, _) -> k != FujiPropertyCode.FilmSimulation }
-                .forEach { (k, v) -> add(k to v) }
+        plan.skipped.forEach { skip ->
+            outcomes += PropertyWriteOutcome.skipped(skip.property, skip.value, skip.reason)
         }
 
-        for ((prop, value) in ordered) {
-            if (isMono && prop in COLOR_ONLY_PROPS) { skipped++; continue }
-            if (!isColorTemp && prop == FujiPropertyCode.ColorTemperature) { skipped++; continue }
-            if (dRangePriority != 0 && prop == FujiPropertyCode.DynamicRange) { skipped++; continue }
-
+        for (write in plan.writes) {
             var tx = connection.executeCommandWithData(
                 code    = PtpConstants.SET_DEVICE_PROP_VALUE,
-                params  = listOf(prop.code),
-                payload = uint16Le(value),
+                params  = listOf(write.property.code),
+                payload = uint16Le(write.value),
             )
             if (!tx.isOk) {
                 for (retry in 1..2) {
                     if (propertyWriteDelayMs > 0) delay(propertyWriteDelayMs)
                     tx = connection.executeCommandWithData(
                         code    = PtpConstants.SET_DEVICE_PROP_VALUE,
-                        params  = listOf(prop.code),
-                        payload = uint16Le(value),
+                        params  = listOf(write.property.code),
+                        payload = uint16Le(write.value),
                     )
                     if (tx.isOk) break
                 }
             }
-            if (tx.isOk) success++ else failed++
+            outcomes += PropertyWriteOutcome.attempted(write, tx.isOk, tx.response.code)
             if (propertyWriteDelayMs > 0) delay(propertyWriteDelayMs)
         }
 
@@ -149,13 +137,30 @@ class FujiRecipeCamera(
             params  = listOf(PtpConstants.FUJI_PRESET_NAME),
             payload = encodePtpString(safeName),
         )
-        if (nameTx.isOk) success++ else failed++
+        outcomes += PropertyWriteOutcome.name(safeName, nameTx.isOk, nameTx.response.code)
 
-        return WriteResult(success, failed, skipped)
+        return WriteResult(
+            success = outcomes.count { it.status == WriteStatus.Written },
+            failed = outcomes.count { it.status == WriteStatus.Failed },
+            skipped = outcomes.count { it.status == WriteStatus.Skipped },
+            outcomes = outcomes,
+        )
     }
 
-    data class WriteResult(val success: Int, val failed: Int, val skipped: Int) {
-        val isOk: Boolean get() = failed == 0
+    /**
+     * Counts kept for existing callers; [outcomes] carries the detail. Reporting a failure by
+     * property code rather than as a bare total is what makes a rejection diagnosable — "2 failed"
+     * cannot distinguish an unsupported setting from a value the body would not take.
+     */
+    data class WriteResult(
+        val success: Int,
+        val failed: Int,
+        val skipped: Int,
+        val outcomes: List<PropertyWriteOutcome> = emptyList(),
+        /** Nothing was sent: the body cannot take this recipe's film simulation. */
+        val blocked: Boolean = false,
+    ) {
+        val isOk: Boolean get() = failed == 0 && !blocked
     }
 
     private fun selectSlot(slot: CameraSlot): Boolean {

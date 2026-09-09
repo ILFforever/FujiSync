@@ -43,6 +43,8 @@ class CameraViewModelTest {
     private val sessionManager: CameraSessionManager = mockk(relaxed = true)
     private val localStore: LocalStore = mockk(relaxed = true)
     private val heartbeat: CameraHeartbeat = mockk(relaxed = true)
+    private val capabilityTable: com.ilfforever.fujisync.data.capability.XrfcCapabilityTable =
+        mockk(relaxed = true)
     private val mockDevice: UsbDevice = mockk(relaxed = true)
 
     private lateinit var vm: CameraViewModel
@@ -64,7 +66,11 @@ class CameraViewModelTest {
         coEvery { localStore.loadCameraLabels() } returns emptyMap()
         coEvery { localStore.loadCameraModels() } returns emptyMap()
         coEvery { localStore.loadCameraFirmwares() } returns emptyMap()
-        vm = CameraViewModel(mockContext, usbManager, repository, connectionFactory, sessionManager, localStore, heartbeat, testDispatcher)
+        coEvery { localStore.loadCameraDeviceKeys() } returns emptyMap()
+        vm = CameraViewModel(
+            mockContext, usbManager, repository, connectionFactory, sessionManager, localStore,
+            heartbeat, capabilityTable, testDispatcher,
+        )
     }
 
     @After

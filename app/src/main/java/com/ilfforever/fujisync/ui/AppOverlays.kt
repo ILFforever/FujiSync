@@ -57,8 +57,11 @@ internal fun BoxScope.AppOverlays(
     showHapticBench: Boolean,
     showPtpLog: Boolean,
     ptpLogText: String,
+    showAppLog: Boolean,
     showNewPathsProbe: Boolean,
     showLiveSettingsBench: Boolean,
+    showCapabilityBench: Boolean,
+    showMonoToneBench: Boolean,
     showImportFromPhotoGuide: Boolean,
     showReadingOverlay: Boolean,
     showDiscardEditorDialog: Boolean,
@@ -97,8 +100,11 @@ internal fun BoxScope.AppOverlays(
     onDrPriorityBenchClose: () -> Unit,
     onHapticBenchClose: () -> Unit,
     onPtpLogClose: () -> Unit,
+    onAppLogClose: () -> Unit,
     onNewPathsProbeClose: () -> Unit,
     onLiveSettingsBenchClose: () -> Unit,
+    onCapabilityBenchClose: () -> Unit,
+    onMonoToneBenchClose: () -> Unit,
     onImportFromPhotoGuideClose: () -> Unit,
     showImportFromScreenshotGuide: Boolean,
     onImportFromScreenshotGuideClose: () -> Unit,
@@ -150,11 +156,14 @@ internal fun BoxScope.AppOverlays(
             writeBusy = state.writeBusy,
             cameraModel = state.camera.cameraModel,
             cameraName = cameraLabel,
+            cameraFirmware = state.camera.firmware,
+            cameraBattery = state.camera.battery,
             cameraSlots = state.camera.slots,
             onWriteToSlot = onWriteLibraryRecipeToSlot,
             interactionsEnabled = !(state.creatingRecipe || state.editorRecipe != null),
             showReferenceImageBlur = state.settings.showReferenceImageBlur,
             maxReferenceImages = state.settings.maxReferenceImages,
+            capability = state.camera.capability,
         )
     }
 
@@ -209,8 +218,11 @@ internal fun BoxScope.AppOverlays(
         showHapticBench = showHapticBench,
         showPtpLog = showPtpLog,
         ptpLogText = ptpLogText,
+        showAppLog = showAppLog,
         showNewPathsProbe = showNewPathsProbe,
         showLiveSettingsBench = showLiveSettingsBench,
+        showCapabilityBench = showCapabilityBench,
+        showMonoToneBench = showMonoToneBench,
         onExifBenchClose = onExifBenchClose,
         onFxwSearchBenchClose = onFxwSearchBenchClose,
         onUsbReadWriteBenchClose = onUsbReadWriteBenchClose,
@@ -220,8 +232,11 @@ internal fun BoxScope.AppOverlays(
         onDrPriorityBenchClose = onDrPriorityBenchClose,
         onHapticBenchClose = onHapticBenchClose,
         onPtpLogClose = onPtpLogClose,
+        onAppLogClose = onAppLogClose,
         onNewPathsProbeClose = onNewPathsProbeClose,
         onLiveSettingsBenchClose = onLiveSettingsBenchClose,
+        onCapabilityBenchClose = onCapabilityBenchClose,
+        onMonoToneBenchClose = onMonoToneBenchClose,
     )
 
     AnimatedVisibility(
@@ -402,7 +417,6 @@ internal fun BoxScope.AppOverlays(
         RecipeEditorScreen(
             initialRecipe = state.editorRecipe,
             referenceImageUris = state.editorReferenceImageUris,
-            cameraModel = state.camera.cameraModel,
             maxReferenceImages = state.settings.maxReferenceImages,
             onClose = requestEditorClose,
             onDirtyChange = onEditorDirtyChange,
@@ -473,6 +487,7 @@ internal fun BoxScope.AppOverlays(
             name = cameraLabel,
             onRename = onCameraRename,
             onClose = onCameraDetailClose,
+            capability = state.camera.capability,
         )
     }
 

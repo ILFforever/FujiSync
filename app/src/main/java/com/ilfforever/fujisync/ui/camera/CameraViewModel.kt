@@ -10,7 +10,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import com.ilfforever.fujisync.BuildConfig
 import com.ilfforever.fujisync.R
+import com.ilfforever.fujisync.data.capability.CameraCapability
+import com.ilfforever.fujisync.data.capability.XrfcCapabilityTable
 import com.ilfforever.fujisync.data.local.LocalStore
+import com.ilfforever.fujisync.data.usb.CameraIdentity
 import com.ilfforever.fujisync.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import com.ilfforever.fujisync.data.usb.CameraHeartbeat
@@ -19,8 +22,10 @@ import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.FujiPtpProbe
 import com.ilfforever.fujisync.data.usb.FujiPtpProbeResult
 import com.ilfforever.fujisync.data.usb.FujiRecipeCamera
+import com.ilfforever.fujisync.data.usb.WriteStatus
 import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.domain.model.CameraSlot
+import com.ilfforever.fujisync.domain.model.FujiPropertyCode
 import com.ilfforever.fujisync.domain.model.RecipePreset
 import com.ilfforever.fujisync.domain.repository.CameraRepository
 import com.ilfforever.fujisync.ui.CameraUiState
@@ -63,6 +68,7 @@ class CameraViewModel @Inject constructor(
     private val sessionManager: CameraSessionManager,
     private val localStore: LocalStore,
     private val heartbeat: CameraHeartbeat,
+    private val capabilityTable: XrfcCapabilityTable,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
@@ -100,7 +106,7 @@ class CameraViewModel @Inject constructor(
         val devices = repository.scanUsb()
         if (devices.none { it.mode == CameraUsbMode.Ptp }) {
             stopHeartbeat()
-            _state.update { it.copy(connected = false) }
+            _state.update { it.copy(connected = false).withoutCapability() }
         }
     }
 
@@ -118,7 +124,7 @@ class CameraViewModel @Inject constructor(
                         slots = emptyList(),
                         readingSlotIndex = -1,
                         scanError = appContext.getString(R.string.error_camera_not_found),
-                    )
+                    ).withoutCapability()
                 }
                 _events.tryEmit(CameraEvent.ScanFailed)
                 return
@@ -172,7 +178,7 @@ class CameraViewModel @Inject constructor(
     fun probeDevice(device: UsbDevice) {
         viewModelScope.launch {
             val result = withContext(ioDispatcher) {
-                runCatching { FujiPtpProbe(connectionFactory).probe(device) }
+                runCatching { FujiPtpProbe(connectionFactory, capabilityTable).probe(device) }
                     .getOrElse { FujiPtpProbeResult.NotReady(reason = it.message ?: appContext.getString(R.string.error_probe_failed)) }
             }
             when (result) {
@@ -190,6 +196,10 @@ class CameraViewModel @Inject constructor(
                         val updatedFirmwares = if (serial.isNotBlank() && fw != "—") {
                             state.cameraFirmwares + (serial to fw)
                         } else state.cameraFirmwares
+                        val deviceKey = result.identity.deviceKey
+                        val updatedDeviceKeys = if (serial.isNotBlank() && deviceKey != null) {
+                            state.cameraDeviceKeys + (serial to deviceKey)
+                        } else state.cameraDeviceKeys
                         state.copy(
                             connected = true,
                             scanning = false,
@@ -202,6 +212,9 @@ class CameraViewModel @Inject constructor(
                             cameraLabels = updatedLabels,
                             cameraModels = updatedModels,
                             cameraFirmwares = updatedFirmwares,
+                            cameraDeviceKeys = updatedDeviceKeys,
+                            capability = result.capability,
+                            identity = result.identity,
                             isRearrangeValidation = false,
                         )
                     }
@@ -220,12 +233,14 @@ class CameraViewModel @Inject constructor(
     private fun readAllSlots(device: UsbDevice) {
         viewModelScope.launch {
             var failCount = 0
+            val observedFilmSims = mutableListOf<Int>()
             val result = sessionManager.withRawSession(device) { conn ->
                 val readSlots = mutableListOf<RecipeUiModel>()
                 for ((idx, slot) in CameraSlot.entries.withIndex()) {
                     _state.update { it.copy(readingSlotIndex = idx) }
                     val preset = runCatching { FujiRecipeCamera(conn).readPreset(slot) }.getOrNull()
                     val recipe = if (preset != null) {
+                        preset.properties[FujiPropertyCode.FilmSimulation]?.let { observedFilmSims += it }
                         preset.toUiModel()
                     } else {
                         failCount++
@@ -243,6 +258,10 @@ class CameraViewModel @Inject constructor(
                     readingSlotIndex = -1,
                     isRestoringValidation = false,
                     scanError = if (failCount > 0) appContext.getString(R.string.error_slots_could_not_read, failCount) else null,
+                    // Simulations the camera is already holding are proof it accepts them, which
+                    // beats any table. This is what stops a body on firmware newer than Fuji's data
+                    // being blocked from a look it plainly supports.
+                    capability = it.capability.withObservedFilmSimulations(observedFilmSims),
                 )
             }
         }
@@ -261,7 +280,12 @@ class CameraViewModel @Inject constructor(
             }
             heartbeat.alive.drop(1).collect { alive ->
                 if (!alive && _state.value.connected) {
-                    _state.update { it.copy(connected = false, scanError = appContext.getString(R.string.error_camera_disconnected)) }
+                    _state.update {
+                        it.copy(
+                            connected = false,
+                            scanError = appContext.getString(R.string.error_camera_disconnected),
+                        ).withoutCapability()
+                    }
                 }
             }
         }
@@ -292,7 +316,7 @@ class CameraViewModel @Inject constructor(
         val targetSlot = CameraSlot.entries.firstOrNull { it.label == targetSlotLabel } ?: CameraSlot.C1
 
         viewModelScope.launch {
-            val writeResult = sessionManager.withSession(selected.device, _state.value.writeDelayMs) { camera, _ ->
+            val writeResult = sessionManager.withSession(selected.device, _state.value.writeDelayMs, _state.value.capability) { camera, _ ->
                 camera.writePreset(recipe.toPreset(targetSlot))
             }
             if (writeResult.isFailure) {
@@ -303,6 +327,13 @@ class CameraViewModel @Inject constructor(
             val updatedRecipe = recipe.copy(slot = targetSlot.label)
             _state.update { it.copy(slots = it.slots.replaceSlot(targetSlot, updatedRecipe)) }
             _writeBusy.value = false
+            // A write that reached the camera can still have had individual properties refused.
+            // Reporting it as a clean success would be the app telling the user something it knows
+            // is not true, so the partial case gets named rather than toasted over.
+            refusedSettingsMessage(writeResult.getOrNull())?.let { message ->
+                _state.update { it.copy(scanError = message) }
+                return@launch
+            }
             _writeToast.value = WriteToastState(slot = targetSlotLabel, name = recipe.name)
             delay(UiTimings.TOAST_DISMISS_MS)
             _writeToast.value = null
@@ -325,7 +356,7 @@ class CameraViewModel @Inject constructor(
         val slot = CameraSlot.entries.firstOrNull { it.label == targetSlotLabel } ?: CameraSlot.C1
 
         viewModelScope.launch {
-            val writeResult = sessionManager.withSession(selected.device, _state.value.writeDelayMs) { camera, _ ->
+            val writeResult = sessionManager.withSession(selected.device, _state.value.writeDelayMs, _state.value.capability) { camera, _ ->
                 camera.writePreset(recipe.toPreset(slot))
             }
             if (writeResult.isFailure) {
@@ -336,6 +367,10 @@ class CameraViewModel @Inject constructor(
             val updatedRecipe = recipe.copy(slot = slot.label, libraryId = null)
             _state.update { it.copy(slots = it.slots.replaceSlot(slot, updatedRecipe)) }
             _writeBusy.value = false
+            refusedSettingsMessage(writeResult.getOrNull())?.let { message ->
+                _state.update { it.copy(scanError = message) }
+                return@launch
+            }
             _writeToast.value = WriteToastState(slot = targetSlotLabel, name = recipe.name)
             delay(UiTimings.TOAST_DISMISS_MS)
             _writeToast.value = null
@@ -388,7 +423,7 @@ class CameraViewModel @Inject constructor(
 
         viewModelScope.launch {
             rdbg("LAUNCH acquiring usbMutex")
-            val writeResult = sessionManager.withSession(selected.device, state.writeDelayMs) { camera, _ ->
+            val writeResult = sessionManager.withSession(selected.device, state.writeDelayMs, state.capability) { camera, _ ->
                 rdbg("LOCKED usbMutex")
                 writes.mapIndexedNotNull { index, (slot, recipe) ->
                     rdbg("WRITE ${slot.label} ($index/${writes.size})")
@@ -593,7 +628,7 @@ class CameraViewModel @Inject constructor(
                 backup.firstOrNull { it.slot == slot.label }?.copy(slot = slot.label)
             }
 
-            val writeResult = sessionManager.withSession(selected.device, _state.value.writeDelayMs) { camera, _ ->
+            val writeResult = sessionManager.withSession(selected.device, _state.value.writeDelayMs, _state.value.capability) { camera, _ ->
                 orderedBackup.mapIndexedNotNull { index, recipe ->
                     _state.update { it.copy(restoringSlotIndex = index) }
                     val slot = CameraSlot.entries.first { it.label == recipe.slot }
@@ -647,7 +682,14 @@ class CameraViewModel @Inject constructor(
 
     fun deleteCamera(serial: String) {
         if (serial.isBlank()) return
-        _state.update { it.copy(cameraLabels = it.cameraLabels - serial, cameraModels = it.cameraModels - serial, cameraFirmwares = it.cameraFirmwares - serial) }
+        _state.update {
+            it.copy(
+                cameraLabels = it.cameraLabels - serial,
+                cameraModels = it.cameraModels - serial,
+                cameraFirmwares = it.cameraFirmwares - serial,
+                cameraDeviceKeys = it.cameraDeviceKeys - serial,
+            )
+        }
         persistCameraMeta()
     }
 
@@ -700,6 +742,7 @@ class CameraViewModel @Inject constructor(
             val cameraLabels = withContext(ioDispatcher) { localStore.loadCameraLabels() }
             val cameraModels = withContext(ioDispatcher) { localStore.loadCameraModels() }
             val cameraFirmwares = withContext(ioDispatcher) { localStore.loadCameraFirmwares() }
+            val cameraDeviceKeys = withContext(ioDispatcher) { localStore.loadCameraDeviceKeys() }
             val selected = backupSets.firstOrNull()
             _state.update {
                 it.copy(
@@ -710,6 +753,7 @@ class CameraViewModel @Inject constructor(
                     cameraLabels = cameraLabels,
                     cameraModels = cameraModels,
                     cameraFirmwares = cameraFirmwares,
+                    cameraDeviceKeys = cameraDeviceKeys,
                 )
             }
         }
@@ -721,10 +765,34 @@ class CameraViewModel @Inject constructor(
             localStore.saveCameraLabels(state.cameraLabels)
             localStore.saveCameraModels(state.cameraModels)
             localStore.saveCameraFirmwares(state.cameraFirmwares)
+            localStore.saveCameraDeviceKeys(state.cameraDeviceKeys)
         }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Capability describes the body that is attached right now, so it is dropped the moment the
+     * camera goes away rather than left behind to gate against a camera that is no longer there.
+     * The device key survives in [CameraUiState.cameraDeviceKeys] for offline editing.
+     */
+    /**
+     * Names the settings the camera refused, or null when every one was accepted.
+     *
+     * Settings deliberately left out — a colour setting under a monochrome simulation, or a
+     * property this body does not have — are not failures and are not reported here; the editor
+     * and sync sheet show those before the write instead.
+     */
+    private fun refusedSettingsMessage(result: FujiRecipeCamera.WriteResult?): String? {
+        val refused = result?.outcomes.orEmpty().filter { it.status == WriteStatus.Failed }
+        if (refused.isEmpty()) return null
+        return "The camera refused ${refused.size} setting" +
+            (if (refused.size == 1) "" else "s") + ": " +
+            refused.joinToString(", ") { it.label } + "."
+    }
+
+    private fun CameraUiState.withoutCapability(): CameraUiState =
+        copy(capability = CameraCapability.Unknown, identity = CameraIdentity.Unknown)
 
     private fun List<RecipeUiModel>.replaceSlot(slot: CameraSlot, recipe: RecipeUiModel): List<RecipeUiModel> {
         val slotIndex = indexOfFirst { it.slot == slot.label }

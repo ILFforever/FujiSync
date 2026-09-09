@@ -100,7 +100,14 @@ fun RecipePreset.toUiModel(): RecipeUiModel {
     val tone = buildMap {
         put("Highlight Tone", hl)
         put("Shadow Tone",    sh)
-        if (!mono) put("Color", color)
+        if (mono) {
+            // Monochrome toning, warm/cool and magenta/green. Confirmed on an X-H2: 0xD193 carries
+            // warm/cool and 0xD194 magenta/green, both on the dial x 10 scale, dial range ±18.
+            put("Mono WC", signedScaled(props[FujiPropertyCode.MonoWc]))
+            put("Mono MG", signedScaled(props[FujiPropertyCode.MonoMg]))
+        } else {
+            put("Color", color)
+        }
         put("Sharpness",   sharp)
         put("High ISO NR", nr)
         put("Clarity",     clarity)
@@ -222,6 +229,10 @@ fun RecipeUiModel.toPreset(targetSlot: CameraSlot): RecipePreset {
     parseScaled(tone["Color"])?.let          { props[FujiPropertyCode.Color]         = it }
     parseScaled(tone["Sharpness"])?.let      { props[FujiPropertyCode.Sharpness]     = it }
     parseScaled(tone["Clarity"])?.let        { props[FujiPropertyCode.Clarity]       = it }
+    // Only meaningful under a monochrome simulation; the write planner drops them under a colour
+    // one, which the camera refuses with 0x201C.
+    parseScaled(tone["Mono WC"])?.let        { props[FujiPropertyCode.MonoWc]        = it }
+    parseScaled(tone["Mono MG"])?.let        { props[FujiPropertyCode.MonoMg]        = it }
 
     // High ISO NR: dial → non-linear PTP raw (dial 0 → 8192).
     parseSigned(tone["High ISO NR"])?.let {

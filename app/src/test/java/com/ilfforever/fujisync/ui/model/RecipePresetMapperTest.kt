@@ -305,4 +305,70 @@ class RecipePresetMapperTest {
         val ui = preset(props = mapOf(FujiPropertyCode.GrainEffect to 6)).toUiModel()
         assertEquals(1, ui.toPreset(CameraSlot.C1).properties[FujiPropertyCode.GrainEffect])
     }
+
+    // ── monochrome toning (0xD193 / 0xD194) ───────────────────────────────────
+    //
+    // Both were dropped in each direction until 2026-09-03. Confirmed on an X-H2 by setting the
+    // camera by hand and reading back: 0xD193 is warm/cool, 0xD194 is magenta/green, both on the
+    // dial x 10 scale with a ±18 dial.
+
+    @Test
+    fun `toUiModel surfaces mono toning under a monochrome simulation`() {
+        val ui = preset(
+            props = mapOf(
+                FujiPropertyCode.FilmSimulation to 12, // Acros
+                FujiPropertyCode.MonoWc to 50,
+                FujiPropertyCode.MonoMg to -30,
+            ),
+        ).toUiModel()
+
+        assertEquals("+5", ui.tone["Mono WC"])
+        assertEquals("−3", ui.tone["Mono MG"])
+    }
+
+    @Test
+    fun `toUiModel hides mono toning under a colour simulation`() {
+        val ui = preset(
+            props = mapOf(
+                FujiPropertyCode.FilmSimulation to 2, // Velvia
+                FujiPropertyCode.MonoWc to 50,
+            ),
+        ).toUiModel()
+
+        assertFalse(ui.tone.containsKey("Mono WC"))
+        assertTrue(ui.tone.containsKey("Color"))
+    }
+
+    @Test
+    fun `toPreset scales mono toning by ten`() {
+        val ui = preset(
+            props = mapOf(
+                FujiPropertyCode.FilmSimulation to 12,
+                FujiPropertyCode.MonoWc to 50,
+                FujiPropertyCode.MonoMg to -30,
+            ),
+        ).toUiModel()
+
+        val back = ui.toPreset(CameraSlot.C1)
+
+        assertEquals(50, back.properties[FujiPropertyCode.MonoWc])
+        assertEquals(-30, back.properties[FujiPropertyCode.MonoMg])
+    }
+
+    @Test
+    fun `mono toning survives a full round trip at the range ends`() {
+        // The dial runs ±18, so ±180 on the wire — twice what the editor used to allow.
+        val original = preset(
+            props = mapOf(
+                FujiPropertyCode.FilmSimulation to 12,
+                FujiPropertyCode.MonoWc to 180,
+                FujiPropertyCode.MonoMg to -180,
+            ),
+        )
+
+        val back = original.toUiModel().toPreset(CameraSlot.C1)
+
+        assertEquals(180, back.properties[FujiPropertyCode.MonoWc])
+        assertEquals(-180, back.properties[FujiPropertyCode.MonoMg])
+    }
 }

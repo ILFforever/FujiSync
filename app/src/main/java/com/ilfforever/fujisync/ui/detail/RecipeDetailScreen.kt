@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ilfforever.fujisync.data.capability.CameraCapability
+import com.ilfforever.fujisync.ui.components.CompatibilityNotice
 import com.ilfforever.fujisync.ui.components.DeleteConfirmDialog
 import com.ilfforever.fujisync.ui.components.FilmSimLabel
 import com.ilfforever.fujisync.ui.components.IconClose
@@ -77,6 +79,8 @@ import com.ilfforever.fujisync.ui.components.recipePropertyRows
 import com.ilfforever.fujisync.ui.haptics.FujiHapticEffect
 import com.ilfforever.fujisync.ui.haptics.FujiHaptics
 import com.ilfforever.fujisync.ui.model.RecipeUiModel
+import com.ilfforever.fujisync.ui.model.blockingFilmSimulation
+import com.ilfforever.fujisync.ui.model.compatibilitySummary
 import com.ilfforever.fujisync.ui.model.formatExposureComp
 import com.ilfforever.fujisync.ui.model.sourceCameraDisplayName
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -107,11 +111,15 @@ fun RecipeDetailScreen(
     writeBusy: Boolean,
     cameraModel: String = "",
     cameraName: String = "",
+    cameraFirmware: String = "",
+    cameraBattery: String = "",
     cameraSlots: List<RecipeUiModel> = emptyList(),
     onWriteToSlot: ((String) -> Unit)? = null,
     interactionsEnabled: Boolean = true,
     showReferenceImageBlur: Boolean = true,
     maxReferenceImages: Int = 20,
+    /** What the attached body accepts, for the pre-write compatibility notice. */
+    capability: CameraCapability = CameraCapability.Unknown,
 ) {
     var expandedImageIndex by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf(false) }
@@ -434,9 +442,29 @@ fun RecipeDetailScreen(
                             .background(Border),
                     )
                     Spacer(Modifier.height(12.dp))
+                    // Sits directly above the write button, where it can still change the decision.
+                    val compatibility = remember(visibleRecipe, capability, cameraModel) {
+                        compatibilitySummary(visibleRecipe, capability, cameraModel)
+                    }
                     val isLibraryRecipe = visibleRecipe.slot.isEmpty() && onWriteToSlot != null
+                    // Library recipes get this on the sync sheet, where the slot is chosen. Showing
+                    // it in both places would say the same thing twice on the way to one write.
+                    if (connected && !isLibraryRecipe && !compatibility.isEmpty) {
+                        CompatibilityNotice(summary = compatibility)
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    // A film simulation this body does not have stops the flow here rather than at
+                    // the write: there is no slot worth picking, so the sheet never opens.
+                    val blockedSim = if (connected) {
+                        remember(visibleRecipe, capability) {
+                            blockingFilmSimulation(visibleRecipe, capability)
+                        }
+                    } else {
+                        null
+                    }
                     val ctaLabel = when {
                         writeBusy -> "Writing…"
+                        blockedSim != null -> "Film Sim Not Supported"
                         isLibraryRecipe && !connected -> "Connect Camera to Sync"
                         isLibraryRecipe -> "Sync to Camera"
                         connected -> "Write to ${visibleRecipe.slot.ifEmpty { "C1" }}"
@@ -446,7 +474,8 @@ fun RecipeDetailScreen(
                         label = ctaLabel,
                         onClick = if (isLibraryRecipe) { { slotPickerOpen = true } } else { { pendingConfirmWrite = true } },
                         busy = writeBusy,
-                        enabled = interactionsEnabled && if (isLibraryRecipe) (connected && !writeBusy) else (connected || visibleRecipe.slot.isEmpty()),
+                        enabled = blockedSim == null && interactionsEnabled &&
+                            if (isLibraryRecipe) (connected && !writeBusy) else (connected || visibleRecipe.slot.isEmpty()),
                     )
                 }
             }
@@ -463,6 +492,10 @@ fun RecipeDetailScreen(
                         slotPickerOpen = false
                         onWriteToSlot(slot)
                     },
+                    recipe = visibleRecipe,
+                    capability = capability,
+                    cameraFirmware = cameraFirmware,
+                    cameraBattery = cameraBattery,
                 )
             }
 
