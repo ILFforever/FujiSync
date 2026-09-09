@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.FujiRecipeCamera
 import com.ilfforever.fujisync.data.usb.UsbPtpConnection
@@ -61,7 +61,7 @@ import javax.inject.Inject
 class ReadSlotsBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
-    private val heartbeat: CameraHeartbeat,
+    private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
     sealed class State {
@@ -90,7 +90,7 @@ class ReadSlotsBenchViewModel @Inject constructor(
                 val started = System.currentTimeMillis()
                 var failed = 0
 
-                heartbeat.usbMutex.withLock {
+                sessionManager.withExclusiveUsb {
                     withContext(Dispatchers.IO) {
                         val conn = connectionFactory.open(device)
                             ?: throw IllegalStateException("Could not open camera USB interface.")

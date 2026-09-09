@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.NewPathsProbeResult
 import com.ilfforever.fujisync.data.usb.UsbPtpConnection
@@ -71,7 +71,7 @@ import javax.inject.Inject
 class NewPathsProbeViewModel @Inject constructor(
     private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
-    private val heartbeat: CameraHeartbeat,
+    private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
     sealed class State {
@@ -99,7 +99,7 @@ class NewPathsProbeViewModel @Inject constructor(
 
                 _state.value = State.Running("Reading new property paths…")
 
-                val result = heartbeat.usbMutex.withLock {
+                val result = sessionManager.withExclusiveUsb {
                     withContext(Dispatchers.IO) {
                         val conn = connectionFactory.open(found.device)
                             ?: throw IllegalStateException("Could not open camera USB interface.")

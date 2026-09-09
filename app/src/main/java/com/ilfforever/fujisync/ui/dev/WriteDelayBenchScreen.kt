@@ -34,7 +34,7 @@ import androidx.lifecycle.viewModelScope
 import com.ilfforever.fujisync.data.usb.BENCH_DELAY_CANDIDATES
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.DelayBenchResult
-import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.domain.repository.CameraRepository
 import com.ilfforever.fujisync.data.usb.benchWriteDelay
@@ -64,7 +64,7 @@ import javax.inject.Inject
 class WriteDelayBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
-    private val heartbeat: CameraHeartbeat,
+    private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
     sealed class State {
@@ -90,7 +90,7 @@ class WriteDelayBenchViewModel @Inject constructor(
                     return@launch
                 }
 
-                val results = heartbeat.usbMutex.withLock {
+                val results = sessionManager.withExclusiveUsb {
                     withContext(Dispatchers.IO) {
                         val conn = connectionFactory.open(device)
                             ?: throw IllegalStateException("Could not open camera USB interface.")

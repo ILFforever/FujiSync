@@ -59,7 +59,7 @@ class CameraViewModelTest {
         every { mockContext.getString(com.ilfforever.fujisync.R.string.error_connect_before_backup) } returns "Connect a camera before backing up slots."
         every { mockContext.getString(com.ilfforever.fujisync.R.string.error_connect_before_restore) } returns "Connect camera before restoring a set."
         every { repository.scanUsb() } returns emptyList()
-        every { heartbeat.usbMutex } returns kotlinx.coroutines.sync.Mutex()
+        every { sessionManager.usbMutex } returns kotlinx.coroutines.sync.Mutex()
         every { heartbeat.slots } returns kotlinx.coroutines.flow.MutableStateFlow(emptyList())
         every { heartbeat.alive } returns kotlinx.coroutines.flow.MutableStateFlow(false)
         coEvery { localStore.loadSlotBackupSets() } returns emptyList()

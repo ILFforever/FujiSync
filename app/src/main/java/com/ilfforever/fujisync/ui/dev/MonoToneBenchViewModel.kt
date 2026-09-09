@@ -2,7 +2,7 @@ package com.ilfforever.fujisync.ui.dev
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.MonoToneHold
 import com.ilfforever.fujisync.data.usb.MonoToneProbe
@@ -37,7 +37,7 @@ import javax.inject.Inject
 class MonoToneBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
-    private val heartbeat: CameraHeartbeat,
+    private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
     sealed class State {
@@ -67,7 +67,7 @@ class MonoToneBenchViewModel @Inject constructor(
         } ?: throw IllegalStateException(
             "No camera in PTP mode. Connect it and set USB to USB RAW CONV.",
         )
-        return heartbeat.usbMutex.withLock {
+        return sessionManager.withExclusiveUsb {
             withContext(Dispatchers.IO) {
                 val conn = connectionFactory.open(found.device)
                     ?: throw IllegalStateException("Could not open the camera USB interface.")

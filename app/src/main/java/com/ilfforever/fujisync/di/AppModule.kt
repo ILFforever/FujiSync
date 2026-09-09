@@ -7,6 +7,7 @@ import com.ilfforever.fujisync.data.local.LocalStore
 import com.ilfforever.fujisync.BuildConfig
 import com.ilfforever.fujisync.data.update.GitHubReleaseUpdater
 import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.UsbCameraRepository
 import com.ilfforever.fujisync.data.usb.UsbCameraScanner
 import com.ilfforever.fujisync.data.usb.UsbPtpConnection
@@ -43,8 +44,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideCameraHeartbeat(usbManager: UsbManager, connectionFactory: UsbPtpConnection): CameraHeartbeat =
-        CameraHeartbeat(usbManager, connectionFactory)
+    fun provideCameraHeartbeat(sessionManager: CameraSessionManager): CameraHeartbeat =
+        CameraHeartbeat(sessionManager)
 
     @Provides
     @Singleton

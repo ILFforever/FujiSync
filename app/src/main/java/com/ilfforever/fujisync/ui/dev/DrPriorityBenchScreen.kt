@@ -37,7 +37,7 @@ import com.ilfforever.fujisync.data.ptp.decodeUInt16Le
 import com.ilfforever.fujisync.data.ptp.hexDump
 import com.ilfforever.fujisync.data.ptp.parsePtpString
 import com.ilfforever.fujisync.data.ptp.uint16Le
-import com.ilfforever.fujisync.data.usb.CameraHeartbeat
+import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.OpenPtpConnection
 import com.ilfforever.fujisync.data.usb.UsbPtpConnection
@@ -101,7 +101,7 @@ data class DrPriorityWriteResult(
 class DrPriorityBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
     private val connectionFactory: UsbPtpConnection,
-    private val heartbeat: CameraHeartbeat,
+    private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
     data class UiState(
@@ -151,7 +151,7 @@ class DrPriorityBenchViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = heartbeat.usbMutex.withLock {
+                val result = sessionManager.withExclusiveUsb {
                     withContext(Dispatchers.IO) {
                         val conn = connectionFactory.open(device)
                             ?: throw IllegalStateException("Could not open camera USB interface.")

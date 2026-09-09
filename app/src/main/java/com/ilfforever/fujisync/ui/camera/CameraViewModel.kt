@@ -177,9 +177,13 @@ class CameraViewModel @Inject constructor(
 
     fun probeDevice(device: UsbDevice) {
         viewModelScope.launch {
-            val result = withContext(ioDispatcher) {
-                runCatching { FujiPtpProbe(connectionFactory, capabilityTable).probe(device) }
-                    .getOrElse { FujiPtpProbeResult.NotReady(reason = it.message ?: appContext.getString(R.string.error_probe_failed)) }
+            // The probe opens a handle of its own, so it needs the camera to itself — otherwise its
+            // claim takes the interface away from whatever the session manager is holding.
+            val result = sessionManager.withExclusiveUsb {
+                withContext(ioDispatcher) {
+                    runCatching { FujiPtpProbe(connectionFactory, capabilityTable).probe(device) }
+                        .getOrElse { FujiPtpProbeResult.NotReady(reason = it.message ?: appContext.getString(R.string.error_probe_failed)) }
+                }
             }
             when (result) {
                 is FujiPtpProbeResult.Ready -> {
@@ -295,6 +299,15 @@ class CameraViewModel @Inject constructor(
         heartbeatJob?.cancel()
         heartbeatJob = null
         heartbeat.reset()
+        // The session is held open between operations now, so stopping the heartbeat has to hand
+        // the interface back — otherwise a camera that is unplugged and returned finds its own
+        // interface still claimed by a connection that can no longer reach it.
+        sessionManager.releaseImmediately()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sessionManager.releaseImmediately()
     }
 
     // ── Write ─────────────────────────────────────────────────────────
