@@ -83,6 +83,8 @@ import com.ilfforever.fujisync.ui.components.IconSmoothSkin
 import com.ilfforever.fujisync.ui.components.IconWB
 import com.ilfforever.fujisync.ui.components.IconWBShift
 import com.ilfforever.fujisync.ui.components.Pill
+import com.ilfforever.fujisync.ui.editor.components.ChipControl
+import com.ilfforever.fujisync.ui.editor.components.FilmSimulationPicker
 import com.ilfforever.fujisync.ui.library.normalizedDRangePriorityLabel
 import com.ilfforever.fujisync.ui.library.normalizedDynamicRangeLabel
 import com.ilfforever.fujisync.ui.model.RecipeUiModel
@@ -123,7 +125,6 @@ private val dRangePriorityOptions = listOf("Off", "Strong", "Weak", "Auto")
 fun RecipeEditorScreen(
     initialRecipe: RecipeUiModel?,
     referenceImageUris: List<String>,
-    cameraModel: String,
     maxReferenceImages: Int = 20,
     onClose: () -> Unit,
     onDirtyChange: (Boolean) -> Unit,
@@ -168,9 +169,11 @@ fun RecipeEditorScreen(
     var exposureCompMax by remember(seed) { mutableStateOf(seed.exposureCompMax) }
     var sensorGens by remember(seed) { mutableStateOf(seed.sensorGens) }
 
+    // This screen is deliberately camera-independent: a recipe is authored on its own terms, so
+    // every control and every value stays available no matter what is plugged in. Whether a
+    // particular body accepts the result is decided when it is pushed — the write path skips what
+    // the camera does not have and reports it. See docs/CAPABILITY_GATING.md.
     val isMono = sim in monoSims
-    val supportsSmoothSkin = !cameraModel.contains("X-Pro3", ignoreCase = true)
-    val supportsClarity = !cameraModel.contains("X-T30", ignoreCase = true)
     val actualWhiteBalance = if (whiteBalance == "Color Temperature") "${colorTemp}K" else whiteBalance
     val draft = remember(
         seed,
@@ -196,8 +199,6 @@ fun RecipeEditorScreen(
         monoMg,
         referenceImageUris,
         isMono,
-        supportsSmoothSkin,
-        supportsClarity,
         isoMin,
         isoMax,
         exposureCompMin,
@@ -214,7 +215,7 @@ fun RecipeEditorScreen(
             grain = grain,
             colorChrome = colorChrome,
             colorChromeBlue = colorChromeBlue,
-            smoothSkin = if (supportsSmoothSkin) smoothSkin else "Off",
+            smoothSkin = smoothSkin,
             whiteBalance = actualWhiteBalance,
             wbRed = wbRed,
             wbBlue = wbBlue,
@@ -223,7 +224,7 @@ fun RecipeEditorScreen(
             color = color,
             sharpness = sharpness,
             highIsoNr = highIsoNr,
-            clarity = if (supportsClarity) clarity else 0,
+            clarity = clarity,
             monoWc = monoWc,
             monoMg = monoMg,
             referenceImageUris = referenceImageUris,
@@ -352,9 +353,7 @@ fun RecipeEditorScreen(
                             ChipControl("Color Chrome", IconCC, listOf("Off", "Weak", "Strong"), colorChrome) { colorChrome = it }
                             ChipControl("Color Chrome FX Blue", IconCCFXBlue, listOf("Off", "Weak", "Strong"), colorChromeBlue) { colorChromeBlue = it }
                         }
-                        if (supportsSmoothSkin) {
-                            ChipControl("Smooth Skin", IconSmoothSkin, listOf("Off", "Weak", "Strong"), smoothSkin) { smoothSkin = it }
-                        }
+                        ChipControl("Smooth Skin", IconSmoothSkin, listOf("Off", "Weak", "Strong"), smoothSkin) { smoothSkin = it }
                     }
 
                     EditorSection("Tone Curve") {
@@ -364,8 +363,10 @@ fun RecipeEditorScreen(
 
                     EditorSection(if (isMono) "Monochrome Color" else "Color Response") {
                         if (isMono) {
-                            StepperControl("Mono WC", IconColor, monoWc, -9, 9) { monoWc = it }
-                            StepperControl("Mono MG", IconColor, monoMg, -9, 9) { monoMg = it }
+                            // Dial range is ±18 on the camera, confirmed on an X-H2 — not the ±9
+                            // the other signed dials use.
+                            StepperControl("Mono WC", IconColor, monoWc, -18, 18) { monoWc = it }
+                            StepperControl("Mono MG", IconColor, monoMg, -18, 18) { monoMg = it }
                         } else {
                             StepperControl("Color", IconColor, color, -4, 4) { color = it }
                         }
@@ -373,7 +374,7 @@ fun RecipeEditorScreen(
 
                     EditorSection("Detail") {
                         StepperControl("Sharpness", IconSharpness, sharpness, -4, 4) { sharpness = it }
-                        if (supportsClarity) StepperControl("Clarity", IconClarity, clarity, -5, 5) { clarity = it }
+                        StepperControl("Clarity", IconClarity, clarity, -5, 5) { clarity = it }
                         StepperControl("High ISO NR", IconNR, highIsoNr, -4, 4) { highIsoNr = it }
                     }
 

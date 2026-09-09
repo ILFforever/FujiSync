@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ilfforever.fujisync.ui.components.SectionLabel
+import com.ilfforever.fujisync.ui.editor.components.ChipGrid
 import com.ilfforever.fujisync.ui.theme.Bg
 import com.ilfforever.fujisync.ui.theme.Border
 import com.ilfforever.fujisync.ui.theme.Gold
@@ -121,95 +122,6 @@ internal fun EditorSection(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FilmSimulationPicker(
-    selected: String,
-    selectedFamily: String,
-    onFamilySelect: (String) -> Unit,
-    onSelect: (String) -> Unit,
-) {
-    val family = filmSimFamilies.firstOrNull { it.label == selectedFamily } ?: filmSimFamilyFor(selected)
-
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        filmSimFamilies.forEach { item ->
-            val active = item.label == family.label
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(if (active) GoldDim else Color.Transparent)
-                    .border(1.dp, if (active) Gold else Border, RoundedCornerShape(999.dp))
-                    .clickable { onFamilySelect(item.label) }
-                    .padding(horizontal = 11.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Text(
-                    text = item.label.uppercase(),
-                    fontFamily = MonoFamily,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                    fontSize = 10.sp,
-                    letterSpacing = 1.1.sp,
-                    color = if (active) Gold else TextMuted,
-                )
-                Text(
-                    text = item.sims.size.toString(),
-                    fontFamily = MonoFamily,
-                    fontSize = 10.sp,
-                    color = if (active) Gold else TextDim,
-                )
-            }
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(Border),
-    )
-
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        family.sims.forEach { option ->
-            val active = option == selected
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (active) Gold else PanelHigh)
-                    .border(1.dp, if (active) Gold else Border, RoundedCornerShape(10.dp))
-                    .clickable { onSelect(option) }
-                    .padding(start = 10.dp, end = 13.dp, top = 10.dp, bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (active) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(RoundedCornerShape(99.dp))
-                            .background(Bg),
-                    )
-                }
-                Text(
-                    text = option,
-                    fontFamily = SansFamily,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                    fontSize = 13.5.sp,
-                    color = if (active) Bg else TextMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
 internal fun GrainEffectControl(
     icon: ImageVector,
     selected: String,
@@ -233,76 +145,6 @@ internal fun GrainEffectControl(
     Spacer(Modifier.height(6.dp))
     ChipGrid(options = listOf("Small", "Large"), selected = size, enabled = strength != "Off") { newSize ->
         onSelect("$strength $newSize")
-    }
-}
-
-@Composable
-internal fun ChipControl(
-    label: String,
-    icon: ImageVector,
-    options: List<String>,
-    selected: String,
-    enabled: Boolean = true,
-    onSelect: (String) -> Unit,
-) {
-    ControlLabel(label = label, icon = icon, enabled = enabled)
-    ChipGrid(options = options, selected = selected, enabled = enabled, onSelect = onSelect)
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun ChipGrid(
-    options: List<String>,
-    selected: String,
-    enabled: Boolean = true,
-    onSelect: (String) -> Unit,
-) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { option ->
-            val active = option == selected
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        when {
-                            !enabled && active -> GoldDim.copy(alpha = 0.28f)
-                            !enabled -> PanelLow
-                            active -> Gold
-                            else -> PanelHigh
-                        },
-                    )
-                    .border(
-                        1.dp,
-                        when {
-                            !enabled -> Color.Transparent
-                            active -> Gold
-                            else -> Border
-                        },
-                        RoundedCornerShape(8.dp),
-                    )
-                    .clickable(enabled = enabled) { onSelect(option) }
-                    .padding(horizontal = 13.dp, vertical = 11.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = option,
-                    fontFamily = SansFamily,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                    fontSize = 13.5.sp,
-                    color = when {
-                        !enabled && active -> Gold.copy(alpha = 0.82f)
-                        !enabled -> TextDim
-                        active -> Bg
-                        else -> TextMuted
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
     }
 }
 

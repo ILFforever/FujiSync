@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -35,14 +35,21 @@ fun Modifier.contentWidth(max: Dp = ReadableWidth): Modifier = this
 /**
  * [contentWidth] that only engages on tablets, for screens where a phone-width column
  * would look stranded in a Medium window.
+ *
+ * A `@Composable` factory rather than `Modifier.composed`: a composed modifier can't be
+ * compared for equality, so the layout node re-materializes its whole chain on every
+ * recomposition of the caller. These sit on screen roots, so that cost lands on the
+ * entire subtree. [LocalWindowWidthClass] is a static local, so the read is free and
+ * this needs no composition group of its own.
  */
-fun Modifier.tabletContentWidth(max: Dp = ReadableWidth): Modifier = composed {
-    val widthClass = LocalWindowWidthClass.current
-    if (widthClass.isTablet) contentWidth(max) else this@tabletContentWidth
-}
+@Composable
+@ReadOnlyComposable
+fun Modifier.tabletContentWidth(max: Dp = ReadableWidth): Modifier =
+    if (LocalWindowWidthClass.current.isTablet) contentWidth(max) else this
 
 /** Horizontal page padding — roomier on tablets so content isn't flush to the bezel. */
 @Composable
+@ReadOnlyComposable
 fun pagePadding(): Dp = if (LocalWindowWidthClass.current.isTablet) 32.dp else 20.dp
 
 /**
@@ -50,6 +57,7 @@ fun pagePadding(): Dp = if (LocalWindowWidthClass.current.isTablet) 32.dp else 2
  * parent, so constraining the width is enough to centre them — a full-bleed drawer across
  * 1280dp reads as a second screen rather than a sheet.
  */
-fun Modifier.sheetWidth(max: Dp = 560.dp): Modifier = composed {
-    if (LocalWindowWidthClass.current.isTablet) widthIn(max = max) else this@sheetWidth
-}
+@Composable
+@ReadOnlyComposable
+fun Modifier.sheetWidth(max: Dp = 560.dp): Modifier =
+    if (LocalWindowWidthClass.current.isTablet) widthIn(max = max) else this
