@@ -43,6 +43,11 @@ Nav = 3 tabs: `CAMERA · LIBRARY · PROFILE`. Screens: Slot Board → Slot Detai
 These are hard rules, not suggestions. Follow them on every change.
 
 ### File size limits
+
+**These rules cover user-facing code. `ui/dev/` is exempt** — dev benches are gated behind
+`DEV_TOOLS_ENABLED`, never reach Play users, and are throwaway diagnostic tools. Don't extract
+components or split files there; get the measurement working instead.
+
 - **Screen files** (`*Screen.kt`): 400 lines max. Extract composables into a `components/`
   sub-package the moment a screen exceeds this.
 - **ViewModel / StateHolder**: 500 lines max. Split by concern, not by line count — each class
@@ -86,4 +91,8 @@ Internal developer docs live in `docs/`:
 
 - `docs/USB_CONNECTION_GUIDE.md` — connection architecture, mutex pattern, ViewModel wiring,
   dev screen scaffolding.
+- `docs/CAPABILITY_GATING.md` — how the app decides what a connected body accepts, and the rule
+  that only the camera's own word blocks a write.
+- `docs/PTP_TRANSPORT_COMPARISON.md` — how another app's PTP transport handles connection and
+  older bodies, where ours is thinner, and the ranked work items that came out of it.
 - `docs/CODE_QUALITY_REPORT.md` — latest code quality snapshot.
