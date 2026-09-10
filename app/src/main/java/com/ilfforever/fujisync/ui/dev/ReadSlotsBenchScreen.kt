@@ -34,7 +34,6 @@ import androidx.lifecycle.viewModelScope
 import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.FujiRecipeCamera
-import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.domain.repository.CameraRepository
 import com.ilfforever.fujisync.domain.model.CameraSlot
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -53,14 +52,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class ReadSlotsBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
@@ -90,20 +87,13 @@ class ReadSlotsBenchViewModel @Inject constructor(
                 val started = System.currentTimeMillis()
                 var failed = 0
 
-                sessionManager.withExclusiveUsb {
-                    withContext(Dispatchers.IO) {
-                        val conn = connectionFactory.open(device)
-                            ?: throw IllegalStateException("Could not open camera USB interface.")
-                        conn.use {
-                            if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                            val cam = FujiRecipeCamera(conn)
-                            for (slot in CameraSlot.entries) {
-                                _state.value = State.Running(slot.label)
-                                runCatching { cam.readPreset(slot) }.onFailure { failed++ }
-                            }
-                        }
+                sessionManager.withRawSession(device) { conn ->
+                    val cam = FujiRecipeCamera(conn)
+                    for (slot in CameraSlot.entries) {
+                        _state.value = State.Running(slot.label)
+                        runCatching { cam.readPreset(slot) }.onFailure { failed++ }
                     }
-                }
+                }.getOrThrow()
 
                 _state.value = State.Done(System.currentTimeMillis() - started, failed)
             } catch (e: Exception) {

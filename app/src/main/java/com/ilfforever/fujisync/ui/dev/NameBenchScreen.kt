@@ -36,7 +36,6 @@ import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.FujiRecipeCamera
 import com.ilfforever.fujisync.data.usb.NameBenchResult
-import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.domain.repository.CameraRepository
 import com.ilfforever.fujisync.data.usb.benchPresetNames
 import com.ilfforever.fujisync.ui.theme.Bg
@@ -55,14 +54,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class NameBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
@@ -89,18 +86,11 @@ class NameBenchViewModel @Inject constructor(
                     return@launch
                 }
 
-                val results = sessionManager.withExclusiveUsb {
-                    withContext(Dispatchers.IO) {
-                        val conn = connectionFactory.open(device)
-                            ?: throw IllegalStateException("Could not open camera USB interface.")
-                        conn.use {
-                            if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                            benchPresetNames(FujiRecipeCamera(conn)) { phase ->
-                                _state.value = State.Running(phase)
-                            }
-                        }
+                val results = sessionManager.withRawSession(device) { conn ->
+                    benchPresetNames(FujiRecipeCamera(conn)) { phase ->
+                        _state.value = State.Running(phase)
                     }
-                }
+                }.getOrThrow()
 
                 _state.value = State.Done(results)
             } catch (e: Exception) {

@@ -9,7 +9,6 @@ import com.ilfforever.fujisync.data.usb.MonoToneProbe
 import com.ilfforever.fujisync.data.usb.MonoToneReading
 import com.ilfforever.fujisync.data.usb.MonoToneSweep
 import com.ilfforever.fujisync.data.usb.OpenPtpConnection
-import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.data.usb.holdMonoToneValue
 import com.ilfforever.fujisync.data.usb.readMonoToneState
 import com.ilfforever.fujisync.data.usb.restoreMonoTone
@@ -22,7 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -36,7 +34,6 @@ import javax.inject.Inject
 @HiltViewModel
 class MonoToneBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
@@ -67,16 +64,7 @@ class MonoToneBenchViewModel @Inject constructor(
         } ?: throw IllegalStateException(
             "No camera in PTP mode. Connect it and set USB to USB RAW CONV.",
         )
-        return sessionManager.withExclusiveUsb {
-            withContext(Dispatchers.IO) {
-                val conn = connectionFactory.open(found.device)
-                    ?: throw IllegalStateException("Could not open the camera USB interface.")
-                conn.use {
-                    if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                    block(conn)
-                }
-            }
-        }
+        return sessionManager.withRawSession(found.device) { conn -> block(conn) }.getOrThrow()
     }
 
     /**

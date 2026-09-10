@@ -8,7 +8,6 @@ import com.ilfforever.fujisync.data.usb.LivePropReading
 import com.ilfforever.fujisync.data.usb.LiveReadResult
 import com.ilfforever.fujisync.data.usb.LiveWriteTest
 import com.ilfforever.fujisync.data.usb.OpenPtpConnection
-import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.data.usb.WbModeSweep
 import com.ilfforever.fujisync.data.usb.runLiveSettingsRead
 import com.ilfforever.fujisync.data.usb.runLiveWriteTest
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -39,7 +37,6 @@ import javax.inject.Inject
 @HiltViewModel
 class LiveSettingsBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
@@ -71,16 +68,9 @@ class LiveSettingsBenchViewModel @Inject constructor(
         } ?: throw IllegalStateException(
             "No camera in PTP mode. Connect the camera and set USB to USB RAW CONV.",
         )
-        return sessionManager.withExclusiveUsb {
-            withContext(Dispatchers.IO) {
-                val conn = connectionFactory.open(found.device)
-                    ?: throw IllegalStateException("Could not open camera USB interface.")
-                conn.use {
-                    if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                    block(conn, found.productName)
-                }
-            }
-        }
+        return sessionManager.withRawSession(found.device) { conn ->
+            block(conn, found.productName)
+        }.getOrThrow()
     }
 
     fun run() {

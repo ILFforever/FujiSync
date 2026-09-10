@@ -37,7 +37,6 @@ import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.FujiRecipeCamera
 import com.ilfforever.fujisync.data.usb.SlotRoundTripResult
-import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.data.usb.benchRoundTripSlot
 import com.ilfforever.fujisync.domain.model.CameraSlot
 import com.ilfforever.fujisync.domain.repository.CameraRepository
@@ -58,14 +57,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class UsbReadWriteBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
@@ -94,20 +91,13 @@ class UsbReadWriteBenchViewModel @Inject constructor(
 
                 val totalStart = System.currentTimeMillis()
 
-                val results = sessionManager.withExclusiveUsb {
-                    withContext(Dispatchers.IO) {
-                        val conn = connectionFactory.open(device)
-                            ?: throw IllegalStateException("Could not open camera USB interface.")
-                        conn.use {
-                            if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                            val cam = FujiRecipeCamera(conn)
-                            CameraSlot.entries.map { slot ->
-                                _state.value = State.Running("${slot.label}…")
-                                benchRoundTripSlot(conn, cam, slot)
-                            }
-                        }
+                val results = sessionManager.withRawSession(device) { conn ->
+                    val cam = FujiRecipeCamera(conn)
+                    CameraSlot.entries.map { slot ->
+                        _state.value = State.Running("${slot.label}…")
+                        benchRoundTripSlot(conn, cam, slot)
                     }
-                }
+                }.getOrThrow()
 
                 _state.value = State.Done(results, System.currentTimeMillis() - totalStart)
             } catch (e: Exception) {

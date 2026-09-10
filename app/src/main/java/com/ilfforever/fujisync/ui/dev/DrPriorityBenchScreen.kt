@@ -40,7 +40,6 @@ import com.ilfforever.fujisync.data.ptp.uint16Le
 import com.ilfforever.fujisync.data.usb.CameraSessionManager
 import com.ilfforever.fujisync.data.usb.CameraUsbMode
 import com.ilfforever.fujisync.data.usb.OpenPtpConnection
-import com.ilfforever.fujisync.data.usb.UsbPtpConnection
 import com.ilfforever.fujisync.domain.model.CameraSlot
 import com.ilfforever.fujisync.domain.model.FujiPropertyCode
 import com.ilfforever.fujisync.domain.repository.CameraRepository
@@ -62,7 +61,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -100,7 +98,6 @@ data class DrPriorityWriteResult(
 @HiltViewModel
 class DrPriorityBenchViewModel @Inject constructor(
     private val repository: CameraRepository,
-    private val connectionFactory: UsbPtpConnection,
     private val sessionManager: CameraSessionManager,
 ) : ViewModel() {
 
@@ -151,21 +148,14 @@ class DrPriorityBenchViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = sessionManager.withExclusiveUsb {
-                    withContext(Dispatchers.IO) {
-                        val conn = connectionFactory.open(device)
-                            ?: throw IllegalStateException("Could not open camera USB interface.")
-                        conn.use {
-                            if (!conn.openSession()) throw IllegalStateException("Camera rejected OpenSession.")
-                            writeAndRead(
-                                conn = conn,
-                                slot = current.selectedSlot,
-                                priorityLabel = current.selectedLabel,
-                                dynamicRangeLabel = current.selectedDynamicRange,
-                            )
-                        }
-                    }
-                }
+                val result = sessionManager.withRawSession(device) { conn ->
+                    writeAndRead(
+                        conn = conn,
+                        slot = current.selectedSlot,
+                        priorityLabel = current.selectedLabel,
+                        dynamicRangeLabel = current.selectedDynamicRange,
+                    )
+                }.getOrThrow()
 
                 _state.update {
                     it.copy(
