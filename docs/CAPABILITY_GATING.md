@@ -2,12 +2,12 @@
 
 How the app works out what a connected Fujifilm body will accept, and what it does with that.
 
-**TL;DR** — Three sources answer "will this setting work on this camera", ranked by how much they
-can be trusted. Only the camera's own word blocks a write. Fuji's shipped compatibility data warns
-but never blocks, because it describes what X RAW STUDIO offers rather than what camera firmware
+Three sources answer "will this setting work on this camera", ranked by how much they can be
+trusted. Only the camera's own word blocks a write. Fuji's shipped compatibility data warns but
+never blocks, because it describes what X RAW STUDIO offers rather than what camera firmware
 accepts, and it has never been verified against a non-X-Trans-V body.
 
-## The three sources
+## Capability sources
 
 | Tier | Source | Answers | Trust |
 |---|---|---|---|
@@ -15,21 +15,20 @@ accepts, and it has never been verified against a non-X-Trans-V body.
 | 2 | `GetDevicePropDesc` (`0x1014`) | The exact legal values | Authoritative when the body answers |
 | 3 | Fuji's XRFC capability table | Value *limits* per camera generation | Evidence, not proof |
 
-Tier 2 is optional, and on the one body tested it is **unavailable**: an X-H2 advertises `0x1014`
+Tier 2 is optional, and on the one body tested it is unavailable: an X-H2 advertises `0x1014`
 in its DeviceInfo operations list and then answers `GeneralError` to every call (confirmed
 2026-09-03). It is probed once against a known-good property and skipped entirely if it fails, so
 the cost is one round-trip and nothing depends on it.
 
-Plan for it being absent rather than present. Where the camera will not state its own legal values,
-value limits come from Fuji's table alone — which is why slot observation below is load-bearing
-rather than a nicety.
+Tier 2 should be treated as generally absent rather than present. Where the camera will not state
+its own legal values, value limits come from Fuji's table alone, which is why slot observation
+(below) is load-bearing rather than a nicety.
 
 Tier 3 is the only source that knows value-level limits — the film-simulation ceiling, whether the
 tone dials have half steps, the two extra white-balance modes, continuous versus listed Kelvin,
-whether a grain *size* axis exists. It is also the least trustworthy. That asymmetry is the whole
-design.
+whether a grain *size* axis exists. It is also the least trustworthy source of the three.
 
-## The rule
+## Write policy
 
 **Film Simulation blocks. Everything else warns.**
 
@@ -52,7 +51,7 @@ A body that lists *none* of the recipe block in its DeviceInfo is not believed a
 clearly not enumerating vendor properties, and treating that as "this camera has no settings" would
 block every write on a camera that works fine.
 
-### A table flag is not a property code
+### Table flags and property codes
 
 The table's flags name **features**; the recipe block names **property codes**; the two are not one
 to one, because a code outlives the feature it was introduced for.
@@ -60,16 +59,15 @@ to one, because a code outlives the feature it was introduced for.
 `BlackImageTone` is the worked example. The flag is true on only four configurations and its field
 name attaches to `0xD193`, which reads like "an X-H2 does not have `0xD193`". It does — the code
 carries the Warm/Cool axis of monochrome toning there, confirmed by reading a camera set by hand.
-BlackImageTone was the single-axis toning of the X-T3 era; the two-axis control succeeded it and
-reused the code.
+BlackImageTone is the single-axis toning of the X-T3 era; the two-axis control that succeeded it
+reuses the same code.
 
-This is why the table is never allowed to veto a code the camera advertises, and why
-`CapabilityResolverTest` guards that. The table is accurate — mapping a feature flag onto a property
-code is the lossy step.
+The table does not veto a code the camera advertises; `CapabilityResolverTest` guards this. The
+table is accurate — mapping a feature flag onto a property code is the lossy step.
 
-### Three latches on the block
+### Where the block is enforced
 
-Each is enough on its own; they cover different routes.
+Each of the following is sufficient on its own; they cover different routes into a write.
 
 1. **Recipe detail CTA** — reads *Film Sim Not Supported* and disables, so the sync sheet never opens.
 2. **Sync sheet CTA** — the same, for any path that reaches the sheet another way.
@@ -77,15 +75,15 @@ Each is enough on its own; they cover different routes.
    restore-from-backup and slot rearrange, which touch neither screen. Those write the slots they
    can and name the ones they could not.
 
-### Slot observation beats the table
+### Slot observation
 
 Every film simulation sitting in C1–C7 is proof the body accepts it. After the connect read,
 `CameraCapability.withObservedFilmSimulations()` widens the known ceiling to include them.
 
 It can only ever raise the ceiling, never lower it — a body can support Reala Ace with no slot
-using it, so absence proves nothing. This is what stops a camera on firmware newer than Fuji's table
-being blocked from a simulation it plainly supports, and it is sound because the simulation
-numbering is a strictly nested chain: if value *n* is legal, everything below it is too.
+using it, so absence proves nothing. It prevents a camera on firmware newer than Fuji's table from
+being blocked from a simulation it plainly supports. This is sound because the simulation numbering
+is a strictly nested chain: if value *n* is legal, everything below it is too.
 
 ## Identity
 
@@ -100,12 +98,12 @@ The generation suffix is **not** the firmware version shown in the camera menus:
 Where the exact key is not in the table — a firmware newer than Fuji's data — the lookup falls back
 to the highest known generation of the same model rather than giving up.
 
-## The capability asset
+## Capability asset
 
 `app/src/main/assets/xrfc_capabilities.json` is generated by
 [`tools/generate_capabilities.py`](../tools/generate_capabilities.py) from the decoded `XRFC.DAT`
-XML in the [fujifilm-ptp-recipes](https://github.com/ILFforever/fujifilm-ptp-recipes) repo. **Never
-edit it by hand.** Regenerate with:
+XML in the [fujifilm-ptp-recipes](https://github.com/ILFforever/fujifilm-ptp-recipes) repo. The
+asset is not edited by hand; it is regenerated with:
 
 ```sh
 python tools/generate_capabilities.py            # defaults to ../fujifilm-ptp-recipes
@@ -113,13 +111,13 @@ python tools/generate_capabilities.py --xml PATH
 ```
 
 The per-variant value lists live inside the generator, transcribed from
-`docs/reverse-engineering/xrfc-value-tables.md` — the XML names a variant (`Std6`) but the values it
-selects are inside `XRFC.dll`, not in the XML.
+`fujifilm-ptp-recipes/docs/reverse-engineering/xrfc-value-tables.md` — the XML names a variant
+(`Std6`) but the values it selects are inside `XRFC.dll`, not in the XML.
 
 `XrfcCapabilityAssetTest` guards the result: dangling config references, unknown property codes and
 variants without a value table all fail the build.
 
-## Where it plugs in
+## Implementation
 
 | File | Role |
 |---|---|
@@ -146,10 +144,9 @@ state it is in, not because it lacks the feature.
 | White Balance not in Kelvin mode | Colour Temperature | Only writable in that mode |
 | D Range Priority is Weak/Strong/Auto | Dynamic Range, **Highlight Tone, Shadow Tone** | All three answer `0x201C` |
 
-The last one is easy to get wrong: while priority is active the camera owns all three properties,
-not just Dynamic Range, and it rejects them with the same response code an out-of-range value
-produces. A locked property therefore looks exactly like an unsupported one. `0xD191` is checked
-before concluding a tone dial is missing.
+While priority is active, the camera owns all three properties, not just Dynamic Range, and
+rejects them with the same response code an out-of-range value produces, so a locked property looks
+identical to an unsupported one. `0xD191` is checked before concluding a tone dial is missing.
 
 ## Adjustment
 
@@ -163,18 +160,12 @@ planner does it and reports the change:
 Never for enumerations such as Film Simulation, where the "nearest" value is a different look
 entirely. Those are sent as asked and the camera refuses them.
 
-## Where compatibility does and does not belong
+## Where compatibility applies
 
-**The recipe editor is camera-independent, on purpose.** A recipe is authored on its own terms —
-it outlives any particular body, gets shared by QR, and is edited with nothing plugged in. So
-`RecipeEditorScreen` takes no camera parameter at all: every control is shown, every value is
-offered, tone dials always take half steps. Compatibility is a property of the *push*, not of the
-recipe.
-
-This also removed the only camera coupling the editor ever had: two model-name string checks
-(`!cameraModel.contains("X-Pro3")` for Smooth Skin, `!cameraModel.contains("X-T30")` for Clarity)
-that were both wrong — an X-T30 II has Clarity, and many bodies besides the X-Pro3 lack Smooth
-Skin — and that forced the value to a default on save, losing it from the recipe.
+The recipe editor is camera-independent. A recipe is authored on its own terms: it outlives any
+particular body, is shared by QR code, and can be edited with nothing plugged in. `RecipeEditorScreen`
+takes no camera parameter; every control is shown, every value is offered, and tone dials always
+take half steps. Compatibility is a property of the push, not of the recipe.
 
 Compatibility surfaces at push time only:
 
@@ -189,14 +180,12 @@ Compatibility surfaces at push time only:
 - **After a write** — settings the camera actually refused are named. A partial write is never
   reported as a success.
 
-The detail sheet lists **only changed settings**, grouped into the recipe's own sections. What
-survives is covered by one sentence — "Everything not listed below transfers unchanged" — which
-does the same reassuring work as listing a dozen untouched rows, at one line instead of a
-screenful. Dropped values are struck through, adjusted ones show the pair (`+1.5 → +1`), and each
-carries its reason underneath rather than squeezed into a right-hand column.
+The detail sheet lists only changed settings, grouped into the recipe's own sections; everything
+else is covered by the line "Everything not listed below transfers unchanged." Dropped values are
+struck through, adjusted ones show the pair (`+1.5 → +1`), and each carries its reason underneath.
 
-The blocked case gets a panel instead of a list, because there is no partial outcome to describe:
-it names the simulation, says the slot is untouched, and says what to change.
+The blocked case is shown as a panel rather than a list: it names the simulation, states that the
+slot is untouched, and states what to change.
 
 ## Limits
 
