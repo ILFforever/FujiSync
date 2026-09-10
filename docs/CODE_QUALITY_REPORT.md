@@ -1,6 +1,6 @@
 # FujiSync — Code Quality Report
 
-**Last updated:** 2026-06-15
+**Last updated:** 2026-09-10
 
 ---
 
@@ -8,11 +8,11 @@
 
 | Metric | Value |
 |--------|-------|
-| Source files | 103 `.kt` (main) |
-| Test files | 13 `.kt` (~2,973 lines) |
-| Main source lines | ~29,525 |
-| Largest file | `DiscoverScreen.kt` (~1,179 lines) |
-| ViewModels | 9 total (5 feature + 4 dev/bench) |
+| Source files | 180 `.kt` (main) |
+| Test files | 22 `.kt` (~4,949 lines) |
+| Main source lines | ~43,899 |
+| Largest file | `LibraryListComponents.kt` (~1,220 lines) |
+| ViewModels | 8 dedicated `*ViewModel.kt` files, plus bench ViewModels declared inside their screen files |
 | Min SDK | 26 (Android 8.0) |
 | Architecture | MVVM, Hilt DI, single-module, Jetpack Compose + Material 3 |
 
@@ -33,8 +33,8 @@
 | Performance | 8/10 |
 | Security | 9/10 |
 | Maintainability | 8/10 |
-| Documentation | 5/10 |
-| **Overall** | **8.1/10** |
+| Documentation | 7/10 |
+| **Overall** | **8.3/10** |
 
 ---
 
@@ -45,7 +45,8 @@
 
 | Issue | File | Notes |
 |-------|------|-------|
-| `FujiRecipeCamera` zero tests | `FujiRecipeCamera.kt` (160 lines) | Core read/write PTP — pure logic, easily testable |
+| `RecipeQrTest` fails | `RecipeQrTest.kt` | `android.util.Base64 not mocked` — the unit test suite is red (292 run, 1 failed). Needs `testOptions.unitTests.isReturnDefaultValues = true` or a JVM Base64 seam. Masks future regressions |
+| `FujiRecipeCamera` zero tests | `FujiRecipeCamera.kt` (190 lines) | Core read/write PTP — pure logic, easily testable |
 | `FujiExifReader` zero tests | `FujiExifReader.kt` (276 lines) | Pure logic EXIF tag parsing |
 | `ImportViewModel` zero tests | `ImportViewModel.kt` (314 lines) | Import orchestration — EXIF/OCR/QR/SmartRef flows |
 
@@ -73,15 +74,22 @@
 ### Architecture & DI
 - MVVM with 5 feature ViewModels (`MainViewModel`, `CameraViewModel`, `ImportViewModel`, `LibraryViewModel`, `DiscoverViewModel`)
 - Hilt DI: `@HiltAndroidApp`, `@HiltViewModel` on all VMs, `@Singleton` on data layer
-- `CameraSessionManager` (67 lines) — single-point USB session lifecycle with mutex
+- `CameraSessionManager` (113 lines) — owns `usbMutex` **and** the held PTP connection; the single
+  entry point for anything touching the camera
 - `MainViewModel` reduced from 1,825 → 809 lines (thin coordinator)
 - Constructor: 4 params (`appContext`, `localStore`, `libraryHolder`, `releaseUpdater`)
 
 ### PTP Protocol
 - Well-structured: `PtpPacket`, `PtpTransaction`, `PtpConstants`, `PtpProtocolException`
-- USB mutex prevents concurrent access (`CameraHeartbeat.usbMutex` + `CameraSessionManager`)
+- USB mutex prevents concurrent access — `CameraSessionManager.usbMutex`, with `withExclusiveUsb`
+  for the dev benches that open handles of their own
+- Session is opened once and held, not reopened per operation
+- `PtpContainerReader` frames containers off the byte stream rather than off read boundaries —
+  extracted so the desync-prone logic is unit-testable without hardware
+- Transaction IDs validated on every container; transport failures poison the connection
+- Recovery via Still Image class device reset (`0x21`/`0x66`); readiness polling on OpenSession and
+  backoff retries on GetDeviceInfo
 - `AutoCloseable` + try/finally ensures cleanup
-- Bulk transfer chunking, container length validation
 - `FujiPtpProbe` probes battery, serial, capabilities before recipe access
 
 ### Data Layer
@@ -104,11 +112,17 @@
 - **Discover**: FXW community feed with stale-disk fallback
 
 ### Test Coverage
-- 13 test files, 2,973 lines
+- 22 test files, ~4,949 lines, 292 tests (1 failing — see Open Issues)
 - `OcrRecipeParserTest` (1,182 lines), `LibraryStateHolderTest` (373 lines, 35 tests)
 - `CameraViewModelTest` (287 lines, 22 tests) — sync + async via `@IoDispatcher`
-- `RecipePresetMapperTest` (258), `LocalStoreTest` (211), `FxwApiParseTest` (189)
-- `PtpPacketTest`, `CameraPresetNameTest`, `PtpEncodingTest`, `FxwRecipeTest`, `RecipeQrTest`, `PtpStringRoundTripTest`, `GitHubReleaseUpdaterTest`
+- Capability layer: `CapabilityResolverTest`, `RecipeWritePlannerTest`, `CameraDeviceKeyTest`,
+  `XrfcCapabilityAssetTest` — the write-gating decision is fully testable without a camera
+- Transport: `PtpContainerReaderTest` (framing, split/coalesced reads, desync rejection),
+  `PtpDeviceInfoTest` (payload layout, string terminators, malformed payloads)
+- `RecipePresetMapperTest`, `LocalStoreTest`, `FxwApiParseTest`, `PtpPacketTest`,
+  `CameraPresetNameTest`, `PtpEncodingTest`, `FxwRecipeTest`, `RecipeQrTest`,
+  `PtpStringRoundTripTest`, `GitHubReleaseUpdaterTest`, `IsoStepperControlTest`,
+  `UsbReadWriteBenchTest`
 - Deps: `mockk:1.13.12`, `kotlinx-coroutines-test:1.8.1`, `turbine:1.2.0`
 
 ---
@@ -150,12 +164,24 @@
 | `LocalStore.loadLibrary()` silently fails on parse error | `getOrThrow()` propagates exception; `LibraryStateHolder` catches and sets `loadError` in `LibraryUiState`; library screen shows "LIBRARY UNAVAILABLE" instead of empty state |
 | No cleartext traffic blocking + unbounded API response | `network_security_config.xml` added (`cleartextTrafficPermitted="false"`); `FxwApi` response body capped at 4 MB; image download already had protections (was a stale finding) |
 | `rdbg()` logging in production | `BuildConfig.DEBUG` guard added — log accumulation now no-ops in release builds |
+| PTP reads assumed container boundaries | `PtpContainerReader` frames off the stream; full-buffer reads, remainder retained. Fixes both a max-packet overflow and a dropped trailing container |
+| Received containers never checked against the request | Transaction ID validated on every container; unexpected container types rejected |
+| A failed transport left a reusable connection | `Usable`/`Poisoned`/`Closed` states; poisoned connections fail fast and are dropped by the session manager |
+| No recovery path from a desync | `resetDevice()` — Still Image class reset — plus readiness polling on OpenSession and backoff retries on GetDeviceInfo |
+| `0x201E SessionAlreadyOpen` treated as success | Now treated as stale camera state: CloseSession, reset, retry |
+| Blind fall back to USB interface 0 | Candidates filtered on having a bulk pair; Still Image class preferred; no index-0 fallback (mass storage has a bulk pair too) |
+| Connection reopened for every operation | `CameraSessionManager` holds one session; heartbeat pings per pulse and re-reads the board every 10th |
+| `probeDevice` opened a handle under no mutex | Routed through `withExclusiveUsb`, which also drops the held connection |
+| Dev benches raw-locked `heartbeat.usbMutex` | All 8 moved to `sessionManager.withExclusiveUsb` |
 
 ---
 
 
 ## Next Steps
 
-1. **Write tests** for `FujiRecipeCamera`, `FujiExifReader`, `ImportViewModel`
-2. **Create `EditorStateHolder`** for `RecipeEditorScreen` (25+ `mutableStateOf` → proper state holder)
-3. **Add accessibility** — `contentDescription` on icons, semantic roles on clickables
+1. **Fix `RecipeQrTest`** — the suite is currently red, which hides every future regression
+2. **Exercise the transport changes on hardware** — session holding, release paths and the class
+   reset are reasoned, not observed; nothing has been run against a camera
+3. **Write tests** for `FujiRecipeCamera`, `FujiExifReader`, `ImportViewModel`
+4. **Create `EditorStateHolder`** for `RecipeEditorScreen` (25+ `mutableStateOf` → proper state holder)
+5. **Add accessibility** — `contentDescription` on icons, semantic roles on clickables

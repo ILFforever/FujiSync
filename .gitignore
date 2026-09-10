@@ -55,3 +55,6 @@ PROTOCOL.md
 # ---------- Claude / Codex working files ----------
 .claude/settings.local.json
 .claude/.cache/
+
+# ---------- Private working notes — never published ----------
+notes/

@@ -89,10 +89,8 @@ ui/
 
 Internal developer docs live in `docs/`:
 
-- `docs/USB_CONNECTION_GUIDE.md` — connection architecture, mutex pattern, ViewModel wiring,
-  dev screen scaffolding.
+- `docs/USB_CONNECTION_GUIDE.md` — connection architecture, the held-session model, transport
+  design notes (framing, poisoning, recovery), ViewModel wiring, dev screen scaffolding.
 - `docs/CAPABILITY_GATING.md` — how the app decides what a connected body accepts, and the rule
   that only the camera's own word blocks a write.
-- `docs/PTP_TRANSPORT_COMPARISON.md` — how another app's PTP transport handles connection and
-  older bodies, where ours is thinner, and the ranked work items that came out of it.
 - `docs/CODE_QUALITY_REPORT.md` — latest code quality snapshot.
